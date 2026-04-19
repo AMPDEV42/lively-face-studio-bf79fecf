@@ -53,6 +53,11 @@ export async function loadVRMA(url: string, vrm: VRM): Promise<THREE.AnimationCl
   } catch (e) {
     const msg = (e as Error)?.message ?? String(e);
     throw new Error(`Tidak bisa parse file VRMA: ${msg}`);
+  } finally {
+    // Revoke blob URL after parsing to avoid memory leak (only for blob: urls)
+    if (url.startsWith('blob:')) {
+      try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+    }
   }
 
   const vrmAnimations: VRMAnimation[] | undefined = gltf.userData.vrmAnimations;
@@ -139,10 +144,12 @@ export function playVRMA(
   }
   const { loop = false, fadeIn = 0 } = opts;
 
-  // Stop + uncache all previous actions so old clips don't interfere
+  // Stop + fully uncache ALL previous clips so old actions don't bleed into the new pose
   try {
     mixer.stopAllAction();
-    // Uncache the clip so that re-uploading same file creates a fresh action
+    const root = mixer.getRoot() as THREE.Object3D;
+    // Uncache root removes every action bound to this mixer's root
+    mixer.uncacheRoot(root);
     mixer.uncacheClip(clip);
   } catch (e) {
     console.warn('playVRMA: cleanup failed (safe to ignore):', e);
