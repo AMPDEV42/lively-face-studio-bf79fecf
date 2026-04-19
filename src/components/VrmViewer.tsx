@@ -143,6 +143,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     },
   }), []);
 
+  // Keep latest getAudioLevel in a ref so animate() doesn't need it as a dep.
+  // This prevents the main useEffect from re-running (and reloading VRM + mixer)
+  // every time the audio analyser reference changes.
+  const getAudioLevelRef = useRef(getAudioLevel);
+  getAudioLevelRef.current = getAudioLevel;
+
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
 
@@ -166,7 +172,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         updateMicroExpressions(elapsed, vrm, delta);
       }
 
-      const level = isSpeakingRef.current ? getAudioLevel() : 0;
+      const level = isSpeakingRef.current ? getAudioLevelRef.current() : 0;
 
       // Update VRMA mixer when active — only source of body motion
       if (mixerRef.current && vrmaPlayingRef.current) {
@@ -186,7 +192,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     if (rendererRef.current && sceneRef.current && cameraRef.current) {
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     }
-  }, [getAudioLevel]);
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -322,7 +328,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       mixerRef.current = null;
       disconnectAudio();
     };
-  }, [modelUrl, animate, disconnectAudio]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelUrl]);
 
   return (
     <div ref={containerRef} className={`relative w-full h-full ${className ?? ''}`}>
