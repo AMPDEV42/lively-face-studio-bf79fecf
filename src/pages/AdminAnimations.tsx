@@ -20,7 +20,22 @@ import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, Save, StopCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 
-const CATEGORIES = ['greeting', 'idle', 'emote', 'gesture', 'reaction'] as const;
+const CATEGORIES = ['talking', 'greeting', 'idle', 'emote', 'gesture', 'reaction'] as const;
+
+/**
+ * Panduan penamaan standar VRMA:
+ *
+ * Kategori      | Contoh nama              | Keyword utama
+ * ------------- | ------------------------ | -----------------------------------------
+ * talking       | Talk Casual              | (auto-play loop saat TTS aktif, tanpa keyword)
+ * talking       | Talk Expressive          | (auto-play loop saat TTS aktif, tanpa keyword)
+ * greeting      | Wave Hello               | halo, hai, hello, selamat pagi, apa kabar
+ * greeting      | Bow Greeting             | salam, assalamualaikum, permisi
+ * idle          | Idle Breathing           | (auto-play saat diam)
+ * emote         | Happy Cheer              | senang, yeay, bagus sekali, mantap
+ * gesture       | Nod Yes                  | iya, ya, setuju, benar
+ * reaction      | Laugh                    | haha, lucu, tertawa
+ */
 
 export default function AdminAnimations() {
   const navigate = useNavigate();
@@ -33,7 +48,7 @@ export default function AdminAnimations() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<typeof CATEGORIES[number]>('gesture');
+  const [category, setCategory] = useState<typeof CATEGORIES[number]>('talking');
   const [keywords, setKeywords] = useState('');
   const [loop, setLoop] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -227,6 +242,33 @@ export default function AdminAnimations() {
 
         {/* Sidebar */}
         <aside className="w-full md:w-[400px] border-l border-border flex flex-col overflow-y-auto p-4 gap-6">
+          {/* Naming guide */}
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold tracking-tight">Panduan Penamaan</h2>
+            <div className="text-[10px] font-mono text-muted-foreground space-y-0.5 bg-secondary/60 rounded-md p-2.5 border border-border leading-relaxed">
+              <p className="font-semibold text-foreground/70 mb-1">Kategori → Nama → Keyword</p>
+              <p className="text-cyan-400 font-semibold mt-1">— TALKING (auto-loop saat TTS aktif) —</p>
+              <p><span className="text-cyan-400">talking</span> → Talk Casual → <em>(tanpa keyword, auto)</em></p>
+              <p><span className="text-cyan-400">talking</span> → Talk Expressive → <em>(tanpa keyword, auto)</em></p>
+              <p><span className="text-cyan-400">talking</span> → Talk Gesture Hand → <em>(tanpa keyword, auto)</em></p>
+              <p className="text-emerald-400 font-semibold mt-1">— GREETING —</p>
+              <p><span className="text-emerald-400">greeting</span> → Wave Hello → halo, hai, hello</p>
+              <p><span className="text-emerald-400">greeting</span> → Bow Greeting → salam, assalamualaikum</p>
+              <p className="text-sky-400 font-semibold mt-1">— IDLE —</p>
+              <p><span className="text-sky-400">idle</span> → Idle Breathing → <em>(tanpa keyword)</em></p>
+              <p><span className="text-sky-400">idle</span> → Idle Look Around → <em>(tanpa keyword)</em></p>
+              <p className="text-violet-400 font-semibold mt-1">— EMOTE —</p>
+              <p><span className="text-violet-400">emote</span> → Happy Cheer → senang, yeay, bagus</p>
+              <p><span className="text-violet-400">emote</span> → Thinking Pose → hmm, berpikir</p>
+              <p className="text-amber-400 font-semibold mt-1">— GESTURE —</p>
+              <p><span className="text-amber-400">gesture</span> → Nod Yes → iya, ya, setuju</p>
+              <p><span className="text-amber-400">gesture</span> → Shake No → tidak, bukan, jangan</p>
+              <p className="text-rose-400 font-semibold mt-1">— REACTION —</p>
+              <p><span className="text-rose-400">reaction</span> → Laugh → haha, lucu, tertawa</p>
+              <p><span className="text-rose-400">reaction</span> → Clap Hands → luar biasa, bravo</p>
+            </div>
+          </section>
+
           {/* Upload */}
           <section className="space-y-3">
             <h2 className="text-sm font-semibold tracking-tight">Preview Upload</h2>
@@ -245,7 +287,7 @@ export default function AdminAnimations() {
               <Label htmlFor="name" className="text-xs">Nama Adegan</Label>
               <Input
                 id="name"
-                placeholder="e.g. Wave Hello"
+                placeholder="e.g. Wave Hello, Nod Yes, Happy Cheer"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -265,7 +307,7 @@ export default function AdminAnimations() {
               <Label htmlFor="kw" className="text-xs">Trigger Keywords (comma-separated)</Label>
               <Input
                 id="kw"
-                placeholder="hai, halo, hello"
+                placeholder="contoh: halo, hai, hello, selamat pagi"
                 value={keywords}
                 onChange={(e) => setKeywords(e.target.value)}
               />
