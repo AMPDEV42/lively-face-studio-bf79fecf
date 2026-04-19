@@ -172,7 +172,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         updateMicroExpressions(elapsed, vrm, delta);
       }
 
-      const level = isSpeakingRef.current ? getAudioLevel() : 0;
+      const level = isSpeakingRef.current ? getAudioLevelRef.current() : 0;
 
       // Update VRMA mixer when active — only source of body motion
       if (mixerRef.current && vrmaPlayingRef.current) {
@@ -192,7 +192,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     if (rendererRef.current && sceneRef.current && cameraRef.current) {
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     }
-  }, [getAudioLevel]);
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
