@@ -11,7 +11,8 @@ import {
 } from '@/lib/vrm-animations';
 import { detectMood } from '@/lib/sentiment';
 import { useAudioAnalyser } from '@/hooks/useAudioAnalyser';
-import { loadVRMA, createMixer, playVRMA, stopVRMA, type PlayVrmaOptions } from '@/lib/vrma-player';
+import { loadVRMA, createMixer, playVRMA, stopVRMA, returnToRestPose, type PlayVrmaOptions } from '@/lib/vrma-player';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface VrmViewerHandle {
   playVrmaUrl: (url: string, opts?: PlayVrmaOptions) => Promise<void>;
@@ -48,6 +49,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const vrmaPlayingRef = useRef(false);
   const vrmaActionRef = useRef<THREE.AnimationAction | null>(null);
 
+  // Talking animation state
+  const talkingClipsRef = useRef<THREE.AnimationClip[]>([]);
+  const talkingClipIndexRef = useRef(0);
+  const isTalkingPlayingRef = useRef(false);
+  const isReturnToRestRef = useRef(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +62,119 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
   isSpeakingRef.current = isSpeaking;
 
-  // Connect audio element for lip sync.
+  // ── Load talking-category VRMA clips from Supabase ──────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const loadTalkingClips = async () => {
+      const vrm = vrmRef.current;
+      if (!vrm) return;
+      try {
+        const { data } = await supabase
+          .from('vrma_animations')
+          .select('file_path')
+          .eq('category', 'talking')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+
+        if (cancelled || !data || data.length === 0) return;
+
+        const clips: THREE.AnimationClip[] = [];
+        for (const row of data) {
+          try {
+            const { data: urlData } = supabase.storage
+              .from('vrma-animations')
+              .getPublicUrl(row.file_path);
+            if (urlData?.publicUrl) {
+              const clip = await loadVRMA(urlData.publicUrl, vrm);
+              if (!cancelled) clips.push(clip);
+            }
+          } catch (e) {
+            console.warn('[VRMA Talking] Failed to load clip:', e);
+          }
+        }
+        if (!cancelled) {
+          talkingClipsRef.current = clips;
+          talkingClipIndexRef.current = 0;
+          console.log('[VRMA Talking] Loaded', clips.length, 'talking clip(s)');
+        }
+      } catch (e) {
+        console.warn('[VRMA Talking] Could not query talking clips:', e);
+      }
+    };
+    // Delay to ensure VRM is mounted
+    const timer = setTimeout(loadTalkingClips, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelUrl, loading]);
+
+  // ── Play talking VRMA when TTS starts, return to rest when TTS ends ──────
+  useEffect(() => {
+    const vrm = vrmRef.current;
+    const mixer = mixerRef.current;
+
+    if (isSpeaking) {
+      // If external VRMA is playing (e.g. admin preview), don't override it
+      if (vrmaActionRef.current) return;
+
+      const clips = talkingClipsRef.current;
+      if (!vrm || !mixer || clips.length === 0) return;
+
+      isReturnToRestRef.current = false;
+      isTalkingPlayingRef.current = true;
+
+      const playNext = () => {
+        if (!isTalkingPlayingRef.current) return;
+        if (vrmaActionRef.current) return; // manual VRMA took over
+
+        const clips = talkingClipsRef.current;
+        if (clips.length === 0) return;
+
+        const clip = clips[talkingClipIndexRef.current % clips.length];
+        talkingClipIndexRef.current = (talkingClipIndexRef.current + 1) % clips.length;
+
+        vrmaPlayingRef.current = true;
+        const action = playVRMA(mixer, clip, { loop: false, fadeIn: 0.3 });
+        if (!action) { vrmaPlayingRef.current = false; return; }
+
+        // When this clip ends, play next (loop through talking clips)
+        const onFinished = (e: { action: THREE.AnimationAction }) => {
+          if (e.action !== action) return;
+          mixer.removeEventListener('finished', onFinished);
+          if (isTalkingPlayingRef.current && !vrmaActionRef.current) {
+            playNext();
+          } else {
+            vrmaPlayingRef.current = false;
+          }
+        };
+        mixer.addEventListener('finished', onFinished);
+      };
+
+      playNext();
+    } else {
+      // TTS ended — stop talking animation and return to rest pose
+      if (isTalkingPlayingRef.current) {
+        isTalkingPlayingRef.current = false;
+        isReturnToRestRef.current = true;
+
+        if (vrm && mixer && vrmaPlayingRef.current) {
+          returnToRestPose(mixer, vrm, 0.6).then(() => {
+            vrmaPlayingRef.current = false;
+            isReturnToRestRef.current = false;
+          });
+        }
+      }
+
+      // Also reset mouth / mood
+      if (vrm) {
+        resetMouthExpressions(vrm);
+        setTargetMood('neutral');
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpeaking]);
   useEffect(() => {
     if (!audioElement) return;
     try {
@@ -64,14 +183,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       console.warn('Could not connect audio element:', e);
     }
   }, [audioElement, connectAudioElement]);
-
-  // Reset mouth + return to neutral mood when speech ends
-  useEffect(() => {
-    if (!isSpeaking && vrmRef.current) {
-      resetMouthExpressions(vrmRef.current);
-      setTargetMood('neutral');
-    }
-  }, [isSpeaking]);
 
   useEffect(() => {
     if (isSpeaking && currentMessage) {
@@ -125,21 +236,41 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
       console.log('[VRMA] Playback started, duration:', clip.duration.toFixed(2), 's');
 
+      // When admin manually plays VRMA, also stop any talking loop
+      isTalkingPlayingRef.current = false;
+
       const onFinished = (e: { action: THREE.AnimationAction }) => {
         if (e.action === vrmaActionRef.current) {
-          // Keep vrmaPlayingRef.current = true so the mixer keeps updating
-          // and clampWhenFinished holds the final pose.
-          // Only reset when stopVrma() is called explicitly.
           mixer.removeEventListener('finished', onFinished);
-          console.log('[VRMA] Playback finished (pose clamped at last frame)');
+          // After admin preview clip finishes, return to rest automatically
+          const vrm = vrmRef.current;
+          if (vrm) {
+            returnToRestPose(mixer, vrm, 0.5).then(() => {
+              vrmaPlayingRef.current = false;
+              vrmaActionRef.current = null;
+            });
+          } else {
+            vrmaPlayingRef.current = false;
+            vrmaActionRef.current = null;
+          }
+          console.log('[VRMA] Playback finished — returning to rest pose');
         }
       };
       mixer.addEventListener('finished', onFinished);
     },
     stopVrma: (fadeOut = 0.3) => {
-      stopVRMA(mixerRef.current, fadeOut);
-      vrmaPlayingRef.current = false;
-      vrmaActionRef.current = null;
+      isTalkingPlayingRef.current = false;
+      const vrm = vrmRef.current;
+      if (vrm && mixerRef.current) {
+        returnToRestPose(mixerRef.current, vrm, fadeOut).then(() => {
+          vrmaPlayingRef.current = false;
+          vrmaActionRef.current = null;
+        });
+      } else {
+        stopVRMA(mixerRef.current, fadeOut);
+        vrmaPlayingRef.current = false;
+        vrmaActionRef.current = null;
+      }
     },
   }), []);
 
@@ -174,8 +305,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
       const level = isSpeakingRef.current ? getAudioLevelRef.current() : 0;
 
-      // Update VRMA mixer when active — only source of body motion
-      if (mixerRef.current && vrmaPlayingRef.current) {
+      // Update VRMA mixer when active OR during return-to-rest fade
+      if (mixerRef.current && (vrmaPlayingRef.current || isReturnToRestRef.current)) {
         mixerRef.current.update(delta);
       }
       // No procedural body/arm/idle animations — face-only blendshapes

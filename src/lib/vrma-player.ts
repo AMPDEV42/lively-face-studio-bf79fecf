@@ -15,6 +15,44 @@ export interface PlayVrmaOptions {
 }
 
 /**
+ * Smoothly return VRM humanoid bones back to the normalized rest pose.
+ * This is called after talking animation ends to avoid the avatar freezing
+ * in a mid-gesture position.
+ *
+ * Strategy: fade-out the current action so THREE.js blends back to the
+ * bind/rest pose over `duration` seconds. Then stop the mixer entirely.
+ */
+export function returnToRestPose(
+  mixer: THREE.AnimationMixer | null,
+  vrm: VRM,
+  duration = 0.5
+): Promise<void> {
+  return new Promise((resolve) => {
+    if (!mixer) {
+      try { vrm.humanoid?.resetNormalizedPose(); } catch (_) { /* ok */ }
+      resolve();
+      return;
+    }
+
+    // Fade out every active action so mixer blends to zero-weight (rest pose).
+    // THREE.AnimationMixer exposes _actions as a private field; cast to any.
+    const actions = (mixer as unknown as { _actions: THREE.AnimationAction[] })._actions ?? [];
+    actions.forEach((action) => {
+      try { action.fadeOut(duration); } catch (_) { /* ok */ }
+    });
+
+    // After the fade completes, reset pose explicitly and stop mixer.
+    setTimeout(() => {
+      try {
+        mixer.stopAllAction();
+        vrm.humanoid?.resetNormalizedPose();
+      } catch (_) { /* ok */ }
+      resolve();
+    }, duration * 1000 + 50);
+  });
+}
+
+/**
  * Ensure a VRMLookAtQuaternionProxy exists in the VRM scene so that
  * createVRMAnimationClip can find it and avoid re-creating it every call
  * (which would leave orphaned proxies in the scene).
