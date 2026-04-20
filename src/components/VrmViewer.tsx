@@ -477,15 +477,15 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
     const isMobileView = container.clientWidth < 768;
     isMobileRef.current = isMobileView;
-    // Close-up framing: waist → head
+    // Wide framing: waist → head visible on all devices.
     const camera = new THREE.PerspectiveCamera(
-      isMobileView ? 26 : 22,
+      isMobileView ? 38 : 34,
       container.clientWidth / container.clientHeight,
       0.1,
       20
     );
-    camera.position.set(0, isMobileView ? 1.42 : 1.45, isMobileView ? 1.15 : 0.95);
-    camera.lookAt(0, 1.35, 0);
+    camera.position.set(0, isMobileView ? 1.0 : 1.05, isMobileView ? 1.8 : 1.6);
+    camera.lookAt(0, 0.95, 0);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
@@ -552,7 +552,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       const wasMobile = isMobileRef.current;
       const nowMobile = container.clientWidth < 768;
       isMobileRef.current = nowMobile;
-      camera.fov = nowMobile ? 26 : 22;
+      camera.fov = nowMobile ? 38 : 34;
+      camera.position.set(0, nowMobile ? 1.0 : 1.05, nowMobile ? 1.8 : 1.6);
+      camera.lookAt(0, 0.95, 0);
       camera.aspect = container.clientWidth / container.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(container.clientWidth, container.clientHeight);
