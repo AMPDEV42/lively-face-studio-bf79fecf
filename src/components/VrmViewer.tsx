@@ -234,7 +234,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           returnToRestPose(mixer, vrm, 0.6).then(() => {
             vrmaPlayingRef.current = false;
             isReturnToRestRef.current = false;
+            // Restart idle loop after returning to rest
+            restartIdleLoop();
           });
+        } else {
+          restartIdleLoop();
         }
       }
 
