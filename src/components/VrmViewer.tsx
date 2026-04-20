@@ -422,10 +422,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
 
       // Idle micro-gestures (chest-up only): apply ONLY when not talking and
-      // not in admin manual playback. Layered on top of idle VRMA (head-only).
+      // not in admin manual playback. Layered on top of idle VRMA, but skip
+      // any bones that the active clip already drives to avoid double-add.
       const isManualOrTalking = !!vrmaActionRef.current || isTalkingPlayingRef.current;
       if (!isManualOrTalking) {
-        updateIdleMicroGestures(elapsed, vrm);
+        updateIdleMicroGestures(elapsed, vrm, activeDrivenBonesRef.current);
       }
 
       // Lip sync + expressions ALWAYS run (don't conflict with VRMA bones)
