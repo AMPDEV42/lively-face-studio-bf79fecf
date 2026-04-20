@@ -9,6 +9,7 @@ import {
   resetMouthExpressions,
   setTargetMood,
   updateIdleMicroGestures,
+  updateIdleSmile,
   getClipDrivenBones,
 } from '@/lib/vrm-animations';
 import { detectMood } from '@/lib/sentiment';
@@ -428,6 +429,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       if (!isManualOrTalking) {
         updateIdleMicroGestures(elapsed, vrm, activeDrivenBonesRef.current);
       }
+      updateIdleSmile(delta, vrm, isManualOrTalking);
 
       // Lip sync + expressions ALWAYS run (don't conflict with VRMA bones)
       if (isSpeakingRef.current) {
