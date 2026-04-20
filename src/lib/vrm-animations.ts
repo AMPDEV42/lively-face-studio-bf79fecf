@@ -232,19 +232,74 @@ export function updateIdleMicroGestures(
   const chest = vrm.humanoid.getNormalizedBoneNode('chest');
   const upperChest = vrm.humanoid.getNormalizedBoneNode('upperChest');
 
-  // Very subtle amplitudes — barely perceptible, just enough to feel alive.
+  // Ultra-subtle amplitudes — avatar should look almost upright with just a hint of life.
+  // Sway dikurangi drastis supaya tidak terlihat sempoyongan/mabuk.
   if (spine && !isDriven('spine')) {
-    spine.rotation.z += Math.sin(elapsed * 0.5) * 0.0035;        // ~0.20° sway
-    spine.rotation.x += Math.sin(elapsed * 0.4 + 0.7) * 0.0015;  // ~0.09°
+    spine.rotation.z += Math.sin(elapsed * 0.45) * 0.0012;       // ~0.07° sway kiri-kanan (sangat tipis)
   }
 
+  // Breathing tetap fokus di dada — naik-turun halus.
   if (chest && !isDriven('chest')) {
-    chest.rotation.x += Math.sin(elapsed * 1.2) * 0.005;         // ~0.29° breathing
+    chest.rotation.x += Math.sin(elapsed * 1.1) * 0.004;         // ~0.23° breathing
   }
 
   if (upperChest && !isDriven('upperChest')) {
-    upperChest.rotation.x += Math.sin(elapsed * 1.2 + 0.3) * 0.0025;
+    upperChest.rotation.x += Math.sin(elapsed * 1.1 + 0.3) * 0.002;
   }
+}
+
+// ============================================
+// 5. IDLE SMILE PULSE (mouth blendshape)
+// ============================================
+// Pulsing antara senyum rapat (default) → senyum lebar → balik ke rapat.
+// Gunakan blendshape 'happy' sebagai senyum lebar; mulut tetap tertutup
+// (tidak menyentuh aa/ih/ou supaya tidak konflik dengan lip sync).
+
+let _smileTimer = 0;
+let _nextSmileIn = 6 + Math.random() * 5;
+let _smileActive = false;
+let _smilePhase = 0; // 0..1 progress dalam satu pulse cycle
+
+const SMILE_DURATION = 2.2;   // total durasi 1 pulse (in + hold + out)
+const SMILE_PEAK = 0.55;      // intensitas senyum lebar (0..1 pada blendshape happy)
+const SMILE_BASE = 0.12;      // senyum rapat baseline (mulut tetap tertutup)
+
+export function updateIdleSmile(delta: number, vrm: VRM, suppressed = false): void {
+  if (!vrm.expressionManager) return;
+
+  // Saat bicara/preview aktif, jangan apply (biar mood/lip-sync ambil alih).
+  if (suppressed) {
+    _smileActive = false;
+    _smileTimer = 0;
+    _smilePhase = 0;
+    return;
+  }
+
+  if (!_smileActive) {
+    _smileTimer += delta;
+    if (_smileTimer >= _nextSmileIn) {
+      _smileTimer = 0;
+      _smileActive = true;
+      _smilePhase = 0;
+    }
+    // Tetap apply baseline senyum rapat
+    vrm.expressionManager.setValue('happy', SMILE_BASE);
+    return;
+  }
+
+  _smilePhase += delta / SMILE_DURATION;
+  if (_smilePhase >= 1) {
+    _smileActive = false;
+    _smilePhase = 0;
+    _nextSmileIn = 5 + Math.random() * 6;
+    vrm.expressionManager.setValue('happy', SMILE_BASE);
+    return;
+  }
+
+  // Easing: ease-in-out sine antara BASE → PEAK → BASE
+  const wave = Math.sin(_smilePhase * Math.PI); // 0 → 1 → 0
+  const value = SMILE_BASE + (SMILE_PEAK - SMILE_BASE) * wave;
+  vrm.expressionManager.setValue('happy', value);
 }
 
 /**
