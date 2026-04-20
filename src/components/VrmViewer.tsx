@@ -9,6 +9,7 @@ import {
   resetMouthExpressions,
   setTargetMood,
   updateIdleMicroGestures,
+  getClipDrivenBones,
 } from '@/lib/vrm-animations';
 import { detectMood } from '@/lib/sentiment';
 import { useAudioAnalyser } from '@/hooks/useAudioAnalyser';
@@ -60,6 +61,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const idleClipRef = useRef<THREE.AnimationClip | null>(null);
   const idleActionRef = useRef<THREE.AnimationAction | null>(null);
   const idlePausedForActivityRef = useRef(false);
+  // Bones currently driven by the active VRMA (idle, talking, or admin preview).
+  // Used to skip those bones in procedural micro-gestures so we don't double-add.
+  const activeDrivenBonesRef = useRef<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +165,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           action.play();
           idleActionRef.current = action;
           vrmaPlayingRef.current = true;
-          console.log('[VRMA Idle] Auto-loop started');
+          activeDrivenBonesRef.current = getClipDrivenBones(clip);
+          console.log('[VRMA Idle] Auto-loop started, driven bones:', Array.from(activeDrivenBonesRef.current));
         }
       } catch (e) {
         console.warn('[VRMA Idle] Could not load idle clip:', e);
@@ -199,6 +204,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       action.play();
       idleActionRef.current = action;
       vrmaPlayingRef.current = true;
+      activeDrivenBonesRef.current = getClipDrivenBones(clip);
       console.log('[VRMA Idle] Resumed idle loop');
     } catch (e) {
       console.warn('[VRMA Idle] Could not restart idle loop:', e);
@@ -233,6 +239,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         vrmaPlayingRef.current = true;
         const action = playVRMA(mixer, clip, { loop: false, fadeIn: 0.3 });
         if (!action) { vrmaPlayingRef.current = false; return; }
+        activeDrivenBonesRef.current = getClipDrivenBones(clip);
 
         // When this clip ends, play next (loop through talking clips)
         const onFinished = (e: { action: THREE.AnimationAction }) => {
@@ -333,7 +340,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         vrmaPlayingRef.current = false;
         throw new Error('Gagal memulai animasi (mixer tidak siap)');
       }
-      console.log('[VRMA] Playback started, duration:', clip.duration.toFixed(2), 's');
+      activeDrivenBonesRef.current = getClipDrivenBones(clip);
+      console.log('[VRMA] Playback started, duration:', clip.duration.toFixed(2), 's', 'driven bones:', Array.from(activeDrivenBonesRef.current));
 
       // When admin manually plays VRMA, also stop any talking loop
       isTalkingPlayingRef.current = false;
@@ -414,10 +422,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
 
       // Idle micro-gestures (chest-up only): apply ONLY when not talking and
-      // not in admin manual playback. Layered on top of idle VRMA (head-only).
+      // not in admin manual playback. Layered on top of idle VRMA, but skip
+      // any bones that the active clip already drives to avoid double-add.
       const isManualOrTalking = !!vrmaActionRef.current || isTalkingPlayingRef.current;
       if (!isManualOrTalking) {
-        updateIdleMicroGestures(elapsed, vrm);
+        updateIdleMicroGestures(elapsed, vrm, activeDrivenBonesRef.current);
       }
 
       // Lip sync + expressions ALWAYS run (don't conflict with VRMA bones)
