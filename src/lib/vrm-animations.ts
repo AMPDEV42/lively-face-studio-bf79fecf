@@ -240,24 +240,29 @@ export function updateIdleMicroGestures(
   }
 
   // Breathing halus di dada.
+  const breathX = Math.sin(elapsed * 1.1) * 0.003;
+  const breathUpperX = Math.sin(elapsed * 1.1 + 0.3) * 0.0015;
+
   if (chest && !isDriven('chest')) {
-    chest.rotation.x += Math.sin(elapsed * 1.1) * 0.003;
+    chest.rotation.x += breathX;
   }
 
   if (upperChest && !isDriven('upperChest')) {
-    upperChest.rotation.x += Math.sin(elapsed * 1.1 + 0.3) * 0.0015;
+    upperChest.rotation.x += breathUpperX;
   }
 
-  // Head and neck stay still — only chest breathes.
-  // Counter-rotate head to cancel inherited chest.rotation.x so head stays upright.
-  if (head && !isDriven('head')) {
-    head.rotation.x = 0;
-    head.rotation.z = 0;
-  }
+  // Head and neck stay still — counter-rotate to cancel inherited chest breath.
+  // Only cancel X (up-down from breathing) and Z; preserve Y so left-right works.
+  const totalBreathX = breathX + breathUpperX;
 
   if (neck && !isDriven('neck')) {
-    neck.rotation.x = 0;
+    neck.rotation.x -= totalBreathX * 0.5;
     neck.rotation.z = 0;
+  }
+
+  if (head && !isDriven('head')) {
+    head.rotation.x -= totalBreathX * 0.5;
+    head.rotation.z = 0;
   }
 }
 
