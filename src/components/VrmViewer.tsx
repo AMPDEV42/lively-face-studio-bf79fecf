@@ -204,6 +204,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       action.play();
       idleActionRef.current = action;
       vrmaPlayingRef.current = true;
+      activeDrivenBonesRef.current = getClipDrivenBones(clip);
       console.log('[VRMA Idle] Resumed idle loop');
     } catch (e) {
       console.warn('[VRMA Idle] Could not restart idle loop:', e);
