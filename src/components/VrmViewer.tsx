@@ -56,6 +56,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const isTalkingPlayingRef = useRef(false);
   const isReturnToRestRef = useRef(false);
 
+  // Idle (default loop) animation state
+  const idleClipRef = useRef<THREE.AnimationClip | null>(null);
+  const idleActionRef = useRef<THREE.AnimationAction | null>(null);
+  const idlePausedForActivityRef = useRef(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
