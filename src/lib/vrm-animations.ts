@@ -231,20 +231,33 @@ export function updateIdleMicroGestures(
   const spine = vrm.humanoid.getNormalizedBoneNode('spine');
   const chest = vrm.humanoid.getNormalizedBoneNode('chest');
   const upperChest = vrm.humanoid.getNormalizedBoneNode('upperChest');
+  const head = vrm.humanoid.getNormalizedBoneNode('head');
+  const neck = vrm.humanoid.getNormalizedBoneNode('neck');
 
-  // Ultra-subtle amplitudes — avatar should look almost upright with just a hint of life.
-  // Sway dikurangi drastis supaya tidak terlihat sempoyongan/mabuk.
+  // Ultra-subtle sway — nyaris tidak terlihat.
   if (spine && !isDriven('spine')) {
-    spine.rotation.z += Math.sin(elapsed * 0.45) * 0.0012;       // ~0.07° sway kiri-kanan (sangat tipis)
+    spine.rotation.z += Math.sin(elapsed * 0.35) * 0.0002;
   }
 
-  // Breathing tetap fokus di dada — naik-turun halus.
+  // Breathing halus di dada.
   if (chest && !isDriven('chest')) {
-    chest.rotation.x += Math.sin(elapsed * 1.1) * 0.004;         // ~0.23° breathing
+    chest.rotation.x += Math.sin(elapsed * 1.1) * 0.003;
   }
 
   if (upperChest && !isDriven('upperChest')) {
-    upperChest.rotation.x += Math.sin(elapsed * 1.1 + 0.3) * 0.002;
+    upperChest.rotation.x += Math.sin(elapsed * 1.1 + 0.3) * 0.0015;
+  }
+
+  // Head and neck stay still — only chest breathes.
+  // Counter-rotate head to cancel inherited chest.rotation.x so head stays upright.
+  if (head && !isDriven('head')) {
+    head.rotation.x = 0;
+    head.rotation.z = 0;
+  }
+
+  if (neck && !isDriven('neck')) {
+    neck.rotation.x = 0;
+    neck.rotation.z = 0;
   }
 }
 
