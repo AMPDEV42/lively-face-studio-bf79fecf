@@ -135,6 +135,7 @@ export type Database = {
           is_active: boolean
           name: string
           trigger_keywords: string[]
+          trigger_keywords_i18n: Json
           updated_at: string
           user_id: string
         }
@@ -147,6 +148,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           trigger_keywords?: string[]
+          trigger_keywords_i18n?: Json
           updated_at?: string
           user_id: string
         }
@@ -159,6 +161,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           trigger_keywords?: string[]
+          trigger_keywords_i18n?: Json
           updated_at?: string
           user_id?: string
         }
