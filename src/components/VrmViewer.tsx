@@ -488,11 +488,19 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     camera.lookAt(0, 0.95, 0);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: !isMobileView,
-      alpha: true,
-      powerPreference: 'high-performance',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: !isMobileView,
+        alpha: true,
+        powerPreference: 'high-performance',
+      });
+    } catch (webglErr) {
+      console.warn('WebGL not available in this environment:', webglErr);
+      setError('WebGL is not supported in this environment. Please open the app directly in a browser.');
+      setLoading(false);
+      return;
+    }
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobileView ? 1.5 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
