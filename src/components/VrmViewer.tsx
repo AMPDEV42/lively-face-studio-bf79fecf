@@ -689,22 +689,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
     },
   }), []);
-      isTalkingPlayingRef.current = false;
-      const vrm = vrmRef.current;
-      if (vrm && mixerRef.current) {
-        returnToRestPose(mixerRef.current, vrm, fadeOut).then(() => {
-          vrmaPlayingRef.current = false;
-          vrmaActionRef.current = null;
-          restartIdleLoop();
-        });
-      } else {
-        stopVRMA(mixerRef.current, fadeOut);
-        vrmaPlayingRef.current = false;
-        vrmaActionRef.current = null;
-        restartIdleLoop();
-      }
-    },
-  }), []);
 
   // Keep latest getAudioLevel in a ref so animate() doesn't need it as a dep.
   // This prevents the main useEffect from re-running (and reloading VRM + mixer)
