@@ -13,6 +13,7 @@ import { detectMood } from '@/lib/sentiment';
 import { setTargetMood } from '@/lib/vrm-animations';
 import { useVrmaTriggers } from '@/hooks/useVrmaTriggers';
 import { useAudioAnalyser } from '@/hooks/useAudioAnalyser';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { parseAnimTag } from '@/lib/chat-api';
 import type { VrmViewerHandle, CameraPreset } from '@/components/VrmViewer';
 import type { LangCode } from '@/lib/lang-detect';
@@ -170,6 +171,11 @@ export default function Index() {
     });
   }, []);
 
+  // Global keyboard shortcuts
+  useKeyboardShortcuts({
+    onToggleChat: handleToggleChat,
+  });
+
   return (
     <div className="relative h-[100dvh] w-screen overflow-hidden bg-background flex">
       <NewUserModelBanner />
@@ -226,7 +232,7 @@ export default function Index() {
               size="icon"
               onClick={handleToggleChat}
               className="relative h-8 w-8 border-border/60 bg-secondary/60 backdrop-blur-md hover:bg-secondary/80 transition-colors"
-              title={chatOpen ? 'Tutup chat' : 'Buka chat'}
+              title={`${chatOpen ? 'Tutup' : 'Buka'} chat (Ctrl+K)`}
             >
               {chatOpen
                 ? <X className="w-4 h-4" />

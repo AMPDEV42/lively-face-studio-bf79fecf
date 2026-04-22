@@ -28,11 +28,13 @@ export async function streamChat({
   onDelta,
   onDone,
   systemPrompt,
+  signal,
 }: {
   messages: ChatMessage[];
   onDelta: (text: string) => void;
   onDone: () => void;
   systemPrompt?: string;
+  signal?: AbortSignal;
 }) {
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
     method: "POST",
@@ -41,6 +43,7 @@ export async function streamChat({
       Authorization: `Bearer ${SUPABASE_KEY}`,
     },
     body: JSON.stringify({ messages, systemPrompt }),
+    signal,
   });
 
   if (!resp.ok || !resp.body) {
