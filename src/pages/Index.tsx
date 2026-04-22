@@ -12,12 +12,14 @@ import { MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { detectMood } from '@/lib/sentiment';
 import { setTargetMood } from '@/lib/vrm-animations';
 import { useVrmaTriggers } from '@/hooks/useVrmaTriggers';
 import { useAudioAnalyser } from '@/hooks/useAudioAnalyser';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { parseAnimTag } from '@/lib/chat-api';
+import { parseAnimTag, isWebSpeechUrl, getWebSpeechText } from '@/lib/chat-api';
+import { speakWithWebSpeech, stopWebSpeech, preloadVoices } from '@/lib/web-speech-tts';
 import type { VrmViewerHandle, CameraPreset } from '@/components/VrmViewer';
 import type { LangCode } from '@/lib/lang-detect';
 
@@ -26,6 +28,10 @@ const VrmViewer = lazy(() => import('@/components/VrmViewer'));
 export default function Index() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const { isPro } = useUserRole();
+
+  // Preload Web Speech voices on mount
+  useEffect(() => { preloadVoices(); }, []);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
   const [modelUrl, setModelUrl] = useState('');
@@ -112,6 +118,38 @@ export default function Index() {
       if (!audio) return;
       if (!audioConnected) setAudioConnected(true);
 
+      // Check if this is a Web Speech fallback URL
+      if (isWebSpeechUrl(audioUrl)) {
+        const text = getWebSpeechText(audioUrl);
+        stopWebSpeech(); // stop any ongoing speech
+        speakWithWebSpeech(text, {
+          onStart: () => setIsSpeaking(true),
+          onEnd:   () => setIsSpeaking(false),
+          onError: () => setIsSpeaking(false),
+        });
+        // Still trigger animations
+        if (messageText) {
+          setSpokenMessage(messageText);
+          const { animName } = parseAnimTag(messageText);
+          let triggered = false;
+          if (animName) {
+            const byName = findClipByName(animName);
+            if (byName && viewerRef.current?.isVrmLoaded()) {
+              viewerRef.current.playVrmaUrl(byName.url, { loop: false, fadeIn: 0.4 }).catch(console.warn);
+              triggered = true;
+            }
+          }
+          if (!triggered) {
+            const match = findMatch(messageText, userLangPref);
+            if (match && viewerRef.current?.isVrmLoaded()) {
+              viewerRef.current.playVrmaUrl(match.url, { loop: false, fadeIn: 0.4 }).catch(console.warn);
+            }
+          }
+        }
+        return;
+      }
+
+      // Regular audio URL (ElevenLabs)
       audio.pause();
       audio.src = audioUrl;
 
@@ -141,6 +179,7 @@ export default function Index() {
 
   const handleSpeakEnd = useCallback(() => {
     audioRef.current?.pause();
+    stopWebSpeech();
     setIsSpeaking(false);
   }, []);
 
@@ -275,6 +314,7 @@ export default function Index() {
           onSpeakEnd={handleSpeakEnd}
           onUserMessage={handleUserMessage}
           voiceId={voiceId}
+          isPro={isPro}
           isMobile
           isOpen={chatOpen}
           onToggle={handleToggleChat}
@@ -289,6 +329,7 @@ export default function Index() {
               onSpeakEnd={handleSpeakEnd}
               onUserMessage={handleUserMessage}
               voiceId={voiceId}
+              isPro={isPro}
               onUnreadChange={setHasUnread}
               personality={personality}
             />

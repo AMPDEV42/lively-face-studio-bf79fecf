@@ -7,13 +7,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Send, Volume2, ChevronDown, X, Bot, User,
   Square, Plus, History, Trash2, Pencil, Check,
-  Search, Download, RefreshCw, MoreVertical,
+  Search, Download, RefreshCw, MoreVertical, Upload, Wifi, WifiOff,
+  Mic, MicOff, Radio,
 } from 'lucide-react';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { streamChat, generateTTS, parseAnimTag, type ChatMessage } from '@/lib/chat-api';
+import { SpeechModeButton } from '@/components/SpeechModeButton';
+import { streamChat, generateTTS, parseAnimTag, isOnline, type ChatMessage } from '@/lib/chat-api';
 import { useConversations } from '@/hooks/useConversations';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -23,6 +26,7 @@ interface ChatPanelProps {
   onUserMessage?: (text: string) => void;
   voiceId?: string;
   personality?: string;
+  isPro?: boolean;
   isMobile?: boolean;
   isOpen?: boolean;
   onToggle?: () => void;
@@ -35,6 +39,7 @@ export default function ChatPanel({
   onUserMessage,
   voiceId,
   personality,
+  isPro = false,
   isMobile = false,
   isOpen = true,
   onToggle,
@@ -57,11 +62,45 @@ export default function ChatPanel({
   const activeConvoIdRef = useRef<string | null>(null);
   const messageCountRef = useRef(0);
 
+  // Speech recognition (STT)
+  const userLang = typeof window !== 'undefined' ? (localStorage.getItem('vrm.lang') ?? 'id') : 'id';
+  const sttLang = userLang === 'auto' || !userLang ? 'id-ID' :
+    ({ id: 'id-ID', en: 'en-US', ja: 'ja-JP', ko: 'ko-KR', zh: 'zh-CN', th: 'th-TH', vi: 'vi-VN' } as Record<string, string>)[userLang] ?? 'id-ID';
+  const stt = useSpeechRecognition(sttLang);
+  const [speechMode, setSpeechMode] = useState(false);
+  const speechModeRef = useRef(false);
+  speechModeRef.current = speechMode;
+
+  // Ref to handleSend — populated after handleSend is defined below
+  const handleSendRef = useRef<((text: string) => void) | null>(null);
+
+  // Auto-send when STT gets a final result in speech mode
+  useEffect(() => {
+    if (!speechModeRef.current) return;
+    if (stt.status !== 'processing') return;
+    const text = stt.transcript.trim();
+    if (!text) return;
+    stt.reset();
+    handleSendRef.current?.(text);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stt.status]);
+
   const {
     conversations, activeId, setActiveId, loading: convosLoading,
     loadConversations, loadMessages, createConversation,
     saveMessage, maybeSetTitle, deleteConversation, renameConversation,
+    importConversations, clearAllConversations,
   } = useConversations(user?.id);
+
+  // Network status
+  const [online, setOnline] = useState(isOnline());
+  useEffect(() => {
+    const onOnline  = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener('online',  onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
+  }, []);
 
   useEffect(() => {
     if (user?.id) loadConversations();
@@ -176,7 +215,7 @@ export default function ChatPanel({
             }
             setLastAssistantText(assistantSoFar);
             setIsTTSLoading(true);
-            const ttsResult = await generateTTS(ttsText, voiceId);
+            const ttsResult = await generateTTS(ttsText, voiceId, 2, isPro);
             setIsTTSLoading(false);
             if (ttsResult.url) onSpeakStart(ttsResult.url, assistantSoFar);
             else toast.error('TTS gagal', { action: { label: 'Coba lagi', onClick: () => handleRetryTTS(ttsText, assistantSoFar) } });
@@ -195,7 +234,7 @@ export default function ChatPanel({
     const text = ttsText ?? lastAssistantText;
     if (!text) return;
     setIsTTSLoading(true);
-    const ttsResult = await generateTTS(text, voiceId);
+    const ttsResult = await generateTTS(text, voiceId, 2, isPro);
     setIsTTSLoading(false);
     if (ttsResult.url) {
       onSpeakStart(ttsResult.url, originalText ?? text);
@@ -205,8 +244,8 @@ export default function ChatPanel({
     }
   }, [lastAssistantText, voiceId, onSpeakStart]);
 
-  const handleSend = useCallback(async () => {
-    const text = input.trim();
+  const handleSend = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || isLoading) return;
 
     onUserMessage?.(text);
@@ -262,7 +301,7 @@ export default function ChatPanel({
             loadConversations();
             setLastAssistantText(assistantSoFar);
             setIsTTSLoading(true);
-            const ttsResult = await generateTTS(ttsText, voiceId);
+            const ttsResult = await generateTTS(ttsText, voiceId, 2, isPro);
             setIsTTSLoading(false);
             if (ttsResult.url) {
               onSpeakStart(ttsResult.url, assistantSoFar);
@@ -287,6 +326,30 @@ export default function ChatPanel({
     ensureConversation, saveMessage, maybeSetTitle, loadConversations, handleRetryTTS,
   ]);
 
+  // Keep ref in sync so STT auto-send can call handleSend
+  useEffect(() => { handleSendRef.current = (text: string) => handleSend(text); }, [handleSend]);
+
+  // Import conversations from JSON file
+  const handleImport = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const result = importConversations(text);
+        if (result.error) toast.error('Import gagal: ' + result.error);
+        else if (result.imported === 0) toast.info('Tidak ada percakapan baru untuk diimpor');
+        else toast.success(`${result.imported} percakapan berhasil diimpor`);
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, [importConversations]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
@@ -301,31 +364,70 @@ export default function ChatPanel({
   // ── Shared UI pieces ──────────────────────────────────────────────────────
 
   const inputBar = (
-    <div className="flex items-end gap-2">
-      <div className="flex-1">
-        <Textarea
-          ref={textareaRef}
-          value={input}
-          onChange={handleTextareaChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Ketik pesan…"
-          disabled={isLoading}
-          rows={1}
-          className="resize-none min-h-[40px] max-h-[120px] bg-secondary/50 border-border/60 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors scrollbar-thin"
-          style={{ height: 'auto' }}
-        />
-      </div>
-      {isLoading ? (
-        <Button type="button" size="icon" onClick={handleStop}
-          className="h-10 w-10 shrink-0 bg-destructive/80 hover:bg-destructive text-white shadow-sm" title="Hentikan">
-          <Square className="w-3.5 h-3.5 fill-current" />
-        </Button>
-      ) : (
-        <Button type="button" size="icon" onClick={handleSend} disabled={!input.trim()}
-          className="h-10 w-10 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm disabled:opacity-40">
-          <Send className="w-4 h-4" />
-        </Button>
+    <div className="space-y-2">
+      {/* Offline banner */}
+      {!online && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+          <WifiOff className="w-3.5 h-3.5 shrink-0" />
+          <span>Tidak ada koneksi internet</span>
+        </div>
       )}
+
+      {/* STT interim transcript */}
+      {speechMode && stt.status === 'listening' && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/8 border border-primary/20 text-xs text-primary/80 animate-pulse">
+          <Radio className="w-3.5 h-3.5 shrink-0" />
+          <span>{stt.transcript || 'Mendengarkan…'}</span>
+        </div>
+      )}
+      {speechMode && stt.error && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+          <MicOff className="w-3.5 h-3.5 shrink-0" />
+          <span>{stt.error}</span>
+        </div>
+      )}
+
+      <div className="flex items-end gap-2">
+        {/* Speech mode toggle */}
+        <SpeechModeButton
+          speechMode={speechMode}
+          sttStatus={stt.status}
+          sttSupported={stt.isSupported}
+          onToggle={() => {
+            if (speechMode) { stt.reset(); setSpeechMode(false); }
+            else { setSpeechMode(true); }
+          }}
+          onStartListening={() => { stt.reset(); stt.start(); }}
+        />
+
+        <div className="flex-1">
+          <Textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleTextareaChange}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              speechMode ? 'Tekan tombol mic untuk bicara…' :
+              online ? 'Ketik pesan…' : 'Offline — tidak bisa mengirim pesan'
+            }
+            disabled={isLoading || !online}
+            rows={1}
+            className="resize-none min-h-[40px] max-h-[120px] bg-secondary/50 border-border/60 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors scrollbar-thin"
+            style={{ height: 'auto' }}
+          />
+        </div>
+        {isLoading ? (
+          <Button type="button" size="icon" onClick={handleStop}
+            className="h-10 w-10 shrink-0 bg-destructive/80 hover:bg-destructive text-white shadow-sm" title="Hentikan">
+            <Square className="w-3.5 h-3.5 fill-current" />
+          </Button>
+        ) : (
+          <Button type="button" size="icon" onClick={() => handleSend()} disabled={!input.trim() || !online}
+            className="h-10 w-10 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm disabled:opacity-40">
+            <Send className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 
@@ -547,9 +649,12 @@ export default function ChatPanel({
                     <MoreVertical className="w-3.5 h-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44 bg-card/95 backdrop-blur-xl border-border/60">
+                <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/60">
                   <DropdownMenuItem onClick={handleExport} className="text-xs gap-2">
                     <Download className="w-3.5 h-3.5" /> Export JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleImport} className="text-xs gap-2">
+                    <Upload className="w-3.5 h-3.5" /> Import JSON
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={handleRegenerate}
@@ -557,6 +662,13 @@ export default function ChatPanel({
                     className="text-xs gap-2"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> Regenerasi
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => { if (confirm('Hapus semua riwayat chat?')) clearAllConversations(); }}
+                    className="text-xs gap-2 text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Hapus semua riwayat
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

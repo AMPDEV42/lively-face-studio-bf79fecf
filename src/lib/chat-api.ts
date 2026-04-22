@@ -3,23 +3,22 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+/** Check if the browser has network connectivity */
+export function isOnline(): boolean {
+  return typeof navigator !== 'undefined' ? navigator.onLine : true;
+}
+
 /**
  * Parse the optional `[ANIM:<name>]` tag the AI may append to its reply.
- * Returns the text with the tag stripped + the animation name (or null).
- * Tag may be on its own line or appended at the end. Match is greedy on
- * the last occurrence so retries don't confuse the parser.
  */
 export function parseAnimTag(text: string): { clean: string; animName: string | null } {
   if (!text) return { clean: text, animName: null };
-  // Match the LAST [ANIM:...] occurrence, optionally surrounded by whitespace/newlines.
   const re = /\s*\[ANIM:\s*([^\]\n]+?)\s*\]\s*$/i;
   const m = text.match(re);
   if (!m) return { clean: text, animName: null };
   const name = m[1].trim();
   const clean = text.slice(0, m.index).replace(/\s+$/, "");
-  if (!name || name.toLowerCase() === "none") {
-    return { clean, animName: null };
-  }
+  if (!name || name.toLowerCase() === "none") return { clean, animName: null };
   return { clean, animName: name };
 }
 
@@ -36,6 +35,8 @@ export async function streamChat({
   systemPrompt?: string;
   signal?: AbortSignal;
 }) {
+  if (!isOnline()) throw new Error("Tidak ada koneksi internet.");
+
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
     method: "POST",
     headers: {
@@ -89,31 +90,76 @@ export async function streamChat({
   onDone();
 }
 
+/** Generate TTS with automatic retry on transient failures.
+ * Falls back to Web Speech API if:
+ * - isPro is false (free user)
+ * - ElevenLabs returns rate limit (429)
+ * - ElevenLabs fails after retries
+ */
 export async function generateTTS(
   text: string,
   voiceId?: string,
-): Promise<{ url: string; error: null } | { url: null; error: string }> {
-  try {
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/tts`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-      body: JSON.stringify({ text, voiceId }),
-    });
+  retries = 2,
+  isPro = true,
+): Promise<{ url: string; error: null; source: 'elevenlabs' | 'webspeech' } |
+           { url: null;   error: string; source: 'none' }> {
+  if (!isOnline()) return { url: null, error: "Tidak ada koneksi internet", source: 'none' };
 
-    if (!resp.ok) {
-      if (resp.status === 429) return { url: null, error: "Rate limited TTS" };
-      return { url: null, error: `TTS error ${resp.status}` };
-    }
-
-    const data = await resp.json();
-    if (data.audioContent) {
-      return { url: `data:audio/mpeg;base64,${data.audioContent}`, error: null };
-    }
-    return { url: null, error: "No audio content" };
-  } catch (e) {
-    return { url: null, error: (e as Error).message };
+  // Free users always use Web Speech
+  if (!isPro) {
+    return { url: 'webspeech://' + encodeURIComponent(text), error: null, source: 'webspeech' };
   }
+
+  // Pro users: try ElevenLabs first
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/tts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ text, voiceId }),
+      });
+
+      if (!resp.ok) {
+        if (resp.status === 429) {
+          // Rate limited — fall back to Web Speech
+          console.warn('[TTS] ElevenLabs rate limited, falling back to Web Speech');
+          return { url: 'webspeech://' + encodeURIComponent(text), error: null, source: 'webspeech' };
+        }
+        if (resp.status === 401 || resp.status === 403) return { url: null, error: "Auth error", source: 'none' };
+        if (resp.status >= 500 && attempt < retries) {
+          await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+          continue;
+        }
+        // Server error after retries — fall back to Web Speech
+        return { url: 'webspeech://' + encodeURIComponent(text), error: null, source: 'webspeech' };
+      }
+
+      const data = await resp.json();
+      if (data.audioContent) {
+        return { url: `data:audio/mpeg;base64,${data.audioContent}`, error: null, source: 'elevenlabs' };
+      }
+      return { url: null, error: "No audio content", source: 'none' };
+    } catch (e) {
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+        continue;
+      }
+      // Network error — fall back to Web Speech
+      return { url: 'webspeech://' + encodeURIComponent(text), error: null, source: 'webspeech' };
+    }
+  }
+  return { url: null, error: "Max retries exceeded", source: 'none' };
+}
+
+/** Check if a TTS URL is a Web Speech fallback */
+export function isWebSpeechUrl(url: string): boolean {
+  return url.startsWith('webspeech://');
+}
+
+/** Extract text from a Web Speech URL */
+export function getWebSpeechText(url: string): string {
+  return decodeURIComponent(url.replace('webspeech://', ''));
 }
