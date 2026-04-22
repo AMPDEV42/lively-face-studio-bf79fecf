@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Volume2, ChevronUp, X } from 'lucide-react';
-import { streamChat, generateTTS, type ChatMessage } from '@/lib/chat-api';
+import { streamChat, generateTTS, parseAnimTag, type ChatMessage } from '@/lib/chat-api';
 import { toast } from 'sonner';
 
 interface ChatPanelProps {
@@ -87,10 +87,27 @@ export default function ChatPanel({
             onUnreadChange(true);
           }
           if (assistantSoFar) {
+            // Strip the [ANIM:<name>] tag (if any) before sending to TTS so
+            // the synth doesn't read "ANIM colon waving" out loud. Pass the
+            // ORIGINAL text to onSpeakStart so Index can re-parse the tag
+            // and trigger the right animation.
+            const { clean } = parseAnimTag(assistantSoFar);
+            const ttsText = clean || assistantSoFar;
+            // Also update the visible bubble so the tag never shows in chat UI.
+            if (clean !== assistantSoFar) {
+              setMessages((prev) =>
+                prev.map((m, i) =>
+                  i === prev.length - 1 && m.role === 'assistant'
+                    ? { ...m, content: clean }
+                    : m,
+                ),
+              );
+            }
             setIsTTSLoading(true);
-            const audioUrl = await generateTTS(assistantSoFar, voiceId);
+            const audioUrl = await generateTTS(ttsText, voiceId);
             setIsTTSLoading(false);
             if (audioUrl) {
+              // Pass the ORIGINAL (with tag) so Index can read [ANIM:<name>].
               onSpeakStart(audioUrl, assistantSoFar);
             }
           }

@@ -241,12 +241,37 @@ export default function VrmaLibrary({ refreshKey, onPlay }: VrmaLibraryProps) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input
-                    className="h-7 text-xs"
-                    placeholder="keyword1, keyword2, ..."
-                    value={editState.keywords}
-                    onChange={(e) => setEditState((s) => ({ ...s, keywords: e.target.value }))}
-                  />
+                  <Tabs defaultValue="id" className="w-full">
+                    <TabsList className="h-7 grid grid-cols-7 w-full">
+                      {LANGS.map((l) => (
+                        <TabsTrigger
+                          key={l}
+                          value={l}
+                          className="text-[10px] px-1 h-5 data-[state=active]:bg-primary/20"
+                        >
+                          {LANG_LABEL[l]}
+                          {(editState.keywordsByLang[l] ?? '').trim() && (
+                            <span className="ml-0.5 w-1 h-1 rounded-full bg-primary inline-block" />
+                          )}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {LANGS.map((l) => (
+                      <TabsContent key={l} value={l} className="mt-1.5">
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder={`Keyword ${LANG_LABEL[l]} (pisahkan dengan koma)`}
+                          value={editState.keywordsByLang[l]}
+                          onChange={(e) =>
+                            setEditState((s) => ({
+                              ...s,
+                              keywordsByLang: { ...s.keywordsByLang, [l]: e.target.value },
+                            }))
+                          }
+                        />
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                   <div className="flex gap-1.5">
                     <Button
                       size="sm"
