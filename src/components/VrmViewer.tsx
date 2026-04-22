@@ -415,6 +415,39 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelUrl, loading, switchIdleClip]);
 
+  // Reusable: play next talking clip in rotation. Used by TTS-start effect
+  // AND by gesture onFinished handler so talking can resume after a gesture.
+  const playNextTalking = useCallback(() => {
+    const mixer = mixerRef.current;
+    const clips = talkingClipsRef.current;
+    if (!mixer || clips.length === 0) return;
+    if (!isTalkingPlayingRef.current) return;
+    if (vrmaActionRef.current) return; // manual VRMA / gesture took over
+
+    const clip = clips[talkingClipIndexRef.current % clips.length];
+    talkingClipIndexRef.current = (talkingClipIndexRef.current + 1) % clips.length;
+
+    vrmaPlayingRef.current = true;
+    const isFirst = idleActionRef.current?.isRunning() ?? false;
+    const action = playVRMA(mixer, clip, { loop: false, fadeIn: isFirst ? 0.4 : 0.5 });
+    if (!action) { vrmaPlayingRef.current = false; return; }
+    if (isFirst) {
+      setTimeout(() => { idleActionRef.current = null; }, 450);
+    }
+    activeDrivenBonesRef.current = getClipDrivenBones(clip);
+
+    const onFinished = (e: { action: THREE.AnimationAction }) => {
+      if (e.action !== action) return;
+      mixer.removeEventListener('finished', onFinished);
+      if (isTalkingPlayingRef.current && !vrmaActionRef.current) {
+        playNextTalking();
+      } else {
+        vrmaPlayingRef.current = false;
+      }
+    };
+    mixer.addEventListener('finished', onFinished);
+  }, []);
+
   // ── Play talking VRMA when TTS starts, cross-fade back to idle when ends ──
   useEffect(() => {
     const vrm = vrmRef.current;
@@ -430,48 +463,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
       isReturnToRestRef.current = false;
       isTalkingPlayingRef.current = true;
-      // Mark idle as paused so the loop counter stops trying to switch idle clips.
       idlePausedForActivityRef.current = true;
 
-      const playNext = () => {
-        if (!isTalkingPlayingRef.current) return;
-        if (vrmaActionRef.current) return; // manual VRMA took over
-
-        const clips = talkingClipsRef.current;
-        if (clips.length === 0) return;
-
-        const clip = clips[talkingClipIndexRef.current % clips.length];
-        talkingClipIndexRef.current = (talkingClipIndexRef.current + 1) % clips.length;
-
-        vrmaPlayingRef.current = true;
-        // Cross-fade from idle (or previous talking clip) into this one.
-        // First clip uses 0.4s (idle→talking), subsequent clips 0.5s (talking→talking).
-        const isFirst = idleActionRef.current?.isRunning() ?? false;
-        const action = playVRMA(mixer, clip, { loop: false, fadeIn: isFirst ? 0.4 : 0.5 });
-        if (!action) { vrmaPlayingRef.current = false; return; }
-        // Once cross-fade is past, idle action will be at weight 0 — clear the ref
-        // so restartIdleLoop creates a fresh action when needed.
-        if (isFirst) {
-          setTimeout(() => {
-            idleActionRef.current = null;
-          }, 450);
-        }
-        activeDrivenBonesRef.current = getClipDrivenBones(clip);
-
-        // When this clip ends, play next (loop through talking clips)
-        const onFinished = (e: { action: THREE.AnimationAction }) => {
-          if (e.action !== action) return;
-          mixer.removeEventListener('finished', onFinished);
-          if (isTalkingPlayingRef.current && !vrmaActionRef.current) {
-            playNext();
-          } else {
-            vrmaPlayingRef.current = false;
-          }
-        };
-        mixer.addEventListener('finished', onFinished);
-      };
-
-      playNext();
+      playNextTalking();
     } else {
       // TTS ended — cross-fade from talking back to idle clip (no T-pose flash).
       if (isTalkingPlayingRef.current) {
