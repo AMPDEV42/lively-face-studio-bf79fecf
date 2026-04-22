@@ -539,17 +539,35 @@ export function updateMicroExpressions(elapsed: number, vrm: VRM, delta = 0.016)
 let _smoothedMouth = 0;
 let _currentShape = 0;
 const MOUTH_SHAPES_STD = ['aa', 'ih', 'ou'] as const;
-// ARKit mouth shapes for lip sync (PascalCase)
-const MOUTH_SHAPES_PS = ['JawOpen', 'MouthFunnel', 'MouthPucker'] as const;
+// ARKit mouth shapes for lip sync — JawOpen is driven separately at reduced weight
+const MOUTH_SHAPES_PS = ['MouthFunnel', 'MouthPucker', 'MouthLeft'] as const;
 let _shapeTimer = 0;
-const SHAPE_DURATION = 0.12;
+
+// Shape hold duration: longer = more natural, less mechanical
+const SHAPE_DURATION = 0.18;
+
+// Max mouth open — keep subtle, real speech rarely opens jaw fully
+const MAX_MOUTH_PS  = 0.45;
+const MAX_MOUTH_STD = 0.55;
+// JawOpen is a separate, softer driver (not the primary shape)
+const JAW_SCALE     = 0.28;
+// How fast mouth opens (fast) vs closes (slow) — asymmetric feels natural
+const SMOOTH_OPEN   = 0.18;
+const SMOOTH_CLOSE  = 0.08;
 
 export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016): void {
   if (!vrm.expressionManager) return;
 
-  const smoothing = 0.1;
+  // Asymmetric smoothing: open fast, close slowly — avoids "stuck open" look
+  const smoothing = audioLevel > _smoothedMouth ? SMOOTH_OPEN : SMOOTH_CLOSE;
   _smoothedMouth += (audioLevel - _smoothedMouth) * smoothing;
-  const mouthValue = Math.pow(Math.min(_smoothedMouth * 1.4, 1.0), 1.3);
+
+  // Gentle power curve — keeps mouth movement subtle at low audio levels
+  const rawValue = Math.min(_smoothedMouth * 1.1, 1.0);
+  const mode = detectExpressionMode(vrm);
+  const maxMouth = mode === 'perfectsync' ? MAX_MOUTH_PS : MAX_MOUTH_STD;
+  // Power > 1 compresses low values (small sounds = barely open)
+  const mouthValue = Math.pow(rawValue, 1.6) * maxMouth;
 
   _shapeTimer += delta;
   if (_shapeTimer >= SHAPE_DURATION) {
@@ -557,29 +575,38 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016): void
     _currentShape = (_currentShape + 1) % 3;
   }
 
+  // Cross-blend between current and next shape for smooth transitions
   const blend = _shapeTimer / SHAPE_DURATION;
-  const mode = detectExpressionMode(vrm);
 
   if (mode === 'perfectsync') {
-    // Clear all mouth shapes first
-    for (const s of MOUTH_SHAPES_PS) vrm.expressionManager.setValue(s, 0);
-    // Also drive mouthSmile down slightly when speaking
-    vrm.expressionManager.setValue('MouthSmileLeft',  Math.max(0, _currentPS.MouthSmileLeft  * (1 - mouthValue * 0.4)));
-    vrm.expressionManager.setValue('MouthSmileRight', Math.max(0, _currentPS.MouthSmileRight * (1 - mouthValue * 0.4)));
+    const em = vrm.expressionManager;
+
+    // Clear shape blendshapes
+    for (const s of MOUTH_SHAPES_PS) em.setValue(s, 0);
+
+    // Suppress smile slightly while speaking (natural — hard to smile while talking)
+    em.setValue('MouthSmileLeft',  Math.max(0, _currentPS.MouthSmileLeft  * (1 - mouthValue * 0.5)));
+    em.setValue('MouthSmileRight', Math.max(0, _currentPS.MouthSmileRight * (1 - mouthValue * 0.5)));
 
     const primary   = MOUTH_SHAPES_PS[_currentShape];
     const secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % 3];
-    vrm.expressionManager.setValue(primary,   mouthValue * (1 - blend * 0.4));
-    vrm.expressionManager.setValue(secondary, mouthValue * blend * 0.4);
-    vrm.expressionManager.setValue('JawOpen', mouthValue * 0.6);
-    vrm.expressionManager.setValue('MouthLowerDownLeft',  mouthValue * 0.3);
-    vrm.expressionManager.setValue('MouthLowerDownRight', mouthValue * 0.3);
+    em.setValue(primary,   mouthValue * (1 - blend * 0.35));
+    em.setValue(secondary, mouthValue * blend * 0.35);
+
+    // JawOpen: soft, independent driver — much lower than primary shape
+    em.setValue('JawOpen', mouthValue * JAW_SCALE);
+
+    // Lower lip drop: very subtle, only at higher volumes
+    const lipDrop = mouthValue > 0.2 ? (mouthValue - 0.2) * 0.15 : 0;
+    em.setValue('MouthLowerDownLeft',  lipDrop);
+    em.setValue('MouthLowerDownRight', lipDrop);
   } else {
-    for (const s of MOUTH_SHAPES_STD) vrm.expressionManager.setValue(s, 0);
+    const em = vrm.expressionManager;
+    for (const s of MOUTH_SHAPES_STD) em.setValue(s, 0);
     const primary   = MOUTH_SHAPES_STD[_currentShape];
     const secondary = MOUTH_SHAPES_STD[(_currentShape + 1) % 3];
-    vrm.expressionManager.setValue(primary,   mouthValue * (1 - blend * 0.4));
-    vrm.expressionManager.setValue(secondary, mouthValue * blend * 0.4);
+    em.setValue(primary,   mouthValue * (1 - blend * 0.35));
+    em.setValue(secondary, mouthValue * blend * 0.35);
   }
 }
 
@@ -596,10 +623,11 @@ export function resetMouthExpressions(vrm: VRM): void {
       try { vrm.expressionManager.setValue(k, 0); } catch (_) { /* ok */ }
     }
   } else {
-    ['aa','ih','ou','ee','oh'].forEach(s => vrm.expressionManager?.setValue(s, 0));
+    ['aa', 'ih', 'ou', 'ee', 'oh'].forEach(s => vrm.expressionManager?.setValue(s, 0));
   }
   _smoothedMouth = 0;
   _shapeTimer = 0;
+  _currentShape = 0;
 }
 
 // ============================================
