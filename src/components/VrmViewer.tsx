@@ -646,25 +646,49 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       const onFinished = (e: { action: THREE.AnimationAction }) => {
         if (e.action === vrmaActionRef.current) {
           mixer.removeEventListener('finished', onFinished);
-          // After admin preview clip finishes, return to rest automatically
-          const vrm = vrmRef.current;
-          if (vrm) {
-            returnToRestPose(mixer, vrm, 0.5).then(() => {
+          // After preview/gesture finishes, cross-fade back to idle (or to
+          // talking if TTS started while gesture was playing).
+          vrmaActionRef.current = null;
+          const idleClips = idleClipsRef.current;
+          if (isTalkingPlayingRef.current && talkingClipsRef.current.length > 0) {
+            // Talking is active — let the talking effect re-trigger naturally.
+            // We just clear the action ref; the next playNext() will fire.
+          } else if (idleClips.length > 0 && mixerRef.current) {
+            const idleClip = idleClips[idleCurrentIndexRef.current % idleClips.length];
+            idleClipRef.current = idleClip;
+            const idleAction = playVRMA(mixerRef.current, idleClip, { loop: true, fadeIn: 0.5 });
+            if (idleAction) {
+              idleActionRef.current = idleAction;
+              vrmaPlayingRef.current = true;
+              activeDrivenBonesRef.current = getClipDrivenBones(idleClip);
+            } else {
               vrmaPlayingRef.current = false;
-              vrmaActionRef.current = null;
-              restartIdleLoop();
-            });
+            }
           } else {
             vrmaPlayingRef.current = false;
-            vrmaActionRef.current = null;
-            restartIdleLoop();
           }
-          console.log('[VRMA] Playback finished — returning to rest pose');
+          console.log('[VRMA] Playback finished — cross-faded back to idle/talking');
         }
       };
       mixer.addEventListener('finished', onFinished);
     },
     stopVrma: (fadeOut = 0.3) => {
+      isTalkingPlayingRef.current = false;
+      const vrm = vrmRef.current;
+      if (vrm && mixerRef.current) {
+        returnToRestPose(mixerRef.current, vrm, fadeOut).then(() => {
+          vrmaPlayingRef.current = false;
+          vrmaActionRef.current = null;
+          restartIdleLoop();
+        });
+      } else {
+        stopVRMA(mixerRef.current, fadeOut);
+        vrmaPlayingRef.current = false;
+        vrmaActionRef.current = null;
+        restartIdleLoop();
+      }
+    },
+  }), []);
       isTalkingPlayingRef.current = false;
       const vrm = vrmRef.current;
       if (vrm && mixerRef.current) {
