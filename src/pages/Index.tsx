@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { detectMood } from '@/lib/sentiment';
 import { setTargetMood } from '@/lib/vrm-animations';
 import { useVrmaTriggers } from '@/hooks/useVrmaTriggers';
+import { parseAnimTag } from '@/lib/chat-api';
 import type { VrmViewerHandle, CameraPreset } from '@/components/VrmViewer';
 import type { LangCode } from '@/lib/lang-detect';
 
