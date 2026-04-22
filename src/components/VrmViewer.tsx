@@ -153,8 +153,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           .eq('is_active', true)
           .order('name', { ascending: true });
 
-        if (cancelled || !data || data.length === 0) return;
+        if (cancelled || !data || data.length === 0) {
+          console.log('[VRMA Talking] No talking clips found');
+          return;
+        }
 
+        console.log('[VRMA Talking] Loading', data.length, 'talking clip(s)…');
         const clips: THREE.AnimationClip[] = [];
         for (const row of data) {
           try {
@@ -163,7 +167,10 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
               .getPublicUrl(row.file_path);
             if (urlData?.publicUrl) {
               const clip = await loadVRMA(urlData.publicUrl, vrm);
-              if (!cancelled) clips.push(clip);
+              if (!cancelled) {
+                clips.push(clip);
+                console.log('[VRMA Talking] Loaded:', row.file_path);
+              }
             }
           } catch (e) {
             console.warn('[VRMA Talking] Failed to load clip:', e);
@@ -172,17 +179,16 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         if (!cancelled) {
           talkingClipsRef.current = clips;
           talkingClipIndexRef.current = 0;
-          console.log('[VRMA Talking] Loaded', clips.length, 'talking clip(s)');
+          console.log('[VRMA Talking] ✓ All', clips.length, 'talking clip(s) ready');
         }
       } catch (e) {
         console.warn('[VRMA Talking] Could not query talking clips:', e);
       }
     };
-    // Delay to ensure VRM is mounted
-    const timer = setTimeout(loadTalkingClips, 300);
+    // Load immediately instead of delaying — avoids T-pose flash during load
+    loadTalkingClips().catch((e) => console.warn('[VRMA Talking] Load error:', e));
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelUrl, loading]);
@@ -195,6 +201,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       const mixer = mixerRef.current;
       if (!vrm || !mixer) return;
       try {
+        console.log('[VRMA Idle] Starting idle clips load...');
         const { data } = await supabase
           .from('vrma_animations')
           .select('file_path,name')
@@ -202,13 +209,26 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           .eq('is_active', true)
           .order('name', { ascending: true });
 
-        if (cancelled || !data || data.length === 0) {
-          console.log('[VRMA Idle] No idle clips found in library — micro-gestures only');
+        if (cancelled) {
+          console.log('[VRMA Idle] Load cancelled');
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          console.warn('[VRMA Idle] No idle clips found in library — micro-gestures only');
+          // Still try to ensure something is active to avoid T-pose
+          if (!vrmaPlayingRef.current && !isTalkingPlayingRef.current && !vrmaActionRef.current) {
+            console.log('[VRMA Idle] No animation active — waiting for content to arrive');
+          }
           return;
         }
 
         console.log('[VRMA Idle] Loading', data.length, 'idle clip(s)…');
         const clips: THREE.AnimationClip[] = [];
+        let firstClipLoaded = false;
+        let firstClip: THREE.AnimationClip | null = null;
+
+        // Load clips sequentially, but start animation as soon as first clip is ready
         for (const row of data) {
           try {
             const { data: urlData } = supabase.storage
@@ -219,54 +239,63 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             if (!cancelled) {
               clips.push(clip);
               console.log('[VRMA Idle] Loaded:', row.name);
+
+              // AUTO-START on first clip without waiting for others
+              // This prevents T-pose flash during loading
+              if (!firstClipLoaded && !vrmaActionRef.current && !isTalkingPlayingRef.current) {
+                firstClipLoaded = true;
+                firstClip = clip;
+                idleClipsRef.current = clips; // Update immediately with what we have
+                idleCurrentIndexRef.current = 0;
+                idleLoopCountRef.current = 0;
+                idleLoopsBeforeSwitchRef.current = 3 + Math.floor(Math.random() * 4);
+
+                const m = mixerRef.current;
+                if (m) {
+                  const action = m.clipAction(clip);
+                  action.reset();
+                  action.setLoop(THREE.LoopRepeat, Infinity);
+                  action.enabled = true;
+                  action.weight = 1;
+                  action.fadeIn(0.3);
+                  action.play();
+                  idleActionRef.current = action;
+                  vrmaPlayingRef.current = true;
+                  activeDrivenBonesRef.current = getClipDrivenBones(clip);
+                  console.log('[VRMA Idle] ✓ FIRST CLIP AUTO-STARTED (no T-pose!)');
+                }
+              }
             }
           } catch (e) {
             console.warn('[VRMA Idle] Failed to load clip:', e);
           }
         }
 
-        if (cancelled || clips.length === 0) return;
+        if (cancelled || clips.length === 0) {
+          console.warn('[VRMA Idle] No idle clips loaded — will rely on procedural micro-gestures only');
+          return;
+        }
 
-        // Shuffle so initial order is random
-        for (let i = clips.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [clips[i], clips[j]] = [clips[j], clips[i]];
+        // After all clips loaded, shuffle array for random switching
+        // (but keep first one active since already started)
+        if (clips.length > 1) {
+          for (let i = clips.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [clips[i], clips[j]] = [clips[j], clips[i]];
+          }
         }
 
         idleClipsRef.current = clips;
-        idleCurrentIndexRef.current = 0;
-        idleLoopCountRef.current = 0;
-        // Randomise first switch threshold: 3–6 loops
-        idleLoopsBeforeSwitchRef.current = 3 + Math.floor(Math.random() * 4);
-
-        const firstClip = clips[0];
-        idleClipRef.current = firstClip;
-        console.log('[VRMA Idle] All clips loaded. Starting with index 0, switch after',
-          idleLoopsBeforeSwitchRef.current, 'loops');
-
-        // Auto-play looped idle if nothing else is active
-        const m = mixerRef.current;
-        if (m && !vrmaActionRef.current && !isTalkingPlayingRef.current) {
-          const action = m.clipAction(firstClip);
-          action.reset();
-          action.setLoop(THREE.LoopRepeat, Infinity);
-          action.enabled = true;
-          action.weight = 1;
-          action.fadeIn(0.5);
-          action.play();
-          idleActionRef.current = action;
-          vrmaPlayingRef.current = true;
-          activeDrivenBonesRef.current = getClipDrivenBones(firstClip);
-          console.log('[VRMA Idle] Auto-loop started');
-        }
+        console.log('[VRMA Idle] All clips loaded (' + clips.length + '). Idle loop active (' + (firstClipLoaded ? 'yes' : 'no') + ')');
       } catch (e) {
         console.warn('[VRMA Idle] Could not load idle clips:', e);
       }
     };
-    const timer = setTimeout(loadIdleClips, 500);
+    // Load immediately instead of delaying — avoids T-pose flash during load.
+    // This is safe because VRM will be available by the time this effect runs.
+    loadIdleClips().catch((e) => console.warn('[VRMA Idle] Load error:', e));
     return () => {
       cancelled = true;
-      clearTimeout(timer);
       const action = idleActionRef.current;
       if (action) {
         try { action.stop(); } catch (_) { /* ok */ }
@@ -281,11 +310,22 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   // Helper: (re)start the idle VRMA loop. Picks the current idle clip from the pool.
   // Called after talking ends or admin preview finishes (since playVRMA uncacheRoots
   // every previous action including idle).
+  // IMPORTANT: This ensures we never get stuck in T-pose by always returning to idle.
   const restartIdleLoop = useCallback(() => {
     const mixer = mixerRef.current;
     const clips = idleClipsRef.current;
-    if (!mixer || clips.length === 0) return;
-    if (vrmaActionRef.current || isTalkingPlayingRef.current) return;
+
+    // If no idle clips loaded, don't try to restart (will just use micro-gestures)
+    if (!mixer || clips.length === 0) {
+      console.log('[VRMA Idle] No idle clips available to restart');
+      return;
+    }
+
+    // Don't restart if another action is currently playing
+    if (vrmaActionRef.current || isTalkingPlayingRef.current) {
+      console.log('[VRMA Idle] Cannot restart — another action is active');
+      return;
+    }
 
     const clip = clips[idleCurrentIndexRef.current % clips.length];
     idleClipRef.current = clip;
@@ -300,9 +340,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       idleActionRef.current = action;
       vrmaPlayingRef.current = true;
       activeDrivenBonesRef.current = getClipDrivenBones(clip);
-      console.log('[VRMA Idle] Resumed idle loop, clip index:', idleCurrentIndexRef.current);
+      console.log('[VRMA Idle] ✓ Resumed idle loop, clip index:', idleCurrentIndexRef.current);
     } catch (e) {
-      console.warn('[VRMA Idle] Could not restart idle loop:', e);
+      console.warn('[VRMA Idle] ✗ Could not restart idle loop:', e);
     }
   }, []);
 
@@ -471,11 +511,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       if (isTalkingPlayingRef.current) {
         isTalkingPlayingRef.current = false;
         idlePausedForActivityRef.current = false;
+        console.log('[TTS] Speaking ended — transitioning back to idle');
 
         const clips = idleClipsRef.current;
         if (mixer && clips.length > 0) {
           // Cross-fade directly to current idle clip — playVRMA handles fadeOut
-          // of the talking action while fadeIn the idle one.
+          // of the talking action while fadeIn the idle one (smooth, no T-pose).
+          console.log('[TTS] Crossfading to idle clip');
           const idleClip = clips[idleCurrentIndexRef.current % clips.length];
           idleClipRef.current = idleClip;
           const idleAction = playVRMA(mixer, idleClip, { loop: true, fadeIn: 0.5 });
@@ -483,17 +525,21 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             idleActionRef.current = idleAction;
             vrmaPlayingRef.current = true;
             activeDrivenBonesRef.current = getClipDrivenBones(idleClip);
+            console.log('[TTS] ✓ Successfully crossfaded to idle');
           } else {
+            console.warn('[TTS] ✗ Failed to crossfade to idle');
             vrmaPlayingRef.current = false;
           }
-        } else if (vrm && mixer && vrmaPlayingRef.current) {
-          // Fallback: no idle clips loaded — fade everything out softly (no T-pose).
+        } else if (mixer && vrmaPlayingRef.current) {
+          // Fallback: no idle clips loaded yet — fade everything out softly (no T-pose).
+          console.log('[TTS] No idle clips loaded — soft fade out and retry');
           isReturnToRestRef.current = true;
           const actions = (mixer as unknown as { _actions: THREE.AnimationAction[] })._actions ?? [];
           actions.forEach((a) => { try { a.fadeOut(0.5); } catch (_) { /* ok */ } });
           setTimeout(() => {
-            vrmaPlayingRef.current = false;
             isReturnToRestRef.current = false;
+            vrmaPlayingRef.current = false;
+            // Retry idle loop once
             restartIdleLoop();
           }, 600);
         }
@@ -641,30 +687,50 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           mixer.removeEventListener('finished', onFinished);
           // After preview/gesture finishes, decide what to resume:
           //   - If TTS still active → resume talking loop
-          //   - Otherwise → cross-fade to idle
+          //   - If idle clips available → cross-fade to idle (smooth, no T-pose)
+          //   - Otherwise → fade out and wait for idle to be ready
           vrmaActionRef.current = null;
           const idleClips = idleClipsRef.current;
+          const m = mixerRef.current;
+
           if (isSpeakingRef.current && talkingClipsRef.current.length > 0) {
             // Talking still ongoing — resume it from where we are. The talking
             // action will cross-fade from the gesture pose smoothly.
+            console.log('[VRMA] Gesture finished while speaking — resuming talking');
             isTalkingPlayingRef.current = true;
             idlePausedForActivityRef.current = true;
             playNextTalking();
-          } else if (idleClips.length > 0 && mixerRef.current) {
+          } else if (m && idleClips.length > 0) {
+            // Idle clips available — smooth cross-fade to idle (never T-pose)
+            console.log('[VRMA] Gesture finished — cross-fading to idle');
             const idleClip = idleClips[idleCurrentIndexRef.current % idleClips.length];
             idleClipRef.current = idleClip;
-            const idleAction = playVRMA(mixerRef.current, idleClip, { loop: true, fadeIn: 0.5 });
+            const idleAction = playVRMA(m, idleClip, { loop: true, fadeIn: 0.5 });
             if (idleAction) {
               idleActionRef.current = idleAction;
               vrmaPlayingRef.current = true;
               activeDrivenBonesRef.current = getClipDrivenBones(idleClip);
             } else {
+              console.warn('[VRMA] Failed to play idle clip after gesture');
               vrmaPlayingRef.current = false;
             }
+          } else if (m) {
+            // No idle clips loaded yet — just fade out current action and set flag
+            // so idle loop restarts once clips become available
+            console.log('[VRMA] Gesture finished, no idle clips yet — soft fade out');
+            isReturnToRestRef.current = true;
+            const actions = (m as unknown as { _actions: THREE.AnimationAction[] })._actions ?? [];
+            actions.forEach((a) => { try { a.fadeOut(0.5); } catch (_) { /* ok */ } });
+            vrmaPlayingRef.current = false;
+            // Try to start idle loop after short delay
+            setTimeout(() => {
+              isReturnToRestRef.current = false;
+              restartIdleLoop();
+            }, 600);
           } else {
+            console.warn('[VRMA] Gesture finished but no mixer available');
             vrmaPlayingRef.current = false;
           }
-          console.log('[VRMA] Playback finished — resumed', isSpeakingRef.current ? 'talking' : 'idle');
         }
       };
       mixer.addEventListener('finished', onFinished);
@@ -733,8 +799,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
       const level = isSpeakingRef.current ? getAudioLevelRef.current() : 0;
 
-      // Update VRMA mixer when active OR during return-to-rest fade
-      if (mixerRef.current && (vrmaPlayingRef.current || isReturnToRestRef.current)) {
+      // ALWAYS update mixer to prevent T-pose: even with no active actions,
+      // mixer.update() is safe and ensures bones stay synchronized with any
+      // running animations. This is critical during initial load before clips
+      // are ready, and for smooth transitions between animations.
+      if (mixerRef.current) {
         mixerRef.current.update(delta);
       }
 
@@ -930,7 +999,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
       orbitControlsRef.current?.dispose();
       orbitControlsRef.current = null;
-      mixerRef.current?.stopAllAction();
+      // IMPORTANT: Do NOT call stopAllAction() — it causes an immediate T-pose snap.
+      // Let THREE handle cleanup naturally on mixer dispose.
+      // Just clear the ref and let GC clean up.
       mixerRef.current = null;
       disconnectAudio();
     };
