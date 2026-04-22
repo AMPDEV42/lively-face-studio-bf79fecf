@@ -72,4 +72,23 @@
   .font-mono {
     font-family: 'JetBrains Mono', monospace;
   }
+
+  /* Mobile: prevent overscroll bounce and ensure full viewport height
+     including dynamic browser chrome (address bar show/hide) */
+  html, body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Smooth scrolling for chat messages */
+  .chat-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Prevent text selection on interactive elements during touch */
+  button, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
 }

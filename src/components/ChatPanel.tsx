@@ -147,7 +147,7 @@ export default function ChatPanel({
       const hasUnread =
         messages.length > 0 && messages[messages.length - 1]?.role === 'assistant';
       return (
-        <div className="absolute bottom-0 left-0 right-0 z-20 p-3 bg-gradient-to-t from-background via-background/95 to-transparent">
+        <div className="absolute bottom-0 left-0 right-0 z-20 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-background via-background/95 to-transparent">
           <div className="flex items-center gap-2">
             <div className="flex-1">{inputBar}</div>
             {messages.length > 0 && (
@@ -155,11 +155,11 @@ export default function ChatPanel({
                 variant="outline"
                 size="icon"
                 onClick={onToggle}
-                className="relative h-10 w-10 shrink-0 border-border bg-secondary/60 backdrop-blur-md"
+                className="relative h-10 w-10 shrink-0 border-border bg-secondary/60 backdrop-blur-md touch-manipulation"
               >
                 <ChevronUp className="w-4 h-4" />
                 {hasUnread && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary animate-pulse" />
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary motion-safe:animate-pulse" />
                 )}
               </Button>
             )}
@@ -171,9 +171,9 @@ export default function ChatPanel({
     // Full overlay
     return (
       <div className="absolute inset-0 z-20 flex flex-col bg-background/95 backdrop-blur-md">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
           <h2 className="text-sm font-semibold text-foreground">Chat</h2>
-          <Button variant="ghost" size="icon" onClick={onToggle} className="h-7 w-7">
+          <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8 touch-manipulation">
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -192,7 +192,7 @@ export default function ChatPanel({
           </div>
         </ScrollArea>
 
-        <div className="p-3 border-t border-border">{inputBar}</div>
+        <div className="p-3 border-t border-border pb-[max(0.75rem,env(safe-area-inset-bottom))]">{inputBar}</div>
       </div>
     );
   }

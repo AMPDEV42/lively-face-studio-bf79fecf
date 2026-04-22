@@ -230,12 +230,12 @@ export default function Index() {
   );
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background flex">
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-background flex">
       {/* New user model banner */}
       <NewUserModelBanner />
 
       {/* VRM Viewer — main area */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-w-0">
         <Suspense
           fallback={
             <div className="absolute inset-0 flex items-center justify-center">
@@ -264,18 +264,18 @@ export default function Index() {
         )}
 
         {/* Top bar overlay */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4 z-10">
-          <h1 className="text-lg font-semibold text-foreground text-glow tracking-tight">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 py-2 md:px-4 md:py-3 z-10">
+          <h1 className="text-base md:text-lg font-semibold text-foreground text-glow tracking-tight truncate mr-2">
             VRM Assistant
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
             <AudioStatusIndicator isSpeaking={isSpeaking} />
             <UserMenu />
             <Button
               variant="outline"
               size="icon"
               onClick={() => setChatOpen(!chatOpen)}
-              className="h-8 w-8 border-border bg-secondary/60 backdrop-blur-md hover:bg-secondary"
+              className="h-8 w-8 border-border bg-secondary/60 backdrop-blur-md hover:bg-secondary touch-manipulation"
             >
               {chatOpen ? <X className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
             </Button>
@@ -297,7 +297,7 @@ export default function Index() {
         />
       ) : (
         chatOpen && (
-          <div className="w-[360px] h-full shrink-0">
+          <div className="w-[320px] lg:w-[360px] h-full shrink-0">
             <ChatPanel
               onSpeakStart={handleSpeakStart}
               onSpeakEnd={handleSpeakEnd}
