@@ -41,7 +41,7 @@ export default function Index() {
   const viewerRef = useRef<VrmViewerHandle>(null);
 
   // Multilingual VRMA trigger matcher (loads keywords for all active clips)
-  const { findMatch } = useVrmaTriggers();
+  const { findMatch, findClipByName } = useVrmaTriggers();
   // User language preference (auto = null → detect from text). localStorage key.
   const userLangPref =
     (typeof window !== 'undefined'
