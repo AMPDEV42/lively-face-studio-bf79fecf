@@ -644,13 +644,17 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       const onFinished = (e: { action: THREE.AnimationAction }) => {
         if (e.action === vrmaActionRef.current) {
           mixer.removeEventListener('finished', onFinished);
-          // After preview/gesture finishes, cross-fade back to idle (or to
-          // talking if TTS started while gesture was playing).
+          // After preview/gesture finishes, decide what to resume:
+          //   - If TTS still active → resume talking loop
+          //   - Otherwise → cross-fade to idle
           vrmaActionRef.current = null;
           const idleClips = idleClipsRef.current;
-          if (isTalkingPlayingRef.current && talkingClipsRef.current.length > 0) {
-            // Talking is active — let the talking effect re-trigger naturally.
-            // We just clear the action ref; the next playNext() will fire.
+          if (isSpeakingRef.current && talkingClipsRef.current.length > 0) {
+            // Talking still ongoing — resume it from where we are. The talking
+            // action will cross-fade from the gesture pose smoothly.
+            isTalkingPlayingRef.current = true;
+            idlePausedForActivityRef.current = true;
+            playNextTalking();
           } else if (idleClips.length > 0 && mixerRef.current) {
             const idleClip = idleClips[idleCurrentIndexRef.current % idleClips.length];
             idleClipRef.current = idleClip;
@@ -665,7 +669,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           } else {
             vrmaPlayingRef.current = false;
           }
-          console.log('[VRMA] Playback finished — cross-faded back to idle/talking');
+          console.log('[VRMA] Playback finished — resumed', isSpeakingRef.current ? 'talking' : 'idle');
         }
       };
       mixer.addEventListener('finished', onFinished);
