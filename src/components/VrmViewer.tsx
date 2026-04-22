@@ -26,48 +26,111 @@ export type CameraPreset =
   | 'wide-shot'
   | 'extreme-wide-shot';
 
-// Camera preset positions and settings
-const CAMERA_PRESETS: Record<CameraPreset, {
+// Camera preset positions and settings — these are RATIOS relative to model height,
+// computed adaptively after VRM loads. See computeAdaptivePresets().
+const CAMERA_PRESET_RATIOS: Record<CameraPreset, {
+  // targetY: fraction of model height (0=feet, 1=top of head)
+  targetYRatio: number;
+  // positionY: fraction of model height
+  positionYRatio: number;
+  // distance: multiplier of model height
+  distanceRatio: number;
+  fov: number;
+}> = {
+  'extreme-closeup': { targetYRatio: 0.93, positionYRatio: 0.95, distanceRatio: 0.22, fov: 50 },
+  'closeup':         { targetYRatio: 0.90, positionYRatio: 0.92, distanceRatio: 0.35, fov: 45 },
+  'medium-closeup':  { targetYRatio: 0.87, positionYRatio: 0.89, distanceRatio: 0.52, fov: 40 },
+  'medium-shot':     { targetYRatio: 0.78, positionYRatio: 0.82, distanceRatio: 0.72, fov: 36 },
+  'medium-wide-shot':{ targetYRatio: 0.68, positionYRatio: 0.72, distanceRatio: 0.95, fov: 34 },
+  'wide-shot':       { targetYRatio: 0.55, positionYRatio: 0.58, distanceRatio: 1.20, fov: 32 },
+  // EWS: full body — target tepat di tengah tubuh, kamera jauh dengan FOV cukup
+  // agar kaki sampai kepala terlihat semua dengan headroom natural
+  'extreme-wide-shot':{ targetYRatio: 0.50, positionYRatio: 0.50, distanceRatio: 2.0, fov: 22 },
+};
+
+// Fallback static presets (used before VRM loads)
+const CAMERA_PRESETS_STATIC: Record<CameraPreset, {
   position: [number, number, number];
   target: [number, number, number];
   fov: number;
 }> = {
-  'extreme-closeup': {
-    position: [0, 1.2, 0.35],
-    target: [0, 1.15, 0],
-    fov: 50,
-  },
-  'closeup': {
-    position: [0, 1.15, 0.55],
-    target: [0, 1.1, 0],
-    fov: 45,
-  },
-  'medium-closeup': {
-    position: [0, 1.1, 0.8],
-    target: [0, 1.05, 0],
-    fov: 40,
-  },
-  'medium-shot': {
-    position: [0, 1.05, 1.1],
-    target: [0, 0.95, 0],
-    fov: 36,
-  },
-  'medium-wide-shot': {
-    position: [0, 1.0, 1.4],
-    target: [0, 0.9, 0],
-    fov: 34,
-  },
-  'wide-shot': {
-    position: [0, 0.95, 1.7],
-    target: [0, 0.8, 0],
-    fov: 32,
-  },
-  'extreme-wide-shot': {
-    position: [0, 0.9, 2.1],
-    target: [0, 0.7, 0],
-    fov: 30,
-  },
+  'extreme-closeup': { position: [0, 1.62, 0.33], target: [0, 1.58, 0], fov: 50 },
+  'closeup':         { position: [0, 1.57, 0.53], target: [0, 1.52, 0], fov: 45 },
+  'medium-closeup':  { position: [0, 1.50, 0.78], target: [0, 1.44, 0], fov: 40 },
+  'medium-shot':     { position: [0, 1.35, 1.08], target: [0, 1.20, 0], fov: 36 },
+  'medium-wide-shot':{ position: [0, 1.25, 1.38], target: [0, 1.10, 0], fov: 34 },
+  'wide-shot':       { position: [0, 1.10, 1.68], target: [0, 0.95, 0], fov: 32 },
+  'extreme-wide-shot':{ position: [0, 0.90, 2.10], target: [0, 0.75, 0], fov: 30 },
 };
+
+/**
+ * Compute adaptive camera presets based on actual VRM model dimensions.
+ * For WS and EWS, calculates exact distance needed to fit full body in frame
+ * using trigonometry: distance = (halfHeight / tan(halfFOV)) * padding
+ */
+function computeAdaptivePresets(vrm: VRM): Record<CameraPreset, {
+  position: [number, number, number];
+  target: [number, number, number];
+  fov: number;
+}> {
+  const box = new THREE.Box3().setFromObject(vrm.scene);
+  const modelHeight = box.max.y - box.min.y;
+  const modelBase = box.min.y;
+  const modelTop = box.max.y;
+  const modelMid = modelBase + modelHeight * 0.5;
+
+  console.log('[Camera] Model height:', modelHeight.toFixed(3), 'base:', modelBase.toFixed(3), 'top:', modelTop.toFixed(3));
+
+  const result = {} as Record<CameraPreset, { position: [number, number, number]; target: [number, number, number]; fov: number }>;
+
+  // Helper: compute exact distance for full-body shots
+  // Given FOV and desired visible height, returns required camera distance
+  // padding > 1 adds headroom/footroom (1.15 = 15% extra space)
+  const fullBodyDistance = (fovDeg: number, visibleHeight: number, padding = 1.18) => {
+    const halfFov = (fovDeg * Math.PI) / 180 / 2;
+    return (visibleHeight * padding) / (2 * Math.tan(halfFov));
+  };
+
+  // Ratio-based presets (ECU → MWS)
+  const ratioPresets: Partial<Record<CameraPreset, { targetYRatio: number; positionYRatio: number; distanceRatio: number; fov: number }>> = {
+    'extreme-closeup': { targetYRatio: 0.93, positionYRatio: 0.95, distanceRatio: 0.22, fov: 50 },
+    'closeup':         { targetYRatio: 0.90, positionYRatio: 0.92, distanceRatio: 0.35, fov: 45 },
+    'medium-closeup':  { targetYRatio: 0.87, positionYRatio: 0.89, distanceRatio: 0.52, fov: 40 },
+    'medium-shot':     { targetYRatio: 0.78, positionYRatio: 0.82, distanceRatio: 0.72, fov: 36 },
+    'medium-wide-shot':{ targetYRatio: 0.68, positionYRatio: 0.72, distanceRatio: 0.95, fov: 34 },
+  };
+
+  for (const [key, ratio] of Object.entries(ratioPresets)) {
+    const targetY   = modelBase + modelHeight * ratio.targetYRatio;
+    const positionY = modelBase + modelHeight * ratio.positionYRatio;
+    const distance  = modelHeight * ratio.distanceRatio;
+    result[key as CameraPreset] = {
+      position: [0, positionY, distance],
+      target:   [0, targetY, 0],
+      fov: ratio.fov,
+    };
+  }
+
+  // WS: full body, target at mid, exact distance calculation
+  const wsFov = 30;
+  const wsDistance = fullBodyDistance(wsFov, modelHeight, 1.20);
+  result['wide-shot'] = {
+    position: [0, modelMid, wsDistance],
+    target:   [0, modelMid, 0],
+    fov: wsFov,
+  };
+
+  // EWS: full body with more breathing room
+  const ewsFov = 24;
+  const ewsDistance = fullBodyDistance(ewsFov, modelHeight, 1.25);
+  result['extreme-wide-shot'] = {
+    position: [0, modelMid, ewsDistance],
+    target:   [0, modelMid, 0],
+    fov: ewsFov,
+  };
+
+  return result;
+}
 
 export interface VrmViewerHandle {
   playVrmaUrl: (url: string, opts?: PlayVrmaOptions) => Promise<void>;
@@ -113,6 +176,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const orbitControlsRef = useRef<OrbitControls | null>(null);
   const cameraFreeRef = useRef(false);
   const cameraAnimationRef = useRef<number>(0);
+  // Adaptive camera presets — recomputed after each VRM load
+  const adaptivePresetsRef = useRef<ReturnType<typeof computeAdaptivePresets> | null>(null);
 
   // Talking animation state
   const talkingClipsRef = useRef<THREE.AnimationClip[]>([]);
@@ -649,19 +714,19 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     const controls = orbitControlsRef.current;
     if (!camera) return;
 
-    const presetData = CAMERA_PRESETS[preset];
+    // Use adaptive presets if available, else fall back to static
+    const presets = adaptivePresetsRef.current ?? CAMERA_PRESETS_STATIC;
+    const presetData = presets[preset];
     const startPos = camera.position.clone();
     const startTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0.95, 0);
     const endPos = new THREE.Vector3(...presetData.position);
     const endTarget = new THREE.Vector3(...presetData.target);
-    const duration = 0.6; // 600ms animation
+    const duration = 0.6;
     const startTime = performance.now();
 
     const animate = (currentTime: number) => {
       const elapsed = (currentTime - startTime) / 1000;
       const progress = Math.min(elapsed / duration, 1);
-
-      // Easing: ease-out-cubic
       const easeProgress = 1 - Math.pow(1 - progress, 3);
 
       camera.position.lerpVectors(startPos, endPos, easeProgress);
@@ -682,15 +747,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         cameraAnimationRef.current = requestAnimationFrame(animate);
       } else {
         cameraAnimationRef.current = 0;
-        if (controls) {
-          controls.update();
-        }
+        if (controls) controls.update();
       }
     };
 
-    if (cameraAnimationRef.current) {
-      cancelAnimationFrame(cameraAnimationRef.current);
-    }
+    if (cameraAnimationRef.current) cancelAnimationFrame(cameraAnimationRef.current);
     cameraAnimationRef.current = requestAnimationFrame(animate);
   }, []);
 
@@ -963,6 +1024,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     // disposal. Nullifying at effect start breaks in-flight async playVrmaUrl
     // calls during strict-mode double-invoke.
 
+    // Reset adaptive presets when model changes
+    adaptivePresetsRef.current = null;
+
     if (!modelUrl) {
       setLoading(false);
       setError(null);
@@ -1049,6 +1113,28 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         scene.add(vrm.scene);
         vrmRef.current = vrm;
         mixerRef.current = createMixer(vrm);
+
+        // Compute adaptive camera presets based on actual model dimensions
+        // Wait one frame so the scene graph is fully updated
+        requestAnimationFrame(() => {
+          const presets = computeAdaptivePresets(vrm);
+          adaptivePresetsRef.current = presets;
+
+          // Apply medium-shot as default initial camera position
+          const ms = presets['medium-shot'];
+          if (cameraRef.current && !cameraFreeRef.current) {
+            cameraRef.current.position.set(...ms.position);
+            cameraRef.current.fov = ms.fov;
+            cameraRef.current.updateProjectionMatrix();
+            if (orbitControlsRef.current) {
+              orbitControlsRef.current.target.set(...ms.target);
+              orbitControlsRef.current.update();
+            } else {
+              cameraRef.current.lookAt(...ms.target);
+            }
+          }
+        });
+
         setLoading(false);
       },
       undefined,
