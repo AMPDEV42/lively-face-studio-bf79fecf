@@ -1157,11 +1157,23 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       const nowMobile = container.clientWidth < 768;
       isMobileRef.current = nowMobile;
 
-      // Only reset camera if not in free mode
-      if (!cameraFreeRef.current) {
-        camera.fov = nowMobile ? 38 : 34;
-        camera.position.set(0, nowMobile ? 1.0 : 1.05, nowMobile ? 1.8 : 1.6);
-        camera.lookAt(0, 0.95, 0);
+      // Recompute adaptive presets if VRM is loaded and mobile state changed
+      // (different aspect ratio needs different framing)
+      if (vrmRef.current && wasMobile !== nowMobile && adaptivePresetsRef.current) {
+        adaptivePresetsRef.current = computeAdaptivePresets(vrmRef.current);
+        console.log('[Camera] Adaptive presets recomputed for', nowMobile ? 'mobile' : 'desktop');
+      }
+
+      // Only reset camera if not in free mode AND adaptive presets available
+      if (!cameraFreeRef.current && adaptivePresetsRef.current) {
+        const presets = adaptivePresetsRef.current;
+        const preset = presets['medium-shot']; // default
+        camera.position.set(...preset.position);
+        camera.fov = preset.fov;
+        camera.lookAt(...preset.target);
+        if (orbitControlsRef.current) {
+          orbitControlsRef.current.target.set(...preset.target);
+        }
       }
 
       camera.aspect = container.clientWidth / container.clientHeight;
