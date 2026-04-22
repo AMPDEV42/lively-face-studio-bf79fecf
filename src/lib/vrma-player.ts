@@ -189,8 +189,9 @@ export function playVRMA(
   try {
     const all = (mixer as unknown as { _actions: THREE.AnimationAction[] })._actions ?? [];
     for (const a of all) {
-      // Active = currently contributing weight to the pose
-      if (a.isRunning() || a.getEffectiveWeight() > 0.001) {
+      // Include any enabled/running action, even at weight≈0. THREE keeps
+      // them as a valid source pose for cross-fade — preventing T-pose flash.
+      if (a.enabled || a.isRunning() || a.getEffectiveWeight() > 0.001) {
         prevActions.push(a);
       }
     }
