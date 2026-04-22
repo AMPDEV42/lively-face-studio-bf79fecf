@@ -142,6 +142,48 @@ export function useConversations(userId: string | undefined) {
     titleSetRef.current.add(id);
   }, [userId]);
 
+  /** Import conversations from a JSON export file */
+  const importConversations = useCallback((jsonData: string): { imported: number; error?: string } => {
+    if (!userId) return { imported: 0, error: 'Not logged in' };
+    try {
+      const parsed = JSON.parse(jsonData);
+      const items: StoredConversation[] = Array.isArray(parsed) ? parsed : [parsed];
+      let imported = 0;
+      for (const item of items) {
+        if (!item.id || !item.title || !Array.isArray(item.messages)) continue;
+        if (storageRef.current.find(c => c.id === item.id)) continue;
+        storageRef.current = [{
+          id: item.id,
+          title: item.title,
+          updated_at: item.exported_at ?? item.updated_at ?? new Date().toISOString(),
+          messages: item.messages.filter((m: any) =>
+            (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+          ),
+        }, ...storageRef.current];
+        imported++;
+      }
+      if (imported > 0) {
+        saveToStorage(userId, storageRef.current);
+        setConversations(storageRef.current.map(c => ({
+          id: c.id, title: c.title, updated_at: c.updated_at,
+          preview: c.messages.at(-1)?.content.slice(0, 60),
+        })));
+      }
+      return { imported };
+    } catch {
+      return { imported: 0, error: 'Format file tidak valid' };
+    }
+  }, [userId]);
+
+  /** Clear all conversations */
+  const clearAllConversations = useCallback(() => {
+    if (!userId) return;
+    storageRef.current = [];
+    saveToStorage(userId, []);
+    setConversations([]);
+    setActiveId(null);
+  }, [userId]);
+
   return {
     conversations,
     activeId,
@@ -154,5 +196,7 @@ export function useConversations(userId: string | undefined) {
     maybeSetTitle,
     deleteConversation,
     renameConversation,
+    importConversations,
+    clearAllConversations,
   };
 }

@@ -256,7 +256,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
     if (vrm) {
       // On mobile: run expressions every other frame to save CPU
-      const runExpressions = !isMobileRef.current || frameCountRef.current % 2 === 0;
+      const runExpressions = !isMobileRef.current || frameCountRef.current % 3 === 0;
 
       // 1. Update mixer first — VRMA clips drive bones
       mixerRef.current?.update(delta);
@@ -268,10 +268,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
       // 3. Procedural micro-gestures (skip when talking/gesture active)
       const isManualOrTalking = !!vrmaActionRef.current || isTalkingPlayingRef.current;
-      if (!isManualOrTalking) {
+      if (!isManualOrTalking && (!isMobileRef.current || frameCountRef.current % 2 === 0)) {
         updateIdleMicroGestures(elapsedTime, vrm, activeDrivenBonesRef.current);
       }
-      updateIdleSmile(delta, vrm, isManualOrTalking);
+      if (!isMobileRef.current || frameCountRef.current % 2 === 0) {
+        updateIdleSmile(delta, vrm, isManualOrTalking);
+      }
 
       // 4. Look-at ALWAYS runs after mixer — passes empty set so it always
       //    overrides neck/head even when VRMA clips drive those bones.
