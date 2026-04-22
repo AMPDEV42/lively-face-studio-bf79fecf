@@ -93,13 +93,19 @@ export function useVrmaTriggers() {
   }, []);
 
   const findMatch = useCallback(
-    (text: string, userPref?: LangCode | null): MatchResult | null => {
+    (
+      text: string,
+      userPref?: LangCode | null,
+      allowedCategories?: string[],
+    ): MatchResult | null => {
       if (!text) return null;
       const haystack = text.toLowerCase().normalize('NFC');
       const langs = langPriority(text, userPref ?? null);
       for (const clip of clipsRef.current) {
         // Skip pools that should auto-loop, not single-trigger.
         if (clip.category === 'idle' || clip.category === 'talking') continue;
+        // Optional whitelist (e.g. only greeting+emote for instant user feedback).
+        if (allowedCategories && !allowedCategories.includes(clip.category)) continue;
         for (const lang of langs) {
           const kws = clip.keywords[lang] ?? [];
           for (const kw of kws) {
@@ -119,5 +125,27 @@ export function useVrmaTriggers() {
     [],
   );
 
-  return { clips, findMatch };
+  /**
+   * Look up an animation clip by its exact name (case-insensitive). Used
+   * when the AI reply contains an `[ANIM:<name>]` tag and we need to play
+   * exactly that clip from the library — no keyword guessing.
+   */
+  const findClipByName = useCallback(
+    (name: string): { url: string; clip: TriggerClip } | null => {
+      if (!name) return null;
+      const target = name.trim().toLowerCase();
+      for (const clip of clipsRef.current) {
+        if (clip.name.trim().toLowerCase() === target) {
+          const { data } = supabase.storage
+            .from('vrma-animations')
+            .getPublicUrl(clip.file_path);
+          if (data?.publicUrl) return { url: data.publicUrl, clip };
+        }
+      }
+      return null;
+    },
+    [],
+  );
+
+  return { clips, findMatch, findClipByName };
 }
