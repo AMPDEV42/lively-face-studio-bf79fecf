@@ -14,7 +14,7 @@ import {
   getClipDrivenBones,
 } from '@/lib/vrm-animations';
 import { detectMood } from '@/lib/sentiment';
-import { loadVRMA, createMixer, playVRMA, stopVRMA, type PlayVrmaOptions } from '@/lib/vrma-player';
+import { loadVRMA, createMixer, playVRMA, stopVRMA, straightenClip, type PlayVrmaOptions } from '@/lib/vrma-player';
 import { supabase } from '@/integrations/supabase/client';
 
 export type CameraPreset =
@@ -172,6 +172,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                 if (clip.duration < 1.5) {
                   console.warn('[VRMA Talking] Skipping short clip:', row.name, 'duration:', clip.duration.toFixed(2), 's');
                 } else {
+                  // Straighten hips Y-rotation so model always faces forward camera
+                  straightenClip(clip);
                   clips.push(clip);
                   console.log('[VRMA Talking] Loaded:', row.name, '(' + clip.duration.toFixed(2) + 's)');
                 }
