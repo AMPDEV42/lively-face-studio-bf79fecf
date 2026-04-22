@@ -143,6 +143,46 @@ export async function loadVRMA(url: string, vrm: VRM): Promise<THREE.AnimationCl
   return clip;
 }
 
+/**
+ * Post-process a clip to neutralize hips Y-rotation (yaw) so the model
+ * always faces forward regardless of how the animation was authored.
+ * Only modifies the hips quaternion track — all other bones are untouched.
+ * Safe to call on any clip; no-op if hips track is not found.
+ */
+export function straightenClip(clip: THREE.AnimationClip): THREE.AnimationClip {
+  for (const track of clip.tracks) {
+    // Match hips quaternion track: "Normalized_J_Bip_C_Hips.quaternion"
+    if (!track.name.includes('Hips') || !track.name.endsWith('.quaternion')) continue;
+    if (!(track instanceof THREE.QuaternionKeyframeTrack)) continue;
+
+    const values = track.values as Float32Array;
+    // Each quaternion = [x, y, z, w] — 4 floats per keyframe
+    for (let i = 0; i < values.length; i += 4) {
+      const x = values[i];
+      const y = values[i + 1];
+      const z = values[i + 2];
+      const w = values[i + 3];
+
+      // Decompose: extract Y rotation (yaw) and remove it.
+      // For a quaternion q, the yaw component can be isolated and zeroed.
+      // We reconstruct the quaternion keeping only pitch (X) and roll (Z).
+      const q = new THREE.Quaternion(x, y, z, w).normalize();
+      const euler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+      // Zero out Y (yaw) — keep X (pitch) and Z (roll)
+      euler.y = 0;
+      const fixed = new THREE.Quaternion().setFromEuler(euler);
+
+      values[i]     = fixed.x;
+      values[i + 1] = fixed.y;
+      values[i + 2] = fixed.z;
+      values[i + 3] = fixed.w;
+    }
+    console.log('[VRMA] straightenClip: hips Y-rotation zeroed on', clip.tracks.length, 'track clip');
+    break;
+  }
+  return clip;
+}
+
 /** Create an AnimationMixer bound to the VRM scene root. */
 export function createMixer(vrm: VRM): THREE.AnimationMixer {
   // Mixer MUST be bound to vrm.scene so it can find bone nodes by name.

@@ -327,7 +327,8 @@ const PS_MOOD_PRESETS: Record<MoodName, PerfectSyncWeights> = {
   },
 };
 
-// Standard VRM mood presets (fallback)
+// Standard VRM mood presets — only uses VRM spec preset names
+// that are guaranteed to exist on any valid VRM model.
 const STD_ZERO: StandardWeights = {
   happy: 0, sad: 0, relaxed: 0, surprised: 0, angry: 0,
   blinkLeft: 0, blinkRight: 0,
@@ -336,19 +337,19 @@ const STD_ZERO: StandardWeights = {
 };
 
 const STD_MOOD_PRESETS: Record<MoodName, StandardWeights> = {
-  neutral:     { ...STD_ZERO, happy: 0.10, relaxed: 0.10, browInnerUp: 0.04 },
-  happy:       { ...STD_ZERO, happy: 0.55, relaxed: 0.25, blinkLeft: 0.20, blinkRight: 0.20, browInnerUp: 0.08 },
-  sad:         { ...STD_ZERO, sad: 0.55, relaxed: 0.10, browInnerUp: 0.45 },
-  excited:     { ...STD_ZERO, happy: 0.70, surprised: 0.30, browInnerUp: 0.30, aa: 0.15 },
-  sympathetic: { ...STD_ZERO, sad: 0.20, relaxed: 0.30, browInnerUp: 0.50 },
-  bored:       { ...STD_ZERO, relaxed: 0.20, blinkLeft: 0.30, blinkRight: 0.30, browDownLeft: 0.15, browDownRight: 0.15 },
-  curious:     { ...STD_ZERO, surprised: 0.20, browInnerUp: 0.45, aa: 0.10 },
-  thinking:    { ...STD_ZERO, browDownLeft: 0.30, browDownRight: 0.20, browInnerUp: 0.10 },
-  angry:       { ...STD_ZERO, angry: 0.50, browDownLeft: 0.55, browDownRight: 0.55 },
-  laughing:    { ...STD_ZERO, happy: 0.90, blinkLeft: 0.50, blinkRight: 0.50, aa: 0.20 },
-  surprised:   { ...STD_ZERO, surprised: 0.80, browInnerUp: 0.60, aa: 0.30 },
-  embarrassed: { ...STD_ZERO, happy: 0.30, relaxed: 0.20, browInnerUp: 0.25 },
-  disgusted:   { ...STD_ZERO, angry: 0.30, browDownLeft: 0.40, browDownRight: 0.40 },
+  neutral:     { ...STD_ZERO, happy: 0.10, relaxed: 0.10 },
+  happy:       { ...STD_ZERO, happy: 0.65, relaxed: 0.20, blinkLeft: 0.15, blinkRight: 0.15 },
+  sad:         { ...STD_ZERO, sad: 0.70, relaxed: 0.10 },
+  excited:     { ...STD_ZERO, happy: 0.80, surprised: 0.35 },
+  sympathetic: { ...STD_ZERO, sad: 0.30, relaxed: 0.35 },
+  bored:       { ...STD_ZERO, relaxed: 0.30, blinkLeft: 0.25, blinkRight: 0.25 },
+  curious:     { ...STD_ZERO, surprised: 0.30, happy: 0.10 },
+  thinking:    { ...STD_ZERO, relaxed: 0.15 },
+  angry:       { ...STD_ZERO, angry: 0.70 },
+  laughing:    { ...STD_ZERO, happy: 0.95, blinkLeft: 0.45, blinkRight: 0.45 },
+  surprised:   { ...STD_ZERO, surprised: 0.85 },
+  embarrassed: { ...STD_ZERO, happy: 0.35, relaxed: 0.25 },
+  disgusted:   { ...STD_ZERO, angry: 0.40, sad: 0.20 },
 };
 
 // Runtime state
@@ -421,16 +422,27 @@ function applyPS(vrm: VRM, noise: number): void {
 
 function applyStd(vrm: VRM, noise: number): void {
   const em = vrm.expressionManager!;
-  em.setValue('happy',         Math.max(0, _currentStd.happy + noise));
-  em.setValue('sad',           Math.max(0, _currentStd.sad));
-  em.setValue('relaxed',       Math.max(0, _currentStd.relaxed));
-  em.setValue('surprised',     Math.max(0, _currentStd.surprised));
-  em.setValue('angry',         Math.max(0, _currentStd.angry));
-  em.setValue('blinkLeft',     Math.max(0, _currentStd.blinkLeft));
-  em.setValue('blinkRight',    Math.max(0, _currentStd.blinkRight));
-  em.setValue('browInnerUp',   Math.max(0, _currentStd.browInnerUp + Math.abs(noise) * 0.5));
-  em.setValue('browDownLeft',  Math.max(0, _currentStd.browDownLeft));
-  em.setValue('browDownRight', Math.max(0, _currentStd.browDownRight));
+  // Helper: try both camelCase and PascalCase variants
+  const set = (name: string, value: number) => {
+    try { em.setValue(name, Math.max(0, value)); } catch (_) { /* ok */ }
+    // Also try PascalCase variant (e.g. 'Surprised')
+    const pascal = name.charAt(0).toUpperCase() + name.slice(1);
+    if (pascal !== name) {
+      try { em.setValue(pascal, Math.max(0, value)); } catch (_) { /* ok */ }
+    }
+  };
+
+  set('happy',    _currentStd.happy + noise);
+  set('sad',      _currentStd.sad);
+  set('relaxed',  _currentStd.relaxed);
+  set('surprised', _currentStd.surprised);
+  set('angry',    _currentStd.angry);
+  set('blinkLeft',  _currentStd.blinkLeft);
+  set('blinkRight', _currentStd.blinkRight);
+  // browInnerUp etc. only exist on some models — set() handles missing gracefully
+  set('browInnerUp',   _currentStd.browInnerUp + Math.abs(noise) * 0.5);
+  set('browDownLeft',  _currentStd.browDownLeft);
+  set('browDownRight', _currentStd.browDownRight);
 }
 
 export function updateMicroExpressions(elapsed: number, vrm: VRM, delta = 0.016): void {
