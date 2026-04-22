@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { detectMood } from '@/lib/sentiment';
 import { setTargetMood } from '@/lib/vrm-animations';
 import { useVrmaTriggers } from '@/hooks/useVrmaTriggers';
+import { parseAnimTag } from '@/lib/chat-api';
 import type { VrmViewerHandle, CameraPreset } from '@/components/VrmViewer';
 import type { LangCode } from '@/lib/lang-detect';
 
@@ -40,7 +41,7 @@ export default function Index() {
   const viewerRef = useRef<VrmViewerHandle>(null);
 
   // Multilingual VRMA trigger matcher (loads keywords for all active clips)
-  const { findMatch } = useVrmaTriggers();
+  const { findMatch, findClipByName } = useVrmaTriggers();
   // User language preference (auto = null → detect from text). localStorage key.
   const userLangPref =
     (typeof window !== 'undefined'
@@ -116,21 +117,42 @@ export default function Index() {
       audio.src = audioUrl;
       if (messageText) {
         setSpokenMessage(messageText);
-        // Multilingual gesture trigger from AI reply (runs alongside talking loop).
-        const match = findMatch(messageText, userLangPref);
-        if (match && viewerRef.current?.isVrmLoaded()) {
-          console.log(
-            `[Trigger] AI → "${match.matchedKeyword}" (${match.matchedLang}) → ${match.clip.name}`,
-          );
-          viewerRef.current
-            .playVrmaUrl(match.url, { loop: false, fadeIn: 0.3 })
-            .catch((e) => console.warn('[Trigger] play failed:', e));
+
+        // 1) Highest priority: AI-chosen animation via [ANIM:<name>] tag.
+        //    The tag was already stripped from the TTS text in ChatPanel,
+        //    but we re-parse here as a safety net (passes-through if absent).
+        const { animName } = parseAnimTag(messageText);
+        let triggered = false;
+        if (animName) {
+          const byName = findClipByName(animName);
+          if (byName && viewerRef.current?.isVrmLoaded()) {
+            console.log(`[Trigger] AI-tag → ${byName.clip.name} (${byName.clip.category})`);
+            viewerRef.current
+              .playVrmaUrl(byName.url, { loop: false, fadeIn: 0.4 })
+              .catch((e) => console.warn('[Trigger] AI-tag play failed:', e));
+            triggered = true;
+          } else {
+            console.warn(`[Trigger] AI requested "${animName}" but not found in library`);
+          }
+        }
+
+        // 2) Fallback: keyword match on the AI reply text.
+        if (!triggered) {
+          const match = findMatch(messageText, userLangPref);
+          if (match && viewerRef.current?.isVrmLoaded()) {
+            console.log(
+              `[Trigger] AI-keyword → "${match.matchedKeyword}" (${match.matchedLang}) → ${match.clip.name}`,
+            );
+            viewerRef.current
+              .playVrmaUrl(match.url, { loop: false, fadeIn: 0.4 })
+              .catch((e) => console.warn('[Trigger] play failed:', e));
+          }
         }
       }
       setIsSpeaking(true);
       audio.play().catch(() => setIsSpeaking(false));
     },
-    [findMatch, userLangPref],
+    [findMatch, findClipByName, userLangPref],
   );
 
   const handleSpeakEnd = useCallback(() => {
@@ -139,20 +161,21 @@ export default function Index() {
     setIsSpeaking(false);
   }, []);
 
-  // When user sends a message, immediately set a sympathetic / matching mood
-  // AND check for multilingual VRMA keyword trigger.
+  // When user sends a message, fire instant feedback gesture but ONLY for
+  // explicit categories (greeting + emote) — leave reactions/gestures to
+  // the AI which has full conversational context.
   const handleUserMessage = useCallback(
     (text: string) => {
       const mood = detectMood(text);
       if (mood !== 'neutral') setTargetMood(mood);
 
-      const match = findMatch(text, userLangPref);
+      const match = findMatch(text, userLangPref, ['greeting', 'emote']);
       if (match && viewerRef.current?.isVrmLoaded()) {
         console.log(
           `[Trigger] User → "${match.matchedKeyword}" (${match.matchedLang}) → ${match.clip.name}`,
         );
         viewerRef.current
-          .playVrmaUrl(match.url, { loop: false, fadeIn: 0.3 })
+          .playVrmaUrl(match.url, { loop: false, fadeIn: 0.4 })
           .catch((e) => console.warn('[Trigger] play failed:', e));
       }
     },
