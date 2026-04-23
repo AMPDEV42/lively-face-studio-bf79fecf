@@ -174,7 +174,7 @@ export default function Landing() {
       </section>
 
       {/* ── Why Voxie ── */}
-      <section className="relative py-24 px-6 lg:px-10 overflow-hidden" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0d0a1f 50%, #07070f 100%)' }}>
+      <section className="relative py-14 px-6 lg:px-10 overflow-hidden" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0d0a1f 50%, #07070f 100%)' }}>
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-violet-600/6 blur-[120px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto">
           <div className="mb-12">
@@ -238,7 +238,7 @@ export default function Landing() {
       </section>
 
       {/* ── Demo + Customize ── */}
-      <section className="py-20 px-6 lg:px-10" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0b0918 50%, #07070f 100%)' }}>
+      <section className="py-12 px-6 lg:px-10" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0b0918 50%, #07070f 100%)' }}>
         <div className="max-w-6xl mx-auto">
           <div className="mb-10">
             <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-3">Demo & Kustomisasi</p>
@@ -267,7 +267,7 @@ export default function Landing() {
             </div>
 
             {/* Customize card */}
-            <div className="rounded-2xl border border-white/[0.07] overflow-hidden flex flex-col lg:flex-row group" style={{ background: 'linear-gradient(135deg, #131228 0%, #0c0b1a 100%)' }}>
+            <div className="rounded-2xl border border-white/[0.07] overflow-hidden flex flex-col lg:flex-row group relative" style={{ background: 'linear-gradient(135deg, #131228 0%, #0c0b1a 100%)' }}>
               <div className="p-7 flex flex-col justify-center gap-4 flex-1">
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/12 border border-violet-500/20 text-violet-300 text-[10px] font-semibold mb-3">
@@ -294,9 +294,15 @@ export default function Landing() {
                   <span className="text-[11px] text-violet-300 font-medium">Bebas Kustomisasi!</span>
                 </div>
               </div>
-              <div className="relative lg:w-40 min-h-[200px] overflow-hidden shrink-0">
-                <img src="/stiker-ai.png" alt="Karakter AI" className="absolute bottom-0 right-0 w-full object-contain object-bottom group-hover:scale-105 transition-transform duration-700" />
-                <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-[#131228] via-[#131228]/20 to-transparent" />
+
+              {/* Character image — pojok kanan bawah dalam card */}
+              <div className="relative lg:w-52 shrink-0 hidden lg:block self-stretch">
+                <img
+                  src="/stiker-ai.png"
+                  alt="Karakter AI"
+                  className="absolute bottom-0 right-0 w-80 object-contain object-bottom transition-transform duration-500 hover:scale-110 drop-shadow-[0_0_30px_rgba(139,92,246,0.3)]"
+                  style={{ transform: 'translateY(25%)' }}
+                />
               </div>
             </div>
           </div>
@@ -304,7 +310,7 @@ export default function Landing() {
       </section>
 
       {/* ── Trusted by ── */}
-      <section className="py-14 px-6 lg:px-10 border-y border-white/[0.05]" style={{ background: '#050509' }}>
+      <section className="py-8 px-6 lg:px-10 border-y border-white/[0.05]" style={{ background: '#050509' }}>
         <div className="max-w-5xl mx-auto text-center">
           <p className="text-[11px] text-white/25 mb-8 tracking-[0.25em] uppercase font-medium">Dipercaya oleh kreator, gamer, pelajar, dan profesional</p>
           <div className="flex flex-wrap items-center justify-center gap-10 opacity-25">
@@ -316,7 +322,7 @@ export default function Landing() {
       </section>
 
       {/* ── Pricing ── */}
-      <section className="relative py-28 px-6 lg:px-10 overflow-hidden" id="harga" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0e0b22 50%, #07070f 100%)' }}>
+      <section className="relative py-16 px-6 lg:px-10 overflow-hidden" id="harga" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0e0b22 50%, #07070f 100%)' }}>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] bg-violet-700/5 blur-[140px] pointer-events-none" />
         <div className="relative max-w-5xl mx-auto">
           <div className="text-center mb-14">
@@ -370,7 +376,7 @@ export default function Landing() {
       </section>
 
       {/* ── Trust badges ── */}
-      <section className="py-12 px-6 lg:px-10 border-t border-white/[0.05]" style={{ background: '#050509' }}>
+      <section className="py-8 px-6 lg:px-10 border-t border-white/[0.05]" style={{ background: '#050509' }}>
         <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
           {[
             { icon: <Zap className="w-5 h-5 text-violet-400 mx-auto mb-2" />, value: '99.9%', label: 'Uptime Terjamin' },
@@ -395,7 +401,7 @@ export default function Landing() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="py-10 px-6 lg:px-10 border-t border-white/[0.05] flex flex-col sm:flex-row items-center justify-between gap-5" style={{ background: '#03030a' }}>
+      <footer className="py-7 px-6 lg:px-10 border-t border-white/[0.05] flex flex-col sm:flex-row items-center justify-between gap-5" style={{ background: '#03030a' }}>
         <Logo />
         <p className="text-xs text-white/20">© {new Date().getFullYear()} Voxie. All rights reserved.</p>
         <div className="flex gap-5">
