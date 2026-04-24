@@ -23,39 +23,35 @@ export function SpeechModeButton({
   return (
     <Button
       type="button"
-      variant={speechMode ? 'default' : 'outline'}
-      size="sm"
+      size="icon"
       onClick={onToggle}
       disabled={isStarting}
-      className={`h-8 gap-1.5 text-xs transition-all ${
+      className={`h-10 w-10 shrink-0 shadow-sm transition-all ${
         speechMode
           ? isListening
-            ? 'bg-destructive/20 text-destructive border-destructive/40 hover:bg-destructive/30 animate-pulse neon-glow-magenta'
+            ? 'bg-destructive/80 hover:bg-destructive text-white animate-pulse neon-glow-magenta'
             : isStarting
-            ? 'bg-primary/10 text-primary/60 border-primary/30 cursor-wait'
-            : 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30 neon-glow-purple'
-          : 'border-border/60 text-muted-foreground hover:text-foreground hover-neon-glow'
+            ? 'bg-primary/60 text-primary-foreground cursor-wait neon-glow-purple'
+            : 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow-purple hover-neon-lift'
+          : 'bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 hover-neon-glow neon-glow-purple'
       }`}
       title={
         isStarting
           ? 'Menyiapkan mikrofon… tunggu sebentar'
-          : 'Speech Mode — bicara langsung ke asisten'
+          : speechMode
+          ? isListening
+            ? 'Mendengarkan - klik untuk berhenti'
+            : 'Speech Mode aktif - klik untuk matikan'
+          : 'Aktifkan Speech Mode - bicara langsung ke asisten'
       }
     >
       {isStarting ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <Loader2 className="w-4 h-4 animate-spin" />
       ) : speechMode ? (
-        <Radio className="w-3.5 h-3.5" />
+        <Radio className="w-4 h-4" />
       ) : (
-        <Mic className="w-3.5 h-3.5" />
+        <Mic className="w-4 h-4" />
       )}
-      {speechMode
-        ? isStarting
-          ? 'Menyiapkan…'
-          : isListening
-          ? 'Mendengarkan'
-          : 'Speech Mode'
-        : 'Voice'}
     </Button>
   );
 }

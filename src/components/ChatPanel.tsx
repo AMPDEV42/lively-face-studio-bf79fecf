@@ -474,7 +474,7 @@ export default function ChatPanel({
         </div>
       )}
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-2 w-full">
         {/* Speech mode toggle */}
         <SpeechModeButton
           speechMode={speechMode}
@@ -486,7 +486,7 @@ export default function ChatPanel({
           }}
         />
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <Textarea
             ref={textareaRef}
             value={input}
@@ -498,7 +498,7 @@ export default function ChatPanel({
             }
             disabled={isLoading || !online}
             rows={1}
-            className="resize-none min-h-[40px] max-h-[120px] cyber-glass border-neon-purple text-sm placeholder:text-muted-foreground/50 focus:border-neon-purple-bright focus:neon-glow-purple transition-all scrollbar-thin"
+            className="resize-none min-h-[40px] max-h-[120px] cyber-glass border-neon-purple text-sm placeholder:text-muted-foreground/50 focus:border-neon-purple-bright focus:neon-glow-purple transition-all scrollbar-thin w-full"
             style={{ height: 'auto' }}
           />
         </div>
@@ -663,16 +663,21 @@ export default function ChatPanel({
     if (!isOpen) {
       const hasUnread = messages.length > 0 && messages[messages.length - 1]?.role === 'assistant';
       return (
-        <div className="absolute bottom-0 left-0 right-0 z-20 px-3 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-background/98 via-background/90 to-transparent">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">{inputBar}</div>
-            {messages.length > 0 && (
-              <Button variant="outline" size="icon" onClick={onToggle}
-                className="relative h-10 w-10 shrink-0 border-border/60 bg-secondary/70 backdrop-blur-md touch-manipulation">
-                <ChevronDown className="w-4 h-4 rotate-180" />
-                {hasUnread && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background animate-pulse" />}
-              </Button>
-            )}
+        <div className="absolute bottom-0 left-0 right-0 z-20">
+          {/* Safe area for input - ensures it doesn't cover other controls */}
+          <div className="px-3 sm:px-6 md:px-12 lg:px-16 xl:px-20 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-background/98 via-background/90 to-transparent">
+            <div className="max-w-2xl mx-auto">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">{inputBar}</div>
+                {messages.length > 0 && (
+                  <Button variant="outline" size="icon" onClick={onToggle}
+                    className="relative h-10 w-10 shrink-0 border-border/60 bg-secondary/70 backdrop-blur-md touch-manipulation">
+                    <ChevronDown className="w-4 h-4 rotate-180" />
+                    {hasUnread && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background animate-pulse" />}
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       );
