@@ -49,8 +49,9 @@ const NEUTRAL_LONG_MAX = 30; // Increased from 20
 const MOOD_MOMENTUM_BOOST = 2.2; // Boost untuk mood yang sama
 
 // Lerp speed range (variable per transition)
-const LERP_SPEED_MIN = 1.6;
-const LERP_SPEED_MAX = 3.2;
+const LERP_SPEED_MIN = 0.2;  // Reduced from 0.4 - extremely slow
+const LERP_SPEED_MAX = 0.6;  // Reduced from 1.0 - extremely slow
+const LERP_SPEED_RESUME = 0.1; // Reduced from 0.2 - extremely slow for first transition after TTS
 
 // Intensity fluctuation during hold
 const INTENSITY_FLUCTUATION_SPEED = 0.3; // Cycles per second
@@ -70,6 +71,7 @@ let _lastIndex = -1;
 let _currentMood: 'positive' | 'negative' | 'neutral' = 'neutral';
 let _lerpSpeed = 2.0;
 let _fluctuationPhase = 0; // Untuk intensity fluctuation
+let _resumeTransitionCount = 0; // Counter untuk transisi setelah resume - gradually speed up
 
 // Mood override
 let _moodOverrideTimer = 0;
@@ -163,8 +165,15 @@ function _pickNext(): {
   const bias = (Math.random() + Math.random()) / 2; // Triangular distribution
   const duration = chosen.minDuration + bias * durationRange;
   
-  // Randomize lerp speed
-  _lerpSpeed = LERP_SPEED_MIN + Math.random() * (LERP_SPEED_MAX - LERP_SPEED_MIN);
+  // Randomize lerp speed - slower for first few transitions after resume
+  if (_resumeTransitionCount < 5) {
+    // Gradually increase speed: 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → normal (extremely slow progression)
+    _lerpSpeed = LERP_SPEED_RESUME + (_resumeTransitionCount * 0.1);
+    _resumeTransitionCount++;
+  } else {
+    // Normal random lerp speed
+    _lerpSpeed = LERP_SPEED_MIN + Math.random() * (LERP_SPEED_MAX - LERP_SPEED_MIN);
+  }
   
   // Build weights
   const weights: Record<string, number> = {};
@@ -175,7 +184,8 @@ function _pickNext(): {
   // Log dengan info tambahan
   const microLabel = chosen.isMicro ? ' [micro]' : '';
   const longLabel = isLongPause && chosen.name === 'neutral' ? ' [long pause]' : '';
-  console.log(`[Idle Expression] → ${chosen.name}${microLabel}${longLabel} (${duration.toFixed(1)}s, intensity: ${chosen.intensity.toFixed(2)})`);
+  const speedLabel = _resumeTransitionCount > 0 && _resumeTransitionCount <= 3 ? ` [slow transition ${_resumeTransitionCount}/3]` : '';
+  console.log(`[Idle Expression] → ${chosen.name}${microLabel}${longLabel}${speedLabel} (${duration.toFixed(1)}s, intensity: ${chosen.intensity.toFixed(2)}, lerp: ${_lerpSpeed.toFixed(1)})`);
   
   return {
     weights,
@@ -248,21 +258,74 @@ export function setIdleExpressionPaused(paused: boolean): void {
     _fluctuationPhase = 0;
     console.log('[Idle Expression] Paused - all weights cleared for lip sync');
   } else {
-    // Resume: pick next expression
-    const next = _pickNext();
-    _targetWeights = next.weights;
-    _baseTargetIntensity = next.intensity;
-    _holdTarget = next.duration;
+    // Resume: Mulai dengan neutral dulu, beri waktu untuk settle
+    // Ini membuat transisi lebih natural setelah TTS selesai
+    _currentWeights = {}; // Start from neutral (all 0)
+    _targetWeights = {};  // Target neutral first
+    _holdTarget = 10 + Math.random() * 5; // Increased: Hold neutral 10-15 detik (was 7-11)
     _holdTimer = 0;
-    _activeName = next.name;
-    _transitioning = true;
-    console.log('[Idle Expression] Resumed - transitioning to', next.name);
+    _activeName = 'neutral';
+    _transitioning = false; // Tidak transitioning, langsung neutral
+    _lerpSpeed = LERP_SPEED_RESUME; // Use slower lerp speed for next transition
+    _resumeTransitionCount = 0; // Reset counter - next 2-3 transitions will be slower
+    console.log('[Idle Expression] Resumed - holding neutral for', _holdTarget.toFixed(1), 'seconds before next expression');
   }
+}
+
+/**
+ * Smoothly fade out idle expressions to neutral before TTS starts.
+ * This creates a more natural transition compared to instant reset.
+ * Returns true when fade is complete.
+ * 
+ * IMPORTANT: Does NOT fade mouth expressions (aa, ih, ou, ee, oh) to allow
+ * lip sync to work immediately during fade out.
+ */
+export function fadeOutIdleExpressions(delta: number, vrm: VRM): boolean {
+  if (!vrm.expressionManager) return true;
+  
+  const em = vrm.expressionManager;
+  const FADE_SPEED = 0.3; // Reduced from 0.5 - extremely slow fade for maximum natural transition
+  
+  // Mouth expressions that should NOT be faded (reserved for lip sync)
+  const mouthExpressions = new Set(['aa', 'ih', 'ou', 'ee', 'oh']);
+  
+  // Lerp all current weights toward 0 (except mouth expressions)
+  let maxValue = 0;
+  for (const [key, value] of Object.entries(_currentWeights)) {
+    // Skip mouth expressions - let lip sync handle them
+    if (mouthExpressions.has(key)) {
+      continue;
+    }
+    
+    const newValue = value * (1 - FADE_SPEED * delta);
+    _currentWeights[key] = newValue;
+    maxValue = Math.max(maxValue, Math.abs(newValue));
+    
+    // Apply to VRM
+    try { em.setValue(key, Math.max(0, newValue)); } catch (_) { /* ok */ }
+  }
+  
+  // Fade complete when all values are near 0
+  if (maxValue < 0.01) {
+    // Clear all weights except mouth expressions
+    const mouthWeights: Record<string, number> = {};
+    for (const [key, value] of Object.entries(_currentWeights)) {
+      if (mouthExpressions.has(key)) {
+        mouthWeights[key] = value;
+      }
+    }
+    _currentWeights = mouthWeights;
+    _targetWeights = {};
+    return true;
+  }
+  
+  return false;
 }
 
 /**
  * Force clear all idle expression values from VRM immediately.
  * Call this right before TTS starts to ensure clean slate for lip sync.
+ * NOTE: This is instant - use fadeOutIdleExpressions() for smooth transition.
  */
 export function forceResetIdleExpressions(vrm: VRM): void {
   if (!vrm.expressionManager) return;

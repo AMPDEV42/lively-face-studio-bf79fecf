@@ -9,6 +9,7 @@ import {
   updateLipSync,
   resetMouthExpressions,
   updateIdleMicroGestures,
+  setGestureIntensity,
 } from '@/lib/vrm-animations';
 
 import { detectMood } from '@/lib/sentiment';
@@ -20,6 +21,7 @@ import {
   applyMoodOverride,
   debugExpressionKeys,
   forceResetIdleExpressions,
+  fadeOutIdleExpressions,
 } from '@/lib/idle-expression-advanced';
 import { createMixer, playVRMA } from '@/lib/vrma-player';
 import { initLookAt, updateLookAt, setLookAtEnabled } from '@/lib/vrm-lookat';
@@ -87,17 +89,27 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isFadingOutRef = useRef(false); // Track if we're fading out idle expression
 
   isSpeakingRef.current = isSpeaking;
 
   // Pause/resume idle expression saat speaking berubah
   useEffect(() => {
-    if (isSpeaking && vrmRef.current) {
-      // CRITICAL: Force reset idle expressions BEFORE pausing
-      // This ensures no residual expression values interfere with lip sync
-      forceResetIdleExpressions(vrmRef.current);
+    if (isSpeaking) {
+      // Start fade out when TTS begins
+      isFadingOutRef.current = true;
+      // Fade out body gestures smoothly
+      setGestureIntensity(0.0); // Target 0, will lerp smoothly
+      console.log('[Idle Expression] Starting fade out for TTS...');
+      console.log('[Body Gestures] Fading out...');
+    } else {
+      // Resume when TTS ends
+      isFadingOutRef.current = false;
+      setIdleExpressionPaused(false);
+      // Fade in body gestures smoothly
+      setGestureIntensity(1.0); // Target 1, will lerp smoothly
+      console.log('[Body Gestures] Fading in...');
     }
-    setIdleExpressionPaused(isSpeaking);
     setBlinkSpeakingMode(isSpeaking);
   }, [isSpeaking]);
 
@@ -334,7 +346,19 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         updateLookAt(delta, vrm, cameraRef.current, new Set());
       }
 
-      // 3. Lip sync - set expression values (ONLY when speaking)
+      // 3. Fade out idle expression when TTS is about to start
+      // Fade happens in parallel with lip sync starting
+      if (isFadingOutRef.current) {
+        const fadeComplete = fadeOutIdleExpressions(delta, vrm);
+        if (fadeComplete) {
+          isFadingOutRef.current = false;
+          setIdleExpressionPaused(true);
+          console.log('[Idle Expression] Fade out complete - paused for TTS');
+        }
+      }
+
+      // 4. Lip sync - set expression values (starts immediately when speaking)
+      // Lip sync can run in parallel with fade out - mouth movements override fading expressions
       if (isSpeakingRef.current) {
         vrm.expressionManager?.setValue('aa', 0);
         const level = isWebSpeechActiveRef.current
@@ -343,24 +367,25 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         updateLipSync(level, vrm, delta);
       }
 
-      // 4. Idle expression rotation (auto mood system) - set expression values
+      // 5. Idle expression rotation (auto mood system) - set expression values
       // CRITICAL: Automatically paused when speaking to prevent interference with lip sync
       // When paused, all idle expression weights are cleared to 0
-      if (!manualBlendshapeRef.current) {
+      if (!manualBlendshapeRef.current && !isFadingOutRef.current) {
         updateIdleExpression(delta, vrm);
       }
 
-      // 5. Apply all expression weights to morph targets - MUST be called after setting values
+      // 6. Apply all expression weights to morph targets - MUST be called after setting values
       vrm.update(delta);
 
-      // 6. Blink - apply AFTER vrm.update() so blink has final say on morph targets
+      // 7. Blink - apply AFTER vrm.update() so blink has final say on morph targets
       // This prevents vrm.update() from overriding the direct morph target manipulation
       updateBlink(delta, vrm);
 
-      // 7. Procedural micro-gestures — body breathing only (no expression override)
+      // 8. Procedural micro-gestures — body breathing only (no expression override)
+      // Now with smooth fade in/out based on gesture intensity
       const isManualOrTalking = !!vrmaActionRef.current || isTalkingPlayingRef.current;
       if (!isManualOrTalking) {
-        updateIdleMicroGestures(elapsedTime, vrm, activeDrivenBonesRef.current);
+        updateIdleMicroGestures(elapsedTime, vrm, activeDrivenBonesRef.current, delta);
       }
 
       // 8. Spring bones — secondary motion (hair, accessories, etc.)
