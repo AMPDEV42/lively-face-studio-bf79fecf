@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 export type SpeechRecognitionStatus =
   | 'idle'
   | 'requesting'   // asking for mic permission
+  | 'starting'     // mic granted, waiting for audio stream
   | 'listening'    // actively recording
   | 'processing'   // got audio, waiting for result
   | 'error';
@@ -11,6 +12,7 @@ export interface UseSpeechRecognitionResult {
   status: SpeechRecognitionStatus;
   transcript: string;        // live interim transcript
   isSupported: boolean;
+  isReady: boolean;          // true when mic is ready to capture audio
   start: () => void;
   stop: () => void;
   reset: () => void;
@@ -30,6 +32,7 @@ export function useSpeechRecognition(
   const [status, setStatus] = useState<SpeechRecognitionStatus>('idle');
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const onFinalSegmentRef = useRef(onFinalSegment);
   onFinalSegmentRef.current = onFinalSegment;
@@ -41,6 +44,7 @@ export function useSpeechRecognition(
     recognitionRef.current?.stop();
     recognitionRef.current = null;
     setStatus('idle');
+    setIsReady(false);
   }, []);
 
   const reset = useCallback(() => {
@@ -48,6 +52,7 @@ export function useSpeechRecognition(
     setTranscript('');
     setError(null);
     setStatus('idle');
+    setIsReady(false);
   }, [stop]);
 
   const start = useCallback(() => {
@@ -62,6 +67,7 @@ export function useSpeechRecognition(
     setStatus('requesting');
     setTranscript('');
     setError(null);
+    setIsReady(false);
 
     const recognition = new SR();
     recognition.lang = detectedLang;
@@ -69,7 +75,25 @@ export function useSpeechRecognition(
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => setStatus('listening');
+    recognition.onstart = () => {
+      setStatus('starting');
+      // Wait a bit for audio stream to be fully ready
+      setTimeout(() => {
+        setStatus('listening');
+        setIsReady(true);
+      }, 300); // 300ms delay to ensure mic is ready
+    };
+
+    recognition.onaudiostart = () => {
+      // Audio stream is now active and capturing
+      setStatus('listening');
+      setIsReady(true);
+    };
+
+    recognition.onsoundstart = () => {
+      // Sound detected - mic is definitely working
+      setIsReady(true);
+    };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = '';
@@ -98,11 +122,13 @@ export function useSpeechRecognition(
       if (errMsg) { setError(errMsg); setStatus('error'); }
       else setStatus('idle');
       recognitionRef.current = null;
+      setIsReady(false);
     };
 
     recognition.onend = () => {
       recognitionRef.current = null;
-      setStatus(prev => (prev === 'listening' || prev === 'requesting' ? 'idle' : prev));
+      setStatus(prev => (prev === 'listening' || prev === 'requesting' || prev === 'starting' ? 'idle' : prev));
+      setIsReady(false);
     };
 
     recognitionRef.current = recognition;
@@ -112,10 +138,11 @@ export function useSpeechRecognition(
       setError('Gagal memulai pengenalan suara');
       setStatus('error');
       recognitionRef.current = null;
+      setIsReady(false);
     }
   }, [detectedLang]);
 
   useEffect(() => () => { recognitionRef.current?.stop(); recognitionRef.current = null; }, []);
 
-  return { status, transcript, isSupported, start, stop, reset, error };
+  return { status, transcript, isSupported, isReady, start, stop, reset, error };
 }

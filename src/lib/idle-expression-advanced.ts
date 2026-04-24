@@ -25,26 +25,25 @@ interface ExpressionSlot {
 
 // ── Expression Pool ───────────────────────────────────────────────────────────
 const EXPRESSIONS: ExpressionSlot[] = [
-  // Regular expressions
-  { name: 'happy',     weight: 3.0, minDuration: 2.5, maxDuration: 7,  baseIntensity: 0.70, intensityVariation: 0.15, mood: 'positive' },
-  { name: 'relaxed',   weight: 2.5, minDuration: 3,   maxDuration: 9,  baseIntensity: 0.75, intensityVariation: 0.10, mood: 'positive' },
-  { name: 'surprised', weight: 0.8, minDuration: 1.5, maxDuration: 3,  baseIntensity: 0.60, intensityVariation: 0.15, mood: 'neutral' },
-  { name: 'sad',       weight: 0.6, minDuration: 2.5, maxDuration: 5,  baseIntensity: 0.50, intensityVariation: 0.10, mood: 'negative' },
+  // Regular expressions - durasi lebih panjang untuk lebih natural
+  { name: 'happy',     weight: 2.0, minDuration: 3,   maxDuration: 8,  baseIntensity: 0.65, intensityVariation: 0.15, mood: 'positive' },
+  { name: 'relaxed',   weight: 2.0, minDuration: 4,   maxDuration: 10, baseIntensity: 0.70, intensityVariation: 0.10, mood: 'positive' },
+  { name: 'surprised', weight: 0.5, minDuration: 2,   maxDuration: 4,  baseIntensity: 0.55, intensityVariation: 0.15, mood: 'neutral' },
+  { name: 'sad',       weight: 0.4, minDuration: 3,   maxDuration: 6,  baseIntensity: 0.45, intensityVariation: 0.10, mood: 'negative' },
   
-  // Micro-expressions (sangat singkat, subtle)
-  { name: 'happy',     weight: 2.5, minDuration: 0.4, maxDuration: 1.2, baseIntensity: 0.35, intensityVariation: 0.10, isMicro: true, mood: 'positive' },
-  { name: 'surprised', weight: 1.8, minDuration: 0.3, maxDuration: 0.9, baseIntensity: 0.30, intensityVariation: 0.10, isMicro: true, mood: 'neutral' },
-  { name: 'sad',       weight: 1.2, minDuration: 0.4, maxDuration: 1.0, baseIntensity: 0.25, intensityVariation: 0.08, isMicro: true, mood: 'negative' },
-  { name: 'relaxed',   weight: 1.5, minDuration: 0.5, maxDuration: 1.3, baseIntensity: 0.40, intensityVariation: 0.08, isMicro: true, mood: 'positive' },
+  // Micro-expressions - dikurangi weight dan frekuensi
+  { name: 'happy',     weight: 1.0, minDuration: 0.5, maxDuration: 1.5, baseIntensity: 0.30, intensityVariation: 0.10, isMicro: true, mood: 'positive' },
+  { name: 'surprised', weight: 0.8, minDuration: 0.4, maxDuration: 1.0, baseIntensity: 0.25, intensityVariation: 0.10, isMicro: true, mood: 'neutral' },
+  { name: 'relaxed',   weight: 0.8, minDuration: 0.6, maxDuration: 1.5, baseIntensity: 0.35, intensityVariation: 0.08, isMicro: true, mood: 'positive' },
 ];
 
-// Neutral configuration
-const NEUTRAL_WEIGHT = 4.5;
-const NEUTRAL_MIN = 2.5;
-const NEUTRAL_MAX = 8;
-const NEUTRAL_LONG_PAUSE_CHANCE = 0.12; // 12% chance pause panjang (12-20 detik)
-const NEUTRAL_LONG_MIN = 12;
-const NEUTRAL_LONG_MAX = 20;
+// Neutral configuration - DIPERPANJANG untuk lebih natural
+const NEUTRAL_WEIGHT = 6.0; // Increased weight - lebih sering neutral
+const NEUTRAL_MIN = 5;      // Increased from 2.5 - minimal 5 detik
+const NEUTRAL_MAX = 15;     // Increased from 8 - maksimal 15 detik
+const NEUTRAL_LONG_PAUSE_CHANCE = 0.20; // Increased from 0.12 - 20% chance pause panjang
+const NEUTRAL_LONG_MIN = 15; // Increased from 12
+const NEUTRAL_LONG_MAX = 30; // Increased from 20
 
 // Emotional momentum
 const MOOD_MOMENTUM_BOOST = 2.2; // Boost untuk mood yang sama
@@ -200,7 +199,7 @@ export function initIdleExpression(): void {
   _targetWeights = {};
   _transitioning = false;
   _holdTimer = 0;
-  _holdTarget = 2 + Math.random() * 3;
+  _holdTarget = 8 + Math.random() * 7; // Increased: 8-15 detik untuk expression pertama
   _activeName = 'neutral';
   _lastIndex = -1;
   _currentMood = 'neutral';
@@ -238,6 +237,48 @@ export function debugExpressionKeys(vrm: VRM): void {
 
 export function setIdleExpressionPaused(paused: boolean): void {
   _paused = paused;
+  
+  // CRITICAL: Reset all idle expression weights saat paused
+  // Ini mencegah idle expression (seperti happy/relaxed yang buka mulut)
+  // mengganggu lip sync saat TTS berbicara
+  if (paused) {
+    _currentWeights = {};
+    _targetWeights = {};
+    _transitioning = false;
+    _fluctuationPhase = 0;
+    console.log('[Idle Expression] Paused - all weights cleared for lip sync');
+  } else {
+    // Resume: pick next expression
+    const next = _pickNext();
+    _targetWeights = next.weights;
+    _baseTargetIntensity = next.intensity;
+    _holdTarget = next.duration;
+    _holdTimer = 0;
+    _activeName = next.name;
+    _transitioning = true;
+    console.log('[Idle Expression] Resumed - transitioning to', next.name);
+  }
+}
+
+/**
+ * Force clear all idle expression values from VRM immediately.
+ * Call this right before TTS starts to ensure clean slate for lip sync.
+ */
+export function forceResetIdleExpressions(vrm: VRM): void {
+  if (!vrm.expressionManager) return;
+  
+  const em = vrm.expressionManager;
+  const managedKeys = ['happy', 'sad', 'angry', 'surprised', 'relaxed', 'neutral', 'joy', 'sorrow', 'fun', 'extra'];
+  
+  for (const k of managedKeys) {
+    try { em.setValue(k, 0); } catch (_) { /* ok */ }
+  }
+  
+  // Also clear internal state
+  _currentWeights = {};
+  _targetWeights = {};
+  
+  console.log('[Idle Expression] Force reset - all expressions cleared from VRM');
 }
 
 export function applyMoodOverride(
@@ -281,6 +322,12 @@ export function setIdleExpressionManual(manual: boolean): void {
 export function updateIdleExpression(delta: number, vrm: VRM): void {
   if (!_enabled || manualMode || !vrm.expressionManager) return;
   
+  // CRITICAL: Jangan apply weights sama sekali saat paused
+  // Ini mencegah idle expression mengganggu lip sync
+  if (_paused) {
+    return;
+  }
+  
   // ── Mood override countdown ───────────────────────────────────────────────
   if (_inMoodOverride) {
     _moodOverrideTimer += delta;
@@ -297,7 +344,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
   }
   
   // ── Hold timer ────────────────────────────────────────────────────────────
-  if (!_paused && !_inMoodOverride) {
+  if (!_inMoodOverride) {
     _holdTimer += delta;
     
     // Intensity fluctuation during hold (subtle breathing effect)
@@ -369,7 +416,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
   // ── Apply to VRM ──────────────────────────────────────────────────────────
   const em = vrm.expressionManager;
   
-  // Reset managed keys
+  // Reset managed keys - EXCLUDE blink keys to avoid interfering with blink system
   const managedKeys = ['happy', 'sad', 'angry', 'surprised', 'relaxed', 'neutral', 'joy', 'sorrow', 'fun', 'extra'];
   for (const k of managedKeys) {
     try { em.setValue(k, 0); } catch (_) { /* ok */ }

@@ -436,13 +436,30 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* STT interim transcript */}
-      {speechMode && stt.status === 'listening' && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple-bright text-xs text-primary/80 pulse-neon">
-          <Radio className="w-3.5 h-3.5 shrink-0" />
-          <span>{stt.transcript || 'Mendengarkan…'}</span>
+      {/* STT starting - mic warming up */}
+      {speechMode && (stt.status === 'requesting' || stt.status === 'starting') && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs text-primary/60 loading-bar">
+          <Mic className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+          <span>Menyiapkan mikrofon… tunggu sebentar</span>
         </div>
       )}
+
+      {/* STT ready and listening */}
+      {speechMode && stt.status === 'listening' && stt.isReady && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple-bright text-xs text-primary/80 pulse-neon">
+          <Radio className="w-3.5 h-3.5 shrink-0" />
+          <span>{stt.transcript || 'Siap mendengarkan — mulai bicara'}</span>
+        </div>
+      )}
+
+      {/* STT listening but not ready yet */}
+      {speechMode && stt.status === 'listening' && !stt.isReady && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs text-primary/60">
+          <Mic className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+          <span>Hampir siap… tunggu sebentar</span>
+        </div>
+      )}
+
       {/* Countdown before auto-send */}
       {speechMode && sendCountdown !== null && (
         <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs">
