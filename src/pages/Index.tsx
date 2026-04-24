@@ -47,7 +47,7 @@ export default function Index() {
   const [isCameraFree, setIsCameraFree] = useState(false);
   const [currentCameraPreset, setCurrentCameraPreset] = useState<CameraPreset>('medium-shot');
   const [chatOpen, setChatOpen] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+    false // Always start closed for both desktop and mobile
   );
   const [hasUnread, setHasUnread] = useState(false);
 
@@ -214,8 +214,8 @@ export default function Index() {
       <OnboardingGuide />
       <KeyboardShortcutsHelp />
 
-      {/* VRM Viewer — main area */}
-      <div className="flex-1 relative min-w-0 scanlines">
+      {/* Full-screen VRM Viewer Background Layer */}
+      <div className="absolute inset-0 z-0">
         <Suspense
           fallback={
             <div className="absolute inset-0 flex items-center justify-center">
@@ -241,10 +241,14 @@ export default function Index() {
               audioElement={audioEl}
               currentMessage={spokenMessage}
               getAudioLevel={audioConnected ? getAudioLevel : undefined}
+              className="w-full h-full"
             />
           </ErrorBoundary>
         </Suspense>
+      </div>
 
+      {/* Content Layer - VRM Viewer area (for controls only) */}
+      <div className="flex-1 relative min-w-0 scanlines z-30">
         {/* Camera Controls */}
         {modelUrl && (
           <CameraControls
@@ -272,7 +276,7 @@ export default function Index() {
         )}
 
         {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 py-2.5 md:px-4 md:py-3 z-10">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 py-2.5 md:px-4 md:py-3 z-40">
           {/* App name */}
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/15 border border-neon-purple-bright flex items-center justify-center neon-glow-purple">
@@ -308,45 +312,27 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Bottom gradient fade for mobile input bar */}
-        {isMobile && !chatOpen && (
-          <div className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none bg-gradient-to-t from-background/60 to-transparent" />
+        {/* Bottom gradient fade for input bar - reduced height to avoid covering controls */}
+        {!chatOpen && (
+          <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none bg-gradient-to-t from-background/60 to-transparent" />
         )}
       </div>
 
-      {/* Chat panel */}
-      {isMobile ? (
-        <ChatPanel
-          onSpeakStart={handleSpeakStart}
-          onSpeakEnd={handleSpeakEnd}
-          onUserMessage={handleUserMessage}
-          voiceId={voiceId}
-          ttsProvider={activeProvider}
-          onTTSRateLimit={handleRateLimit}
-          isMobile
-          isOpen={chatOpen}
-          onToggle={handleToggleChat}
-          onUnreadChange={setHasUnread}
-          personality={personality}
-          isSpeaking={isSpeaking}
-        />
-      ) : (
-        chatOpen && (
-          <div className="w-[320px] lg:w-[360px] h-full shrink-0 border-l border-neon-purple-bright">
-            <ChatPanel
-              onSpeakStart={handleSpeakStart}
-              onSpeakEnd={handleSpeakEnd}
-              onUserMessage={handleUserMessage}
-              voiceId={voiceId}
-              ttsProvider={activeProvider}
-              onTTSRateLimit={handleRateLimit}
-              onUnreadChange={setHasUnread}
-              personality={personality}
-              isSpeaking={isSpeaking}
-            />
-          </div>
-        )
-      )}
+      {/* Chat panel - always mobile-style (overlay) for both desktop and mobile */}
+      <ChatPanel
+        onSpeakStart={handleSpeakStart}
+        onSpeakEnd={handleSpeakEnd}
+        onUserMessage={handleUserMessage}
+        voiceId={voiceId}
+        ttsProvider={activeProvider}
+        onTTSRateLimit={handleRateLimit}
+        isMobile={true} // Always use mobile layout
+        isOpen={chatOpen}
+        onToggle={handleToggleChat}
+        onUnreadChange={setHasUnread}
+        personality={personality}
+        isSpeaking={isSpeaking}
+      />
     </div>
   );
 }

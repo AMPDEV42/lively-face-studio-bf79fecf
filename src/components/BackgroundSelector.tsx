@@ -63,13 +63,15 @@ export default function BackgroundSelector({
       return;
     }
 
+    console.log('[BackgroundSelector] Starting upload:', file.name, file.size, 'bytes');
     setUploading(true);
     try {
       const newBackground = await BackgroundManager.uploadBackground(file, user?.id);
+      console.log('[BackgroundSelector] Upload completed:', newBackground);
       setBackgrounds(prev => [...prev, newBackground]);
       toast.success('Background berhasil diupload');
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.error('[BackgroundSelector] Upload failed:', error);
       toast.error(error instanceof Error ? error.message : 'Upload gagal');
     } finally {
       setUploading(false);

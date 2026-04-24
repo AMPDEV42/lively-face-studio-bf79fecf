@@ -96,7 +96,7 @@ export class EnvironmentManager {
 
   private setGradientBackground(colors: string[]) {
     // Create gradient using a large sphere with gradient material
-    const geometry = new THREE.SphereGeometry(50, 32, 16);
+    const geometry = new THREE.SphereGeometry(100, 32, 16);
     
     // Create gradient texture
     const canvas = document.createElement('canvas');
@@ -115,47 +115,74 @@ export class EnvironmentManager {
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
     
+    // Use MeshBasicMaterial to ensure NO lighting effects
     const material = new THREE.MeshBasicMaterial({
       map: texture,
       side: THREE.BackSide,
+      depthWrite: false,
+      depthTest: false,
+      fog: false, // Disable fog effects
+      toneMapped: false, // Disable tone mapping
+      colorSpace: THREE.SRGBColorSpace, // Ensure proper color space
     });
     
     const sphere = new THREE.Mesh(geometry, material);
     sphere.name = 'EnvironmentSphere';
+    sphere.renderOrder = -999;
+    sphere.frustumCulled = false;
+    sphere.matrixAutoUpdate = false;
+    sphere.castShadow = false; // Don't cast shadows
+    sphere.receiveShadow = false; // Don't receive shadows
+    sphere.updateMatrix();
     this.scene.add(sphere);
     
     // Also set scene background to first color as fallback
     this.scene.background = new THREE.Color(colors[0]);
+    
+    console.log('[Environment] Gradient background created - unlit material, no lighting effects');
   }
 
   private setImageBackground(imageUrl: string, scale: number = 1.0) {
     this.textureLoader.load(
       imageUrl,
       (texture) => {
-        // Create sphere geometry for 360° background
-        const geometry = new THREE.SphereGeometry(50, 32, 16);
-        
-        // Configure texture
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(scale, scale);
+        // Configure texture properly
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
         
+        // Set scene background (maintains full aspect ratio)
+        this.scene.background = texture;
+        this.currentBackground = texture;
+        
+        // Create sphere geometry for 360° background
+        const geometry = new THREE.SphereGeometry(100, 64, 32);
+        
+        // Clone and configure texture for sphere
+        const sphereTexture = texture.clone();
+        sphereTexture.wrapS = THREE.RepeatWrapping;
+        sphereTexture.wrapT = THREE.ClampToEdgeWrapping;
+        
+        // Fix orientation: flip horizontally and rotate
+        sphereTexture.repeat.set(-scale, scale);
+        sphereTexture.offset.set(scale, 0);
+        
         const material = new THREE.MeshBasicMaterial({
-          map: texture,
+          map: sphereTexture,
           side: THREE.BackSide,
+          depthWrite: false,
+          depthTest: false,
         });
         
         const sphere = new THREE.Mesh(geometry, material);
         sphere.name = 'EnvironmentSphere';
+        sphere.renderOrder = -999;
+        sphere.frustumCulled = false;
+        sphere.rotation.y = Math.PI; // Fix orientation
         this.scene.add(sphere);
-        
-        this.currentBackground = texture;
-        
-        // Set scene background to average color as fallback
-        this.scene.background = new THREE.Color(0x1a1a2e);
       },
       undefined,
       (error) => {
@@ -170,6 +197,7 @@ export class EnvironmentManager {
     // Remove existing environment sphere
     const existing = this.scene.getObjectByName('EnvironmentSphere');
     if (existing) {
+      console.log('[Environment] Removing existing background sphere');
       this.scene.remove(existing);
       if (existing instanceof THREE.Mesh) {
         existing.geometry.dispose();
@@ -182,8 +210,11 @@ export class EnvironmentManager {
       }
     }
     
+    // Clear scene background
     this.scene.background = null;
     this.currentBackground = null;
+    
+    console.log('[Environment] Background cleared');
   }
 
   // Set background from image URL (for custom backgrounds)
@@ -195,40 +226,76 @@ export class EnvironmentManager {
     this.textureLoader.load(
       imageUrl,
       (texture) => {
-        console.log('[Environment] Image loaded successfully');
+        console.log('[Environment] Image loaded successfully, size:', texture.image.width, 'x', texture.image.height);
         
-        // Create sphere geometry for 360° background
-        const geometry = new THREE.SphereGeometry(50, 32, 16);
-        
-        // Configure texture
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(scale, scale);
+        // Configure texture properly for background
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.generateMipmaps = false; // Disable mipmaps for better performance
         
+        // Method 1: Scene background (maintains aspect ratio, full coverage)
+        // This ensures background is always visible regardless of viewport changes
+        this.scene.background = texture;
+        this.currentBackground = texture;
+        console.log('[Environment] Scene background set - will maintain full landscape aspect');
+        
+        // Method 2: Create background sphere for 360° immersion
+        const geometry = new THREE.SphereGeometry(100, 64, 32);
+        
+        // Clone texture for sphere with proper UV mapping
+        const sphereTexture = texture.clone();
+        sphereTexture.wrapS = THREE.RepeatWrapping;
+        sphereTexture.wrapT = THREE.ClampToEdgeWrapping;
+        sphereTexture.generateMipmaps = false;
+        
+        // Fix texture orientation for sphere mapping
+        sphereTexture.repeat.set(-1, 1); // Negative X flips horizontally
+        sphereTexture.offset.set(1, 0);  // Offset to compensate for flip
+        
+        // Use MeshBasicMaterial to ensure NO lighting effects
         const material = new THREE.MeshBasicMaterial({
-          map: texture,
-          side: THREE.BackSide,
+          map: sphereTexture,
+          side: THREE.BackSide, // Render inside faces
+          transparent: false,
+          depthWrite: false,
+          depthTest: false,
+          fog: false, // Disable fog effects
+          // Ensure material is completely unlit (not affected by lights)
+          toneMapped: false, // Disable tone mapping
+          colorSpace: THREE.SRGBColorSpace, // Ensure proper color space
         });
         
+        // Ensure the sphere is not affected by any lighting
         const sphere = new THREE.Mesh(geometry, material);
         sphere.name = 'EnvironmentSphere';
+        sphere.position.set(0, 0, 0);
+        sphere.renderOrder = -999;
+        sphere.frustumCulled = false;
+        sphere.matrixAutoUpdate = false; // Static position, no need to update matrix
+        sphere.castShadow = false; // Don't cast shadows
+        sphere.receiveShadow = false; // Don't receive shadows
+        
+        // Rotate sphere to correct orientation
+        sphere.rotation.y = Math.PI; // 180 degree rotation to fix orientation
+        sphere.updateMatrix(); // Update matrix once after rotation
+        
         this.scene.add(sphere);
         
-        this.currentBackground = texture;
-        
-        // Set scene background to average color as fallback
-        this.scene.background = new THREE.Color(0x1a1a2e);
-        
-        console.log('[Environment] Custom image background applied');
+        console.log('[Environment] Background sphere created - unlit material, no lighting effects');
+        console.log('[Environment] Material properties - fog:', material.fog, 'toneMapped:', material.toneMapped);
+        console.log('[Environment] Sphere rotation Y:', sphere.rotation.y);
+        console.log('[Environment] Texture repeat:', sphereTexture.repeat);
+        console.log('[Environment] Texture offset:', sphereTexture.offset);
       },
       (progress) => {
-        console.log('[Environment] Loading progress:', (progress.loaded / progress.total * 100) + '%');
+        if (progress.total > 0) {
+          console.log('[Environment] Loading progress:', Math.round(progress.loaded / progress.total * 100) + '%');
+        }
       },
       (error) => {
         console.error('[Environment] Failed to load background image:', error);
-        // Fallback to gradient
         console.log('[Environment] Using gradient fallback');
         this.setGradientBackground(['#0a0a1f', '#1a0a2e', '#16213e']);
       }

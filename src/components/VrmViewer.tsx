@@ -543,8 +543,22 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    
+    // Configure tone mapping - but exclude background materials
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
+    
+    // Ensure background is always rendered properly
+    renderer.autoClear = true;
+    renderer.autoClearColor = true;
+    renderer.autoClearDepth = true;
+    renderer.autoClearStencil = true;
+    
+    // Set clear color as fallback (should not be visible if background is set)
+    renderer.setClearColor(0x0a0a1f, 1.0);
+    
+    console.log('[VrmViewer] Renderer configured - tone mapping:', renderer.toneMapping, 'exposure:', renderer.toneMappingExposure);
+    
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -558,8 +572,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     controls.update();
     orbitControlsRef.current = controls;
 
-    // Remove the old manual lighting setup since we now use LightingManager
-    // Lighting is now handled by lightingManagerRef.current
+    // Add debugging to window for console testing
+    if (typeof window !== 'undefined') {
+      (window as any).scene = scene;
+      (window as any).camera = camera;
+      (window as any).renderer = renderer;
+      (window as any).environmentManager = environmentManagerRef.current;
+    }
 
     // Load VRM
     const loader = new GLTFLoader();
@@ -625,7 +644,10 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     const cleanupLookAt = isMobile ? () => {} : initLookAt(container);
 
     const onResize = () => {
-      if (!container) return;
+      if (!container || !renderer || !camera) return;
+      
+      console.log('[VrmViewer] Resize triggered - container size:', container.clientWidth, 'x', container.clientHeight);
+      
       const wasMobile = isMobileRef.current;
       const nowMobile = container.clientWidth < 768;
       isMobileRef.current = nowMobile;
@@ -638,6 +660,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       if (wasMobile !== nowMobile && lightingManagerRef.current) {
         lightingManagerRef.current.setMobileMode(nowMobile);
       }
+      
+      // Update camera settings
       if (!cameraFreeRef.current && adaptivePresetsRef.current) {
         const p = adaptivePresetsRef.current['medium-shot'];
         camera.position.set(...p.position);
@@ -645,15 +669,31 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         camera.lookAt(...p.target);
         orbitControlsRef.current?.target.set(...p.target);
       }
+      
+      // Update camera aspect ratio and renderer size
       camera.aspect = container.clientWidth / container.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(container.clientWidth, container.clientHeight);
+      
+      // Ensure background is still visible after resize
+      if (environmentManagerRef.current && sceneRef.current) {
+        // Force background refresh to ensure it's still visible
+        const currentBg = sceneRef.current.background;
+        if (currentBg) {
+          console.log('[VrmViewer] Refreshing background after resize');
+          // Trigger a re-render to ensure background is visible
+          renderer.render(sceneRef.current, camera);
+        }
+      }
+      
       if (wasMobile !== nowMobile) {
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, nowMobile ? 1.5 : 2));
         // Disable look-at on mobile, re-enable on desktop
         setLookAtEnabled(!nowMobile);
       }
       orbitControlsRef.current?.handleResize?.();
+      
+      console.log('[VrmViewer] Resize complete - new aspect ratio:', camera.aspect);
     };
 
     const onVisibility = () => { isVisibleRef.current = document.visibilityState === 'visible'; };

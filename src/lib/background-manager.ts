@@ -10,56 +10,73 @@ export interface BackgroundItem {
   thumbnail?: string;
 }
 
-// Default backgrounds untuk free users (dengan fallback ke generated placeholders)
+// Default backgrounds dengan gambar real dari folder public
 export const DEFAULT_BACKGROUNDS: BackgroundItem[] = [
   {
     id: 'cyberpunk-city',
     name: 'Cyberpunk City',
-    url: '/backgrounds/cyberpunk-city.jpg',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.45.05.png',
     type: 'default',
     isPro: false,
-    thumbnail: '/backgrounds/thumbs/cyberpunk-city-thumb.jpg',
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.45.05.png',
   },
   {
     id: 'neon-grid',
     name: 'Neon Grid',
-    url: '/backgrounds/neon-grid.jpg',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.49.24.png',
     type: 'default',
     isPro: false,
-    thumbnail: '/backgrounds/thumbs/neon-grid-thumb.jpg',
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.49.24.png',
   },
   {
     id: 'space-station',
     name: 'Space Station',
-    url: '/backgrounds/space-station.jpg',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.54.56.png',
     type: 'default',
     isPro: false,
-    thumbnail: '/backgrounds/thumbs/space-station-thumb.jpg',
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.54.56.png',
   },
   {
     id: 'digital-void',
     name: 'Digital Void',
-    url: '/backgrounds/digital-void.jpg',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.55.55.png',
     type: 'default',
     isPro: false,
-    thumbnail: '/backgrounds/thumbs/digital-void-thumb.jpg',
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.55.55.png',
   },
   // Pro-only defaults
   {
     id: 'hologram-lab',
     name: 'Hologram Lab',
-    url: '/backgrounds/hologram-lab.jpg',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.56.06.png',
     type: 'default',
     isPro: true,
-    thumbnail: '/backgrounds/thumbs/hologram-lab-thumb.jpg',
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.56.06.png',
   },
   {
     id: 'matrix-code',
     name: 'Matrix Code',
-    url: '/backgrounds/matrix-code.jpg',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.57.17.png',
     type: 'default',
     isPro: true,
-    thumbnail: '/backgrounds/thumbs/matrix-code-thumb.jpg',
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.57.17.png',
+  },
+  // Additional Pro backgrounds
+  {
+    id: 'cyber-nexus',
+    name: 'Cyber Nexus',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.30.png',
+    type: 'default',
+    isPro: true,
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.30.png',
+  },
+  {
+    id: 'quantum-realm',
+    name: 'Quantum Realm',
+    url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.41.png',
+    type: 'default',
+    isPro: true,
+    thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.41.png',
   },
 ];
 
@@ -69,23 +86,22 @@ export class BackgroundManager {
 
   // Get all available backgrounds for user
   static async getBackgrounds(isPro: boolean = false): Promise<BackgroundItem[]> {
+    console.log('[BackgroundManager] Getting backgrounds, isPro:', isPro);
     const backgrounds: BackgroundItem[] = [];
     
-    // Add default backgrounds based on user tier with fallback generation
+    // Add default backgrounds based on user tier (now using real images)
     const defaultBackgrounds = DEFAULT_BACKGROUNDS.filter(bg => !bg.isPro || isPro);
-    
-    // Generate fallback images for missing files
-    for (const bg of defaultBackgrounds) {
-      const backgroundWithFallback = await this.ensureBackgroundExists(bg);
-      backgrounds.push(backgroundWithFallback);
-    }
+    console.log('[BackgroundManager] Adding', defaultBackgrounds.length, 'default backgrounds');
+    backgrounds.push(...defaultBackgrounds);
     
     // Add custom uploaded backgrounds (Pro only)
     if (isPro) {
       const customBackgrounds = await this.getCustomBackgrounds();
+      console.log('[BackgroundManager] Adding', customBackgrounds.length, 'custom backgrounds');
       backgrounds.push(...customBackgrounds);
     }
     
+    console.log('[BackgroundManager] Total backgrounds:', backgrounds.length);
     return backgrounds;
   }
 
@@ -160,39 +176,8 @@ export class BackgroundManager {
 
   // Get custom uploaded backgrounds
   static async getCustomBackgrounds(): Promise<BackgroundItem[]> {
-    try {
-      // Try Supabase first
-      const { data: user } = await supabase.auth.getUser();
-      if (user?.user?.id) {
-        // Check if bucket exists
-        const { data: buckets } = await supabase.storage.listBuckets();
-        const bucketExists = buckets?.some(bucket => bucket.name === this.BUCKET_NAME);
-        
-        if (bucketExists) {
-          const { data: files } = await supabase.storage
-            .from(this.BUCKET_NAME)
-            .list(user.user.id);
-          
-          if (files) {
-            return files
-              .filter(file => file.name.match(/\.(jpg|jpeg|png|webp)$/i))
-              .map(file => ({
-                id: `custom-${file.name}`,
-                name: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
-                url: this.getSupabaseUrl(user.user.id, file.name),
-                type: 'uploaded' as const,
-                isPro: true,
-              }));
-          }
-        } else {
-          console.warn('Backgrounds bucket not found, using localStorage fallback');
-        }
-      }
-    } catch (error) {
-      console.warn('Supabase storage not available, using localStorage:', error);
-    }
-    
-    // Fallback to localStorage
+    // Temporarily disable Supabase completely - use localStorage only
+    console.log('[BackgroundManager] Using localStorage only (Supabase temporarily disabled)');
     return this.getLocalStorageBackgrounds();
   }
 
@@ -207,41 +192,8 @@ export class BackgroundManager {
       throw new Error('Ukuran file maksimal 10MB');
     }
 
-    try {
-      // Try Supabase first
-      if (userId) {
-        // Check if bucket exists first
-        const { data: buckets } = await supabase.storage.listBuckets();
-        const bucketExists = buckets?.some(bucket => bucket.name === this.BUCKET_NAME);
-        
-        if (!bucketExists) {
-          console.warn('Backgrounds bucket not found, using localStorage fallback');
-          throw new Error('Bucket not available');
-        }
-
-        const ext = file.name.split('.').pop();
-        const fileName = `${Date.now()}.${ext}`;
-        const filePath = `${userId}/${fileName}`;
-        
-        const { error } = await supabase.storage
-          .from(this.BUCKET_NAME)
-          .upload(filePath, file, { upsert: true });
-        
-        if (error) throw error;
-        
-        return {
-          id: `custom-${fileName}`,
-          name: file.name.replace(/\.[^/.]+$/, ''),
-          url: this.getSupabaseUrl(userId, fileName),
-          type: 'uploaded',
-          isPro: true,
-        };
-      }
-    } catch (error) {
-      console.warn('Supabase upload failed, using localStorage:', error);
-    }
-    
-    // Fallback to localStorage
+    // For now, use localStorage only (skip Supabase)
+    console.log('[BackgroundManager] Using localStorage for upload (Supabase disabled)');
     return this.uploadToLocalStorage(file);
   }
 
