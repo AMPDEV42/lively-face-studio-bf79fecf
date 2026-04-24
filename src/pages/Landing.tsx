@@ -78,59 +78,59 @@ export default function Landing() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="relative w-full overflow-hidden" style={{ paddingTop: '56.25%' }}>
+      <section className="relative w-full overflow-hidden" style={{ paddingTop: 'clamp(400px, 56.25vw, 56.25%)' }}>
         <img src="/voxie-hero.png" alt="Voxie" className="absolute inset-0 w-full h-full object-cover object-center" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#07070f]/95 via-[#07070f]/25 to-[#07070f]/55" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#07070f] via-transparent to-[#07070f]/60" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#07070f]/95 via-[#07070f]/40 to-[#07070f]/60" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#07070f] via-transparent to-[#07070f]/70" />
         <div className="absolute inset-0 opacity-[0.02]" style={{
           backgroundImage: 'linear-gradient(rgba(139,92,246,1) 1px,transparent 1px),linear-gradient(90deg,rgba(139,92,246,1) 1px,transparent 1px)',
           backgroundSize: '50px 50px'
         }} />
 
-        <div className="absolute inset-0 flex items-end pb-14 pt-20">
-          <div className="w-full max-w-7xl mx-auto px-6 lg:px-10 flex items-end justify-between gap-8">
-            <div className="space-y-6 max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 backdrop-blur-sm text-violet-300 text-xs font-medium">
+        <div className="absolute inset-0 flex items-end pb-10 sm:pb-14 pt-20">
+          <div className="w-full max-w-7xl mx-auto px-5 sm:px-6 lg:px-10 flex items-end justify-between gap-6">
+            <div className="space-y-4 sm:space-y-6 max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 backdrop-blur-sm text-violet-300 text-[10px] sm:text-xs font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
                 AI · 3D · REAL-TIME
               </div>
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.0] tracking-tight">
+              <h1 className="text-3xl sm:text-5xl lg:text-7xl font-black leading-[1.05] sm:leading-[1.0] tracking-tight">
                 Asisten Virtual<br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-purple-300 to-pink-300">
                   3D Interaktif
                 </span>
               </h1>
-              <p className="text-sm sm:text-base text-white/60 leading-relaxed max-w-sm">
+              <p className="text-xs sm:text-sm text-white/60 leading-relaxed max-w-xs sm:max-w-sm">
                 Upload model VRM 3D pilihanmu dan berinteraksi real-time dengan asisten AI yang merespons dengan suara dan ekspresi wajah.
               </p>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <Link to={ctaHref}>
-                  <Button size="lg" className="gap-2 h-12 px-7 bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl shadow-2xl shadow-violet-500/35 text-sm font-semibold">
-                    Mulai Sekarang <ArrowRight className="w-4 h-4" />
+                  <Button size="sm" className="gap-2 h-10 sm:h-12 px-5 sm:px-7 bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl shadow-2xl shadow-violet-500/35 text-xs sm:text-sm font-semibold">
+                    Mulai Sekarang <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </Button>
                 </Link>
-                <Button variant="outline" size="lg" className="gap-2.5 h-12 px-6 border-white/15 bg-white/5 hover:bg-white/10 backdrop-blur text-white text-sm rounded-xl">
-                  <div className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center">
-                    <Play className="w-2.5 h-2.5 fill-white" />
+                <Button variant="outline" size="sm" className="gap-2 h-10 sm:h-12 px-4 sm:px-6 border-white/15 bg-white/5 hover:bg-white/10 backdrop-blur text-white text-xs sm:text-sm rounded-xl">
+                  <div className="w-5 h-5 rounded-full bg-white/15 flex items-center justify-center">
+                    <Play className="w-2 h-2 fill-white" />
                   </div>
                   Lihat Demo
                 </Button>
               </div>
-              <div className="flex items-center gap-3 pt-1">
-                <div className="flex -space-x-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex -space-x-2">
                   {['bg-violet-500','bg-purple-600','bg-indigo-500','bg-pink-500'].map((c,i) => (
-                    <div key={i} className={`w-8 h-8 rounded-full ${c} border-2 border-[#07070f] flex items-center justify-center text-[9px] font-bold`}>
+                    <div key={i} className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full ${c} border-2 border-[#07070f] flex items-center justify-center text-[8px] sm:text-[9px] font-bold`}>
                       {['A','B','C','D'][i]}
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-white/45">
+                <p className="text-[10px] sm:text-xs text-white/45">
                   <span className="text-white/80 font-semibold">10.000+</span> pengguna aktif ✦
                 </p>
               </div>
             </div>
 
-            {/* Chat panel */}
+            {/* Chat panel — desktop only */}
             <div className="hidden lg:flex flex-col w-52 shrink-0 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xl shadow-2xl overflow-hidden mb-4">
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/8 bg-white/[0.03]">
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-[9px] font-bold shrink-0">V</div>
@@ -160,13 +160,13 @@ export default function Landing() {
         </div>
 
         {/* Feature pills */}
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2">
+        <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5 sm:gap-2">
           {[
             { icon: <Smile className="w-3 h-3" />, label: 'Ekspresi' },
             { icon: <Mic className="w-3 h-3" />, label: 'Suara' },
             { icon: <Activity className="w-3 h-3" />, label: 'Gerakan' },
           ].map(p => (
-            <div key={p.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 border border-white/10 backdrop-blur-sm text-xs text-white/65">
+            <div key={p.label} className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-black/50 border border-white/10 backdrop-blur-sm text-[10px] sm:text-xs text-white/65">
               <span className="text-violet-400">{p.icon}</span>{p.label}
             </div>
           ))}
@@ -177,10 +177,10 @@ export default function Landing() {
       <section className="relative py-14 px-6 lg:px-10 overflow-hidden" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0d0a1f 50%, #07070f 100%)' }}>
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-violet-600/6 blur-[120px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto">
-          <div className="mb-12">
-            <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-3">Fitur Unggulan</p>
-            <h2 className="text-4xl font-black tracking-tight">Kenapa Voxie? <span className="text-violet-400">✦</span></h2>
-            <p className="text-sm text-white/40 mt-2 max-w-md">Semua yang kamu butuhkan untuk asisten virtual yang benar-benar hidup.</p>
+          <div className="mb-8 sm:mb-12">
+            <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-2 sm:mb-3">Fitur Unggulan</p>
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight">Kenapa Voxie? <span className="text-violet-400">✦</span></h2>
+            <p className="text-xs sm:text-sm text-white/40 mt-2 max-w-md">Semua yang kamu butuhkan untuk asisten virtual yang benar-benar hidup.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {([
@@ -240,14 +240,14 @@ export default function Landing() {
       {/* ── Demo + Customize ── */}
       <section className="py-12 px-6 lg:px-10" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0b0918 50%, #07070f 100%)' }}>
         <div className="max-w-6xl mx-auto">
-          <div className="mb-10">
-            <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-3">Demo & Kustomisasi</p>
-            <h2 className="text-4xl font-black tracking-tight">Lihat & Rasakan Sendiri</h2>
+          <div className="mb-6 sm:mb-10">
+            <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-2 sm:mb-3">Demo & Kustomisasi</p>
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight">Lihat & Rasakan Sendiri</h2>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Demo card */}
             <div className="rounded-2xl border border-white/[0.07] overflow-hidden flex flex-col lg:flex-row group" style={{ background: 'linear-gradient(135deg, #131228 0%, #0c0b1a 100%)' }}>
-              <div className="p-7 flex flex-col justify-center gap-5 lg:w-52 shrink-0">
+              <div className="p-5 sm:p-7 flex flex-col justify-center gap-4 sm:gap-5 lg:w-52 shrink-0">
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/25 text-red-400 text-[10px] font-semibold mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" /> LIVE
@@ -268,7 +268,7 @@ export default function Landing() {
 
             {/* Customize card */}
             <div className="rounded-2xl border border-white/[0.07] overflow-hidden flex flex-col lg:flex-row group relative" style={{ background: 'linear-gradient(135deg, #131228 0%, #0c0b1a 100%)' }}>
-              <div className="p-7 flex flex-col justify-center gap-4 flex-1">
+              <div className="p-5 sm:p-7 flex flex-col justify-center gap-4 flex-1">
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/12 border border-violet-500/20 text-violet-300 text-[10px] font-semibold mb-3">
                     <Sparkles className="w-3 h-3" /> Kustomisasi
@@ -295,7 +295,17 @@ export default function Landing() {
                 </div>
               </div>
 
-              {/* Character image — pojok kanan bawah dalam card */}
+              {/* Character image mobile — tampil di bawah konten */}
+              <div className="overflow-hidden lg:hidden -mx-5 -mb-5">
+                <img
+                  src="/stiker-ai.png"
+                  alt="Karakter AI"
+                  className="w-4/5 mx-auto block object-contain"
+                  style={{ transform: 'translateY(25%)', marginTop: '-50%' }}
+                />
+              </div>
+
+              {/* Character image desktop — pojok kanan bawah dalam card */}
               <div className="relative lg:w-52 shrink-0 hidden lg:block self-stretch">
                 <img
                   src="/stiker-ai.png"
@@ -313,7 +323,7 @@ export default function Landing() {
       <section className="py-8 px-6 lg:px-10 border-y border-white/[0.05]" style={{ background: '#050509' }}>
         <div className="max-w-5xl mx-auto text-center">
           <p className="text-[11px] text-white/25 mb-8 tracking-[0.25em] uppercase font-medium">Dipercaya oleh kreator, gamer, pelajar, dan profesional</p>
-          <div className="flex flex-wrap items-center justify-center gap-10 opacity-25">
+          <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-10 opacity-25">
             {['NEXUS','STELLAR','KIZUNA LABS','OTAKU STUDIO','MIRAI TECH'].map(b => (
               <span key={b} className="text-sm font-black tracking-widest text-white">{b}</span>
             ))}
@@ -325,10 +335,10 @@ export default function Landing() {
       <section className="relative py-16 px-6 lg:px-10 overflow-hidden" id="harga" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0e0b22 50%, #07070f 100%)' }}>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] bg-violet-700/5 blur-[140px] pointer-events-none" />
         <div className="relative max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-3">Harga</p>
-            <h2 className="text-4xl font-black tracking-tight">Pilih Paket yang Sesuai</h2>
-            <p className="text-sm text-white/40 mt-2">Semua paket termasuk fitur berbicara, gerak, dan ekspresif.</p>
+          <div className="text-center mb-8 sm:mb-14">
+            <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-2 sm:mb-3">Harga</p>
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight">Pilih Paket yang Sesuai</h2>
+            <p className="text-xs sm:text-sm text-white/40 mt-2">Semua paket termasuk fitur berbicara, gerak, dan ekspresif.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
