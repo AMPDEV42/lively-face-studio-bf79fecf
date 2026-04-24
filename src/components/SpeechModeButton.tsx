@@ -1,4 +1,4 @@
-import { Radio, Mic } from 'lucide-react';
+import { Radio, Mic, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { SpeechRecognitionStatus } from '@/hooks/useSpeechRecognition';
 
@@ -18,6 +18,7 @@ export function SpeechModeButton({
   if (!sttSupported) return null;
 
   const isListening = sttStatus === 'listening';
+  const isStarting = sttStatus === 'requesting' || sttStatus === 'starting';
 
   return (
     <Button
@@ -25,17 +26,36 @@ export function SpeechModeButton({
       variant={speechMode ? 'default' : 'outline'}
       size="sm"
       onClick={onToggle}
-      className={`h-8 gap-1.5 text-xs ${
+      disabled={isStarting}
+      className={`h-8 gap-1.5 text-xs transition-all ${
         speechMode
           ? isListening
-            ? 'bg-destructive/20 text-destructive border-destructive/40 hover:bg-destructive/30 animate-pulse'
-            : 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30'
-          : 'border-border/60 text-muted-foreground hover:text-foreground'
+            ? 'bg-destructive/20 text-destructive border-destructive/40 hover:bg-destructive/30 animate-pulse neon-glow-magenta'
+            : isStarting
+            ? 'bg-primary/10 text-primary/60 border-primary/30 cursor-wait'
+            : 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30 neon-glow-purple'
+          : 'border-border/60 text-muted-foreground hover:text-foreground hover-neon-glow'
       }`}
-      title="Speech Mode — bicara langsung ke asisten"
+      title={
+        isStarting
+          ? 'Menyiapkan mikrofon… tunggu sebentar'
+          : 'Speech Mode — bicara langsung ke asisten'
+      }
     >
-      {speechMode ? <Radio className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-      {speechMode ? (isListening ? 'Mendengarkan…' : 'Speech Mode') : 'Voice'}
+      {isStarting ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : speechMode ? (
+        <Radio className="w-3.5 h-3.5" />
+      ) : (
+        <Mic className="w-3.5 h-3.5" />
+      )}
+      {speechMode
+        ? isStarting
+          ? 'Menyiapkan…'
+          : isListening
+          ? 'Mendengarkan'
+          : 'Speech Mode'
+        : 'Voice'}
     </Button>
   );
 }

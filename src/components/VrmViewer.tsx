@@ -19,6 +19,7 @@ import {
   setIdleExpressionManual,
   applyMoodOverride,
   debugExpressionKeys,
+  forceResetIdleExpressions,
 } from '@/lib/idle-expression-advanced';
 import { createMixer, playVRMA } from '@/lib/vrma-player';
 import { initLookAt, updateLookAt, setLookAtEnabled } from '@/lib/vrm-lookat';
@@ -91,6 +92,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
   // Pause/resume idle expression saat speaking berubah
   useEffect(() => {
+    if (isSpeaking && vrmRef.current) {
+      // CRITICAL: Force reset idle expressions BEFORE pausing
+      // This ensures no residual expression values interfere with lip sync
+      forceResetIdleExpressions(vrmRef.current);
+    }
     setIdleExpressionPaused(isSpeaking);
     setBlinkSpeakingMode(isSpeaking);
   }, [isSpeaking]);
@@ -328,7 +334,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         updateLookAt(delta, vrm, cameraRef.current, new Set());
       }
 
-      // 3. Lip sync - set expression values
+      // 3. Lip sync - set expression values (ONLY when speaking)
       if (isSpeakingRef.current) {
         vrm.expressionManager?.setValue('aa', 0);
         const level = isWebSpeechActiveRef.current
@@ -338,16 +344,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
 
       // 4. Idle expression rotation (auto mood system) - set expression values
-      // Jalan terus, tapi akan di-pause internal saat isSpeaking
+      // CRITICAL: Automatically paused when speaking to prevent interference with lip sync
+      // When paused, all idle expression weights are cleared to 0
       if (!manualBlendshapeRef.current) {
         updateIdleExpression(delta, vrm);
       }
 
-      // 5. Blink - set expression values BEFORE vrm.update()
-      updateBlink(delta, vrm);
-
-      // 6. Apply all expression weights to morph targets - MUST be called after setting values
+      // 5. Apply all expression weights to morph targets - MUST be called after setting values
       vrm.update(delta);
+
+      // 6. Blink - apply AFTER vrm.update() so blink has final say on morph targets
+      // This prevents vrm.update() from overriding the direct morph target manipulation
+      updateBlink(delta, vrm);
 
       // 7. Procedural micro-gestures — body breathing only (no expression override)
       const isManualOrTalking = !!vrmaActionRef.current || isTalkingPlayingRef.current;

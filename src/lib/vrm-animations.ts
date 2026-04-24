@@ -139,6 +139,7 @@ export function updateBlink(delta: number, vrm: VRM): void {
       _randomizeBlinkParams(false);
       blinkPhase = 'closing';
       blinkPhaseTimer = 0;
+      console.log('[Blink] Starting blink - burst:', blinksRemaining, 'peak:', _peakValue.toFixed(2));
     }
     return;
   }
@@ -176,6 +177,7 @@ export function updateBlink(delta: number, vrm: VRM): void {
         blinkPhase = 'idle';
         blinkTimer = 0;
         nextBlinkIn = _scheduleNextBlink(_isSpeakingBlink);
+        console.log('[Blink] Complete - next in', nextBlinkIn.toFixed(1), 'seconds');
       }
     }
 
