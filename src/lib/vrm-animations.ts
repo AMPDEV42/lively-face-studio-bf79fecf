@@ -747,22 +747,44 @@ function getBones(vrm: VRM) {
   return cached;
 }
 
+// Gesture intensity for smooth fade in/out
+let _gestureIntensity = 1.0; // 0.0 = no gestures, 1.0 = full gestures
+let _targetGestureIntensity = 1.0;
+const GESTURE_FADE_SPEED = 0.15; // Reduced from 0.25 - extremely slow fade for maximum natural transition
+
+export function setGestureIntensity(target: number, immediate = false): void {
+  _targetGestureIntensity = Math.max(0, Math.min(1, target));
+  if (immediate) {
+    _gestureIntensity = _targetGestureIntensity;
+  }
+}
+
 export function updateIdleMicroGestures(
   elapsed: number,
   vrm: VRM,
   drivenBones?: Set<string>,
+  delta = 0.016,
 ): void {
   if (!vrm.humanoid) return;
+
+  // Smooth lerp toward target intensity
+  if (Math.abs(_gestureIntensity - _targetGestureIntensity) > 0.01) {
+    const lerpSpeed = GESTURE_FADE_SPEED * delta;
+    _gestureIntensity += (_targetGestureIntensity - _gestureIntensity) * lerpSpeed;
+  } else {
+    _gestureIntensity = _targetGestureIntensity;
+  }
 
   const isDriven = (name: string) => !!drivenBones?.has(name);
   const { spine, chest, upperChest, head, neck } = getBones(vrm);
 
+  // Apply gestures with current intensity multiplier
   if (spine && !isDriven('spine')) {
-    spine.rotation.z += Math.sin(elapsed * 0.35) * 0.0002;
+    spine.rotation.z += Math.sin(elapsed * 0.35) * 0.0002 * _gestureIntensity;
   }
 
-  const breathX      = Math.sin(elapsed * 0.7) * 0.0006;
-  const breathUpperX = Math.sin(elapsed * 0.7 + 0.3) * 0.0003;
+  const breathX      = Math.sin(elapsed * 0.7) * 0.0006 * _gestureIntensity;
+  const breathUpperX = Math.sin(elapsed * 0.7 + 0.3) * 0.0003 * _gestureIntensity;
 
   if (chest && !isDriven('chest'))           chest.rotation.x      += breathX;
   if (upperChest && !isDriven('upperChest')) upperChest.rotation.x += breathUpperX;
