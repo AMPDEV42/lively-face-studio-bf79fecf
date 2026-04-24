@@ -211,8 +211,7 @@ export default function Landing() {
                   {f.img ? (
                     <>
                       <img src={f.img} alt={f.title} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
-                      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 35%, #0c0b1a 95%)' }} />
-                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#0c0b1a] via-transparent to-[#131228]/50" />
+                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#0c0b1a]/80 via-transparent to-[#131228]/30" />
                     </>
                   ) : (
                     <div className="w-full h-full flex flex-col justify-center gap-3 px-5" style={{ background: 'linear-gradient(180deg, transparent, #0c0b1a)' }}>
