@@ -806,6 +806,34 @@ export function updateIdleMicroGestures(
   // Only apply breathing to chest/upperChest to avoid conflict
   if (neck && !isDriven('neck')) { neck.rotation.z = 0; }
   if (head && !isDriven('head')) { head.rotation.z = 0; }
+
+  // --- Boredom Stretching Mechanics & Otonomi Gestur ---
+  // Memicu peregangan pundak/tubuh ringan setiap rentang waktu ketika dibiarkan idle.
+  // Kami menjadwalkannya dengan modulo rotasi waktu absolut, misalnya 45 detik.
+  const BOREDOM_CYCLE = 45; // detik
+  const stretchPhase = (elapsed % BOREDOM_CYCLE);
+  
+  // 4 detik terakhir dari siklus 45 detik adalah fase merenggangkan (stretch) bahu
+  if (stretchPhase > BOREDOM_CYCLE - 4) { 
+    const t = stretchPhase - (BOREDOM_CYCLE - 4); // berjalan dari 0 ke 4
+    const curve = Math.sin((t / 4) * Math.PI); // Parabola memuncak di detik ke 2
+    
+    const leftShoulder  = vrm.humanoid.getNormalizedBoneNode('leftShoulder');
+    const rightShoulder = vrm.humanoid.getNormalizedBoneNode('rightShoulder');
+    const leftUpperArm  = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+
+    // Manggutkan pinggang
+    if (spine && !isDriven('spine')) spine.rotation.x -= curve * 0.08 * _gestureIntensity;
+    
+    // Angkat dan putar bahu layaknya peregangan rileks
+    if (leftShoulder && !isDriven('leftShoulder')) leftShoulder.rotation.z += curve * 0.15 * _gestureIntensity;
+    if (rightShoulder && !isDriven('rightShoulder')) rightShoulder.rotation.z -= curve * 0.15 * _gestureIntensity;
+    
+    // Lengan atas mundur sedikit
+    if (leftUpperArm && !isDriven('leftUpperArm')) leftUpperArm.rotation.x -= curve * 0.2 * _gestureIntensity;
+    if (rightUpperArm && !isDriven('rightUpperArm')) rightUpperArm.rotation.x -= curve * 0.2 * _gestureIntensity;
+  }
 }
 
 // ============================================

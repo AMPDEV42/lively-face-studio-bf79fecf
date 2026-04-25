@@ -622,6 +622,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         // Init spring bones for secondary motion
         initSpringBones(vrm);
 
+        // Setup Headpat hitbox (invisible sphere around head bone)
+        const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+        if (headNode) {
+          const hitboxGeom = new THREE.SphereGeometry(0.22, 12, 12);
+          const hitboxMat = new THREE.MeshBasicMaterial({ visible: false }); 
+          const hitboxMesh = new THREE.Mesh(hitboxGeom, hitboxMat);
+          hitboxMesh.name = 'headpat_hitbox';
+          // Offset sedikit ke atas ubun-ubun kepala (0.1m)
+          hitboxMesh.position.set(0, 0.1, 0.02); 
+          headNode.add(hitboxMesh);
+        }
+
         // Init idle expression rotation
         initIdleExpression();
         
@@ -808,8 +820,109 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelUrl]);
 
+  // Affection & Headpat states
+  const [affection, setAffection] = useState(() => parseInt(localStorage.getItem('vrm.affection') || '0', 10));
+  const pointerSpeedY = useRef(0);
+  const lastPointerY = useRef(0);
+  
+  // Taptic particle pop
+  const [tapticParticles, setTapticParticles] = useState<{id: number, x: number, y: number, char: string}[]>([]);
+  const tapticIdCounter = useRef(0);
+
+  const saveAffection = (addAmount: number) => {
+    setAffection(prev => {
+      const newVal = prev + addAmount;
+      localStorage.setItem('vrm.affection', newVal.toString());
+      return newVal;
+    });
+  };
+
+  const syncAffectionFromChat = useCallback(() => {
+    if (isSpeaking && currentMessage && currentMessage.length > 5) {
+      saveAffection(1); // Bertambah 1 tiap bicara
+    }
+  }, [isSpeaking, currentMessage]);
+
+  useEffect(() => { syncAffectionFromChat(); }, [isSpeaking]);
+
+  const handlePointerMoveHitbox = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (cameraFreeRef.current || !cameraRef.current || !sceneRef.current) return;
+    if (e.buttons !== 1) return; // Only process on drag (mouse down + move)
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    const deltaY = e.clientY - lastPointerY.current;
+    lastPointerY.current = e.clientY;
+    
+    // Akumulasi speed patokan y (sapuan atas-bawah)
+    pointerSpeedY.current += Math.abs(deltaY);
+
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera({ x, y }, cameraRef.current);
+
+    const allHitMeshes: THREE.Mesh[] = [];
+    sceneRef.current.traverse(child => {
+      if (child.name === 'headpat_hitbox') allHitMeshes.push(child as THREE.Mesh);
+    });
+
+    const intersects = rc.intersectObjects(allHitMeshes);
+    if (intersects.length > 0) {
+      if (pointerSpeedY.current > 30) {
+        pointerSpeedY.current = 0; // reset
+        
+        // --- Spawn Taptic Particle ---
+        const ex = e.clientX;
+        const ey = e.clientY;
+        const emojis = ['✨', '💕', '⭐', '🌸'];
+        const randomChar = emojis[Math.floor(Math.random() * emojis.length)];
+        const id = tapticIdCounter.current++;
+        setTapticParticles(prev => [...prev, { id, x: ex, y: ey, char: randomChar }]);
+        setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id)), 1000); // auto clear
+        
+        // --- Trigger Blush ---
+        if (vrmRef.current) {
+          applyMoodOverride('happy', 3, vrmRef.current);
+          saveAffection(2); // Elusan nambah lumayan banyak
+        }
+      }
+    }
+  };
+
   return (
-    <div ref={containerRef} className={`relative w-full h-full ${className ?? ''}`}>
+    <div ref={containerRef} className={`relative w-full h-full ${className ?? ''}`}
+         onPointerMove={handlePointerMoveHitbox}
+         onPointerDown={(e) => { lastPointerY.current = e.clientY; pointerSpeedY.current = 0; }}>
+      
+      {/* Taptic Particles Rendering */}
+      {tapticParticles.map(p => (
+        <div key={p.id} className="taptic-particle pointer-events-none z-[99999]" style={{ position: 'fixed', left: p.x - 16 + 'px', top: p.y - 16 + 'px', fontSize: '32px', textShadow: '0 0 10px rgba(236,72,153,1)' }}>
+          {p.char}
+        </div>
+      ))}
+
+      {/* Level 3+ Sakura Aura Rendering */}
+      {Math.floor(affection / 100) >= 3 && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10 opacity-60">
+          {Array.from({ length: 25 }).map((_, i) => (
+            <div 
+              key={`sakura-${i}`} 
+              className="sakura-petal"
+              style={{
+                left: `${Math.random() * 100}vw`,
+                width: `${Math.random() * 10 + 6}px`,
+                height: `${Math.random() * 10 + 6}px`,
+                animation: `sakura-fall ${Math.random() * 6 + 6}s linear ${Math.random() * 5}s infinite, sakura-sway ${Math.random() * 2 + 2}s ease-in-out infinite alternate`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* HTML image background — fade transition, never affected by Three.js tone mapping */}
       {bgImageUrl && (
         <img
@@ -855,8 +968,49 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           </div>
         </div>
       )}
+
+      {/* Companion HUD Overlay (Lovometer & Cinematic Subtitles) */}
+      <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between overflow-hidden">
+        
+        {/* Top Header Region for Lovometer */}
+        <div className="absolute top-0 left-0 right-0 flex justify-center sm:justify-start sm:ml-40 mt-3 md:mt-4 pointer-events-none">
+          {/* Lovometer - Affection level indicator */}
+          <div className="bg-background/80 backdrop-blur-md border px-3 py-1.5 flex items-center gap-2 pointer-events-auto shadow-md select-none transition-all rounded-full border-pink-500/20 max-w-[160px] h-8">
+            <span className="text-[11px] font-bold tracking-widest text-pink-400 drop-shadow-sm font-mono leading-none">
+              LV.{Math.floor(affection / 100)}
+            </span>
+            <div className="relative flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden shadow-inner w-16">
+              <div 
+                className="absolute left-0 top-0 bottom-0 bg-pink-500 transition-all duration-500 ease-out"
+                style={{ width: `${affection % 100}%` }}
+              />
+            </div>
+            <span className="text-sm cursor-pointer hover:scale-125 transition-transform drop-shadow-md leading-none" 
+                  title="Affection Level (Peningkatan melalui obrolan & sentuhan wajah)">
+              💖
+            </span>
+          </div>
+        </div>
+
+        {/* Floating Subtitle */}
+        {isSpeaking && currentMessage && (
+          <div className="pb-24 px-4 w-full max-w-4xl mx-auto flex items-end justify-center pointer-events-none">
+            <div className="text-center w-full">
+              <p className="text-xl sm:text-2xl font-black text-white px-6 py-2 tracking-wide leading-relaxed inline-block"
+                style={{ 
+                  textShadow: '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 4px 10px rgba(0,0,0,0.8)',
+                  WebkitTextStroke: '0.8px #222'
+                }}>
+                {currentMessage}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 });
 
 export default VrmViewer;
+
