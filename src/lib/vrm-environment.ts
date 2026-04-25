@@ -44,6 +44,11 @@ export const ENVIRONMENT_PRESETS: Record<string, EnvironmentConfig> = {
     background: ['transparent'],
     intensity: 1.0,
   },
+  'green-screen': {
+    type: 'color',
+    background: ['#00FF00'], // Solid pure green for Chroma Key
+    intensity: 1.0,
+  },
 };
 
 export class EnvironmentManager {

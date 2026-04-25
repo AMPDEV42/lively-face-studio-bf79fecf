@@ -677,8 +677,18 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016): void
     em.setValue('MouthSmileLeft',  Math.max(0, _currentPS.MouthSmileLeft  * (1 - mouthValue * 0.5)));
     em.setValue('MouthSmileRight', Math.max(0, _currentPS.MouthSmileRight * (1 - mouthValue * 0.5)));
 
-    const primary   = MOUTH_SHAPES_PS[_currentShape];
-    const secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % 3];
+    // Wibu / Anime Enhancement:
+    // If audio is very loud, strongly emphasize 'MouthFunnel' (O shape) or MouthPucker (U shape)
+    // Audio volume correlates loosely with plosives or loud screams (kyaa~!)
+    const isLoud = mouthValue > (maxMouth * 0.6);
+    let primary = MOUTH_SHAPES_PS[_currentShape];
+    let secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % 3];
+
+    if (isLoud) {
+      if (_currentShape === 0) primary = 'MouthFunnel';
+      else primary = 'MouthPucker';
+    }
+
     em.setValue(primary,   mouthValue * (1 - blend * 0.35));
     em.setValue(secondary, mouthValue * blend * 0.35);
 
@@ -780,11 +790,13 @@ export function updateIdleMicroGestures(
 
   // Apply gestures with current intensity multiplier
   if (spine && !isDriven('spine')) {
-    spine.rotation.z += Math.sin(elapsed * 0.35) * 0.0002 * _gestureIntensity;
+    spine.rotation.z += Math.sin(elapsed * 0.35) * 0.001 * _gestureIntensity;
+    spine.rotation.x += Math.sin(elapsed * 0.7) * 0.0005 * _gestureIntensity;
   }
 
-  const breathX      = Math.sin(elapsed * 0.7) * 0.0006 * _gestureIntensity;
-  const breathUpperX = Math.sin(elapsed * 0.7 + 0.3) * 0.0003 * _gestureIntensity;
+  // Anime / Companion breathing is slightly more noticeable than base VRM
+  const breathX      = Math.sin(elapsed * 0.7) * 0.0025 * _gestureIntensity;
+  const breathUpperX = Math.sin(elapsed * 0.7 + 0.3) * 0.0015 * _gestureIntensity;
 
   if (chest && !isDriven('chest'))           chest.rotation.x      += breathX;
   if (upperChest && !isDriven('upperChest')) upperChest.rotation.x += breathUpperX;

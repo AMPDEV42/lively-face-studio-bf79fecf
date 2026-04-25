@@ -194,6 +194,26 @@ export const DEFAULT_PRESETS: Omit<BlendshapePreset, 'id' | 'created_at'>[] = [
     MouthShrugUpper: 0.40,
   })),
 
+  // Wibu Anime Presets
+  preset('Yandere', 'Mata redup mengerikan dengan senyum tipis psychopat', 'emote', w({
+    BrowDownLeft: 0.65, BrowDownRight: 0.65,
+    EyeSquintLeft: 0.35, EyeSquintRight: 0.35,
+    // Typical Yandere: Mata membelalak atas, alis turun, senyum miring
+    EyeWideLeft: 0.65, EyeWideRight: 0.65,
+    MouthSmileLeft: 0.35, MouthSmileRight: 0.35,
+    JawForward: 0.20,
+    MouthDimpleLeft: 0.40, MouthDimpleRight: 0.40,
+  })),
+
+  preset('Tsundere', 'Blushing pouting (marah malu)', 'emote', w({
+    BrowDownLeft: 0.85, BrowDownRight: 0.85,
+    MouthPucker: 0.65, // Manyun
+    EyeSquintLeft: 0.40, EyeSquintRight: 0.40,
+    MouthRollLower: 0.30,
+    CheekPuff: 0.45,
+    CheekSquintLeft: 0.50, CheekSquintRight: 0.50,
+  })),
+
   preset('Crying', 'Menangis dengan mulut gemetar', 'emote', w({
     MouthFrownLeft: 0.80, MouthFrownRight: 0.80,
     BrowInnerUp: 0.90,

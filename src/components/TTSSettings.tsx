@@ -6,6 +6,8 @@ import {
   listWebSpeechVoices,
   setWebSpeechVoice,
   getWebSpeechVoice,
+  getWebSpeechConfig,
+  setWebSpeechConfig,
   speakWithWebSpeech,
   stopWebSpeech,
   type WebSpeechVoiceInfo,
@@ -333,6 +335,43 @@ export default function TTSSettings({
                       Reset ke pilihan otomatis
                     </button>
                   )}
+
+                  <div className="pt-2 border-t border-border/40 space-y-3">
+                    <p className="text-[11px] font-medium text-foreground">Kustomisasi Karakter Suara</p>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] text-muted-foreground">Nada (Pitch)</label>
+                        <span className="text-[10px] tabular-nums">{getWebSpeechConfig().pitch.toFixed(2)}x</span>
+                      </div>
+                      <input 
+                        type="range" min="0.5" max="2.0" step="0.05"
+                        defaultValue={getWebSpeechConfig().pitch}
+                        onMouseUp={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          setWebSpeechConfig(val, getWebSpeechConfig().rate);
+                          toast.success('Pitch tersimpan');
+                        }}
+                        className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] text-muted-foreground">Kecepatan (Rate)</label>
+                        <span className="text-[10px] tabular-nums">{getWebSpeechConfig().rate.toFixed(2)}x</span>
+                      </div>
+                      <input 
+                        type="range" min="0.5" max="2.0" step="0.05"
+                        defaultValue={getWebSpeechConfig().rate}
+                        onMouseUp={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          setWebSpeechConfig(getWebSpeechConfig().pitch, val);
+                          toast.success('Kecepatan tersimpan');
+                        }}
+                        className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
                 </>
               )}
             </div>

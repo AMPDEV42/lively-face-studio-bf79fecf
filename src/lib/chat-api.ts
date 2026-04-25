@@ -37,13 +37,18 @@ export async function streamChat({
 }) {
   if (!isOnline()) throw new Error("Tidak ada koneksi internet.");
 
+  const now = new Date();
+  const timeContext = `[META: Waktu dunia nyata pengguna saat ini adalah ${now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} pukul ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}. Sesuaikan nada dan ucapan/sapaanmu jika berhubungan dengan waktu tersebut, act natural.]`;
+  
+  const modifiedPrompt = systemPrompt ? `${systemPrompt}\n\n${timeContext}` : timeContext;
+
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${SUPABASE_KEY}`,
     },
-    body: JSON.stringify({ messages, systemPrompt }),
+    body: JSON.stringify({ messages, systemPrompt: modifiedPrompt }),
     signal,
   });
 
