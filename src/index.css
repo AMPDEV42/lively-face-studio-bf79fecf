@@ -240,24 +240,38 @@
 
   /* --- SAKURA PARTICLES --- */
   @keyframes sakura-fall {
-    0% { transform: translate3d(0, -10vh, 0) rotate(0deg) scale(0.5); opacity: 0; }
+    0% { transform: translateY(-10vh) rotate(0deg) scale(0.5); opacity: 0; }
     10% { opacity: 0.8; }
     90% { opacity: 0.8; }
-    100% { transform: translate3d(20vw, 110vh, 0) rotate(360deg) scale(1.2); opacity: 0; }
-  }
-  @keyframes sakura-sway {
-    0%, 100% { transform: translateX(0); }
-    50% { transform: translateX(3vw); }
+    100% { transform: translateY(110vh) rotate(360deg) scale(1.2); opacity: 0; }
   }
   .sakura-petal {
     position: absolute;
-    top: -10px;
+    top: -5vh;
     background: linear-gradient(135deg, #ffb7c5, #ff9eb5);
-    border-radius: 10px 0px 10px 0px;
-    box-shadow: 0 0 5px rgba(255,183,197, 0.4);
+    border-radius: 50% 0 50% 50%;
+    box-shadow: 0 0 10px rgba(255,183,197, 0.4);
     opacity: 0;
     pointer-events: none;
-    z-index: 10;
+    filter: blur(0.5px);
+  }
+  
+  /* Cinematic Subtitle Styling */
+  .cinematic-subtitle {
+     text-align: center;
+     padding: 0.75rem 2rem;
+     background: linear-gradient(to right, transparent, rgba(0,0,0,0.7), rgba(0,0,0,0.7), transparent);
+     color: #fff;
+     font-weight: 700;
+     letter-spacing: 0.05em;
+     text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+     max-width: 90vw;
+     margin: 0 auto;
+     animation: subtitleFadeIn 0.3s ease-out;
+  }
+  @keyframes subtitleFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   /* --- TAPTIC HEADPAT POP --- */
@@ -274,5 +288,53 @@
     filter: drop-shadow(0 0 8px rgba(236,72,153,0.8));
     font-size: 24px;
     user-select: none;
+  }
+
+  /* --- AMBIENT EFFECTS --- */
+  
+  /* Rain: Light drizzle, vertical, soft */
+  @keyframes rain-fall {
+    from { transform: translateY(-30vh); opacity: 0; }
+    50% { opacity: 0.4; }
+    to { transform: translateY(110vh); opacity: 0; }
+  }
+  .rain-drop {
+    position: absolute;
+    width: 1px;
+    height: 15px;
+    background: rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Snow: Slow, swaying, varying opacity */
+  @keyframes snow-fall {
+    0% { transform: translateY(-10vh) translateX(0) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.8; }
+    90% { opacity: 0.8; }
+    100% { transform: translateY(110vh) translateX(10vw) rotate(360deg); opacity: 0; }
+  }
+  .snow-flake {
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10;
+    filter: blur(1.5px);
+  }
+
+  /* Leaves: Tumbling, colorful, organic paths */
+  @keyframes leaves-fall {
+    0% { transform: translateY(-10vh) translateX(0) rotateX(0) rotateY(0); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translateY(110vh) translateX(-20vw) rotateX(720deg) rotateY(360deg); opacity: 0; }
+  }
+  .leaf-particle {
+    position: absolute;
+    background: linear-gradient(135deg, #4d7c0f, #a3e635);
+    border-radius: 2px 15px 2px 15px;
+    pointer-events: none;
+    z-index: 10;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
   }
 }

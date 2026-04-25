@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle, useMemo } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -24,7 +24,7 @@ import {
   fadeOutIdleExpressions,
 } from '@/lib/idle-expression-advanced';
 import { createMixer, playVRMA } from '@/lib/vrma-player';
-import { initLookAt, updateLookAt, setLookAtEnabled } from '@/lib/vrm-lookat';
+import { initLookAt, updateLookAt, setLookAtEnabled, forceNeutral } from '@/lib/vrm-lookat';
 import { initSpringBones, updateSpringBones } from '@/lib/vrm-spring';
 import { getWebSpeechLipLevel } from '@/lib/web-speech-tts';
 import { createEnvironmentManager, type EnvironmentManager } from '@/lib/vrm-environment';
@@ -73,10 +73,12 @@ interface VrmViewerProps {
   currentMessage?: string;
   className?: string;
   getAudioLevel?: () => number;
+  onLevelUp?: (newLevel: number) => void;
+  ambientEffect?: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves';
 }
 
 const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer(
-  { modelUrl, isSpeaking = false, isWebSpeechActive = false, audioElement, currentMessage, className, getAudioLevel },
+  { modelUrl, isSpeaking = false, isWebSpeechActive = false, audioElement, currentMessage, className, getAudioLevel, onLevelUp, ambientEffect = 'none' },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -824,6 +826,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const [affection, setAffection] = useState(() => parseInt(localStorage.getItem('vrm.affection') || '0', 10));
   const pointerSpeedY = useRef(0);
   const lastPointerY = useRef(0);
+  const isPattingRef = useRef(false);
   
   // Taptic particle pop
   const [tapticParticles, setTapticParticles] = useState<{id: number, x: number, y: number, char: string}[]>([]);
@@ -831,7 +834,14 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
   const saveAffection = (addAmount: number) => {
     setAffection(prev => {
+      const oldLevel = Math.floor(prev / 100);
       const newVal = prev + addAmount;
+      const newLevel = Math.floor(newVal / 100);
+      
+      if (newLevel > oldLevel && newLevel >= 1) {
+        onLevelUp?.(newLevel);
+      }
+      
       localStorage.setItem('vrm.affection', newVal.toString());
       return newVal;
     });
@@ -872,6 +882,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
     const intersects = rc.intersectObjects(allHitMeshes);
     if (intersects.length > 0) {
+      if (!isPattingRef.current) {
+        isPattingRef.current = true;
+        forceNeutral(true); // Lerp back to center smoothly
+      }
+      
       if (pointerSpeedY.current > 30) {
         pointerSpeedY.current = 0; // reset
         
@@ -890,12 +905,56 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           saveAffection(2); // Elusan nambah lumayan banyak
         }
       }
+    } else {
+      if (isPattingRef.current) {
+        isPattingRef.current = false;
+        setLookAtEnabled(true);
+      }
     }
   };
+
+  // --- Ambient Particles Data (Memoized to prevent jitter on re-render) ---
+  const ambientParticles = useMemo(() => {
+    return {
+      sakura: Array.from({ length: 30 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        size: Math.random() * 12 + 8,
+        duration: Math.random() * 8 + 8,
+        delay: Math.random() * 10
+      })),
+      rain: Array.from({ length: 40 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        duration: Math.random() * 1 + 1.5,
+        delay: Math.random() * -5
+      })),
+      snow: Array.from({ length: 60 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        size: Math.random() * 5 + 3,
+        duration: Math.random() * 10 + 5,
+        delay: Math.random() * -15 // Negative delay to scatter
+      })),
+      leaves: Array.from({ length: 25 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 120,
+        size: Math.random() * 15 + 10,
+        duration: Math.random() * 8 + 6,
+        delay: Math.random() * -10 // Negative delay to scatter
+      }))
+    };
+  }, []);
 
   return (
     <div ref={containerRef} className={`relative w-full h-full ${className ?? ''}`}
          onPointerMove={handlePointerMoveHitbox}
+         onPointerUp={() => {
+           if (isPattingRef.current) {
+             isPattingRef.current = false;
+             forceNeutral(false); // Resume following mouse
+           }
+         }}
          onPointerDown={(e) => { lastPointerY.current = e.clientY; pointerSpeedY.current = 0; }}>
       
       {/* Taptic Particles Rendering */}
@@ -905,20 +964,38 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         </div>
       ))}
 
-      {/* Level 3+ Sakura Aura Rendering */}
-      {Math.floor(affection / 100) >= 3 && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10 opacity-60">
-          {Array.from({ length: 25 }).map((_, i) => (
-            <div 
-              key={`sakura-${i}`} 
-              className="sakura-petal"
-              style={{
-                left: `${Math.random() * 100}vw`,
-                width: `${Math.random() * 10 + 6}px`,
-                height: `${Math.random() * 10 + 6}px`,
-                animation: `sakura-fall ${Math.random() * 6 + 6}s linear ${Math.random() * 5}s infinite, sakura-sway ${Math.random() * 2 + 2}s ease-in-out infinite alternate`,
-              }}
-            />
+      {/* Ambient Aura Rendering */}
+      {ambientEffect !== 'none' && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+          {ambientEffect === 'sakura' && ambientParticles.sakura.map(p => (
+            <div key={p.id} className="sakura-petal" style={{
+              left: `${p.left}%`,
+              width: `${p.size}px`,
+              height: `${p.size}px`,
+              animation: `sakura-fall ${p.duration}s linear ${p.delay}s infinite`,
+            }} />
+          ))}
+          {ambientEffect === 'rain' && ambientParticles.rain.map(p => (
+            <div key={p.id} className="rain-drop" style={{
+              left: `${p.left}%`,
+              animation: `rain-fall ${p.duration}s linear ${p.delay}s infinite`,
+            }} />
+          ))}
+          {ambientEffect === 'snow' && ambientParticles.snow.map(p => (
+            <div key={p.id} className="snow-flake" style={{
+              left: `${p.left}%`,
+              width: `${p.size}px`,
+              height: `${p.size}px`,
+              animation: `snow-fall ${p.duration}s linear ${p.delay}s infinite`,
+            }} />
+          ))}
+          {ambientEffect === 'leaves' && ambientParticles.leaves.map(p => (
+            <div key={p.id} className="leaf-particle" style={{
+              left: `${p.left}%`,
+              width: `${p.size}px`,
+              height: `${p.size * 0.7}px`,
+              animation: `leaves-fall ${p.duration}s linear ${p.delay}s infinite`,
+            }} />
           ))}
         </div>
       )}
@@ -994,15 +1071,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
         {/* Floating Subtitle */}
         {isSpeaking && currentMessage && (
-          <div className="pb-24 px-4 w-full max-w-4xl mx-auto flex items-end justify-center pointer-events-none">
-            <div className="text-center w-full">
-              <p className="text-xl sm:text-2xl font-black text-white px-6 py-2 tracking-wide leading-relaxed inline-block"
-                style={{ 
-                  textShadow: '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 4px 10px rgba(0,0,0,0.8)',
-                  WebkitTextStroke: '0.8px #222'
-                }}>
-                {currentMessage}
-              </p>
+          <div className="pb-24 px-4 w-full flex items-end justify-center pointer-events-none">
+            <div className="cinematic-subtitle">
+              {currentMessage}
             </div>
           </div>
         )}
