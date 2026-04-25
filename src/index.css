@@ -237,4 +237,42 @@
   .hover-scale:hover {
     transform: scale(1.02);
   }
+
+  /* --- SAKURA PARTICLES --- */
+  @keyframes sakura-fall {
+    0% { transform: translate3d(0, -10vh, 0) rotate(0deg) scale(0.5); opacity: 0; }
+    10% { opacity: 0.8; }
+    90% { opacity: 0.8; }
+    100% { transform: translate3d(20vw, 110vh, 0) rotate(360deg) scale(1.2); opacity: 0; }
+  }
+  @keyframes sakura-sway {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(3vw); }
+  }
+  .sakura-petal {
+    position: absolute;
+    top: -10px;
+    background: linear-gradient(135deg, #ffb7c5, #ff9eb5);
+    border-radius: 10px 0px 10px 0px;
+    box-shadow: 0 0 5px rgba(255,183,197, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* --- TAPTIC HEADPAT POP --- */
+  @keyframes taptic-pop {
+    0% { transform: translateY(0) scale(0.5); opacity: 1; }
+    50% { transform: translateY(-40px) scale(1.5) rotate(15deg); opacity: 1; }
+    100% { transform: translateY(-80px) scale(1); opacity: 0; }
+  }
+  .taptic-particle {
+    position: absolute;
+    pointer-events: none;
+    z-index: 50;
+    animation: taptic-pop 1s ease-out forwards;
+    filter: drop-shadow(0 0 8px rgba(236,72,153,0.8));
+    font-size: 24px;
+    user-select: none;
+  }
 }
