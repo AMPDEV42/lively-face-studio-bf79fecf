@@ -7,6 +7,7 @@ import NewUserModelBanner from '@/components/NewUserModelBanner';
 import CameraControls from '@/components/CameraControls';
 import EnvironmentControls from '@/components/EnvironmentControls';
 import LightingControls from '@/components/LightingControls';
+import BackgroundSelector from '@/components/BackgroundSelector';
 import OnboardingGuide from '@/components/OnboardingGuide';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
@@ -248,35 +249,32 @@ export default function Index() {
       </div>
 
       {/* Content Layer - VRM Viewer area (for controls only) */}
-      <div className="flex-1 relative min-w-0 scanlines z-30">
-        {/* Camera Controls */}
+      <div className="flex-1 relative min-w-0 scanlines z-30 pointer-events-none">
+        {/* Right-side vertical control column */}
         {modelUrl && (
-          <CameraControls
-            onPresetChange={handleCameraPresetChange}
-            onFreeModeChange={handleCameraFreeModeChange}
-            isFreeMode={isCameraFree}
-            currentPreset={currentCameraPreset}
-          />
-        )}
-
-        {/* Environment Controls */}
-        {modelUrl && (
-          <EnvironmentControls
-            onEnvironmentChange={(preset) => viewerRef.current?.setEnvironment(preset)}
-            onImageBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
-            currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
-          />
-        )}
-
-        {/* Lighting Controls */}
-        {modelUrl && (
-          <LightingControls
-            onLightingChange={(config) => viewerRef.current?.setLighting(config)}
-          />
+          <div className="absolute top-[3.75rem] right-3 md:right-4 flex flex-col gap-2 z-20 pointer-events-auto">
+            <CameraControls
+              onPresetChange={handleCameraPresetChange}
+              onFreeModeChange={handleCameraFreeModeChange}
+              isFreeMode={isCameraFree}
+              currentPreset={currentCameraPreset}
+            />
+            <BackgroundSelector
+              onBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
+            />
+            <EnvironmentControls
+              onEnvironmentChange={(preset) => viewerRef.current?.setEnvironment(preset)}
+              onImageBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
+              currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
+            />
+            <LightingControls
+              onLightingChange={(config) => viewerRef.current?.setLighting(config)}
+            />
+          </div>
         )}
 
         {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 py-2.5 md:px-4 md:py-3 z-40">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 py-2.5 md:px-4 md:py-3 z-40 pointer-events-auto">
           {/* App name */}
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/15 border border-neon-purple-bright flex items-center justify-center neon-glow-purple">

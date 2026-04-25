@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Palette, Eye, EyeOff } from 'lucide-react';
+import { Palette, EyeOff } from 'lucide-react';
 import { ENVIRONMENT_PRESETS } from '@/lib/vrm-environment';
-import BackgroundSelector from './BackgroundSelector';
 
 interface EnvironmentControlsProps {
   onEnvironmentChange: (preset: string) => void;
@@ -32,21 +31,17 @@ export default function EnvironmentControls({
   const [isVisible, setIsVisible] = useState(false);
 
   return (
-    <>
-      {/* Background Selector */}
-      <BackgroundSelector
-        onBackgroundChange={onImageBackgroundChange}
-        className={className}
-      />
-      
-      {/* Environment Presets */}
-      <div className={`absolute bottom-4 left-4 z-20 ${className}`}>
+    <div className="relative">
       {/* Toggle Button */}
       <Button
         variant="outline"
         size="icon"
         onClick={() => setIsVisible(!isVisible)}
-        className="h-10 w-10 cyber-glass border-neon-purple-bright hover-neon-glow"
+        className={`h-9 w-9 border-border/60 backdrop-blur-md shadow-md transition-colors ${
+          isVisible
+            ? 'bg-primary/20 border-primary/40 text-primary'
+            : 'bg-secondary/70 hover:bg-secondary/90 text-foreground/70 hover:text-foreground'
+        }`}
         title="Environment Controls"
       >
         <Palette className="w-4 h-4" />
@@ -54,7 +49,7 @@ export default function EnvironmentControls({
 
       {/* Controls Panel */}
       {isVisible && (
-        <Card className="absolute bottom-12 left-0 w-64 p-4 cyber-glass-strong border-neon-purple">
+        <Card className="absolute top-0 right-12 w-64 p-4 cyber-glass-strong border-neon-purple">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-neon-purple">Environment</h3>
@@ -92,7 +87,6 @@ export default function EnvironmentControls({
         </Card>
       )}
     </div>
-    </>
   );
 }
 

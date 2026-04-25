@@ -45,7 +45,7 @@ export default function CameraControls({
         <Button
           variant="outline"
           size="icon"
-          className={`absolute top-[3.75rem] right-3 md:right-4 h-9 w-9 border-border/60 backdrop-blur-md shadow-md transition-colors z-20 ${
+          className={`h-9 w-9 border-border/60 backdrop-blur-md shadow-md transition-colors ${
             isOpen || isFreeMode
               ? 'bg-primary/20 border-primary/40 text-primary'
               : 'bg-secondary/70 hover:bg-secondary/90 text-foreground/70 hover:text-foreground'

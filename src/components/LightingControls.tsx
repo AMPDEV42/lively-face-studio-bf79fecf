@@ -34,13 +34,17 @@ export default function LightingControls({
   };
 
   return (
-    <div className={`absolute bottom-4 right-4 z-20 ${className}`}>
+    <div className="relative">
       {/* Toggle Button */}
       <Button
         variant="outline"
         size="icon"
         onClick={() => setIsVisible(!isVisible)}
-        className="h-10 w-10 cyber-glass border-neon-purple-bright hover-neon-glow"
+        className={`h-9 w-9 border-border/60 backdrop-blur-md shadow-md transition-colors ${
+          isVisible
+            ? 'bg-primary/20 border-primary/40 text-primary'
+            : 'bg-secondary/70 hover:bg-secondary/90 text-foreground/70 hover:text-foreground'
+        }`}
         title="Lighting Controls"
       >
         <Lightbulb className="w-4 h-4" />
@@ -48,7 +52,7 @@ export default function LightingControls({
 
       {/* Controls Panel */}
       {isVisible && (
-        <Card className="absolute bottom-12 right-0 w-80 p-4 cyber-glass-strong border-neon-purple">
+        <Card className="absolute top-0 right-12 w-80 p-4 cyber-glass-strong border-neon-purple">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-neon-purple">Lighting</h3>
