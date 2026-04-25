@@ -424,6 +424,27 @@ export default function ChatPanel({
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   };
 
+  // ── Visual viewport offset for mobile keyboard ────────────────────────────
+  // When soft keyboard opens on mobile, visualViewport shrinks.
+  // We track the offset so the input bar stays just above the keyboard.
+  const [kbOffset, setKbOffset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      // offsetTop = distance from top of layout viewport to top of visual viewport
+      // height = visible area height (shrinks when keyboard opens)
+      const hidden = window.innerHeight - vv.height - vv.offsetTop;
+      setKbOffset(Math.max(0, hidden));
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
   // ── Shared UI pieces ──────────────────────────────────────────────────────
 
   const inputBar = (
@@ -673,9 +694,15 @@ export default function ChatPanel({
       const hasUnread = messages.length > 0 && messages[messages.length - 1]?.role === 'assistant';
       return (
         <div className="absolute bottom-0 left-0 right-0 z-20">
-          {/* Safe area for input - ensures it doesn't cover other controls */}
-          <div className="px-3 sm:px-6 md:px-12 lg:px-16 xl:px-20 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-            style={{ background: 'linear-gradient(to top, rgba(6,4,14,0.80) 0%, rgba(6,4,14,0.4) 50%, transparent 100%)' }}>
+          <div className="px-3 sm:px-4 pt-8"
+            style={{
+              paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+              paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+              paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+              background: 'linear-gradient(to top, rgba(6,4,14,0.80) 0%, rgba(6,4,14,0.4) 50%, transparent 100%)',
+              transform: kbOffset > 0 ? `translateY(-${kbOffset}px)` : undefined,
+              transition: 'transform 0.15s ease-out',
+            }}>
             <div className="max-w-2xl mx-auto">
               <div className="flex items-end gap-2">
                 <div className="flex-1">{inputBar}</div>
@@ -694,14 +721,14 @@ export default function ChatPanel({
     }
 
     return (
-      <div className="absolute inset-0 z-20 flex flex-col animate-slide-up scanlines"
-        style={{ background: 'rgba(6,4,14,0.92)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
+      <div className="absolute inset-0 z-50 flex flex-col animate-slide-up scanlines"
+        style={{ background: 'rgba(6,4,14,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
         {showHistory ? historyPanel : (
           <>
             <div className="flex items-center justify-between px-4 border-b border-neon-purple corner-accent"
               style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))', paddingBottom: '0.875rem' }}>
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center neon-glow-purple">
+                <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center neon-glow-purple">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
                 <div>
@@ -710,14 +737,19 @@ export default function ChatPanel({
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover-neon-glow" onClick={() => setShowHistory(true)}><History className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover-neon-glow" onClick={startNewConversation}><Plus className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8 text-muted-foreground touch-manipulation hover-neon-glow"><X className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover-neon-glow touch-manipulation" onClick={() => setShowHistory(true)}><History className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover-neon-glow touch-manipulation" onClick={startNewConversation}><Plus className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={onToggle} className="h-10 w-10 text-muted-foreground touch-manipulation hover-neon-glow"><X className="w-4 h-4" /></Button>
               </div>
             </div>
             <ScrollArea className="flex-1 py-4 px-3" ref={scrollRef}>{messageList}</ScrollArea>
-            <div className="px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-neon-purple"
-              style={{ background: 'rgba(6,4,14,0.85)' }}>{inputBar}</div>
+            <div className="px-3 pt-2 border-t border-neon-purple"
+              style={{
+                paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+                background: 'rgba(6,4,14,0.85)',
+                transform: kbOffset > 0 ? `translateY(-${kbOffset}px)` : undefined,
+                transition: 'transform 0.15s ease-out',
+              }}>{inputBar}</div>
           </>
         )}
       </div>

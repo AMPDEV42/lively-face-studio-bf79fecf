@@ -73,19 +73,26 @@ export default function BackgroundSelector({
     }
   };
 
+  const [confirmed, setConfirmed] = useState<string | null>(null);
+
+  const showConfirm = (id: string) => {
+    setConfirmed(id);
+    setTimeout(() => setConfirmed(null), 1200);
+  };
+
   const handlePresetSelect = (preset: string) => {
     onEnvironmentChange(preset);
     setActiveType('preset');
+    showConfirm('preset:' + preset);
     setIsOpen(false);
-    toast.success(`Environment "${PRESET_LABELS[preset] ?? preset}" dipilih`);
   };
 
   const handleImageSelect = (background: BackgroundItem) => {
     onBackgroundChange(background.url);
     BackgroundManager.setCurrentBackground(background.id);
     setActiveType('image');
+    showConfirm('img:' + background.id);
     setIsOpen(false);
-    toast.success(`Background "${background.name}" dipilih`);
   };
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,14 +131,21 @@ export default function BackgroundSelector({
           <Button
             variant="outline"
             size="icon"
-            className={`h-9 w-9 btn-overlay shadow-md ${isOpen ? 'active' : ''}`}
+            className={`h-10 w-10 btn-overlay shadow-md relative ${isOpen ? 'active' : ''}`}
             title="Background & Environment"
           >
             <Layers className="w-4 h-4" />
+            {/* Confirmed flash */}
+            {confirmed && (
+              <span className="absolute inset-0 flex items-center justify-center rounded-md animate-ping-once"
+                style={{ background: 'rgba(168,85,247,0.3)' }}>
+                <Check className="w-3.5 h-3.5 text-primary" />
+              </span>
+            )}
           </Button>
         </DialogTrigger>
 
-        <DialogContent className="max-w-2xl panel-overlay flex flex-col" style={{ maxHeight: '80vh' }} aria-describedby="bg-desc">
+        <DialogContent className="panel-overlay flex flex-col w-[calc(100vw-2rem)] sm:max-w-2xl" style={{ maxHeight: '85dvh' }} aria-describedby="bg-desc">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-neon-purple flex items-center gap-2">
               <Layers className="w-4 h-4" />
@@ -164,7 +178,7 @@ export default function BackgroundSelector({
 
           {/* Preset tab */}
           {tab === 'preset' && (
-            <div className="grid grid-cols-4 gap-2 p-0.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-0.5">
               {Object.keys(ENVIRONMENT_PRESETS).map((preset) => {
                 const isActive = activeType === 'preset' && currentEnvironment === preset;
                 return (
@@ -222,7 +236,7 @@ export default function BackgroundSelector({
               )}
 
               {/* Image grid */}
-              <div className="grid grid-cols-3 gap-2 p-0.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-0.5">
                 {loading ? (
                   <div className="col-span-full flex items-center justify-center py-8">
                     <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -280,3 +294,4 @@ export default function BackgroundSelector({
     </div>
   );
 }
+
