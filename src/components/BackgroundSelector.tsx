@@ -15,6 +15,8 @@ interface BackgroundSelectorProps {
   onEnvironmentChange: (preset: string) => void;
   currentEnvironment?: string;
   currentBackground?: string;
+  currentAmbient?: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves';
+  onAmbientChange: (effect: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves') => void;
   className?: string;
 }
 
@@ -48,12 +50,14 @@ export default function BackgroundSelector({
   onEnvironmentChange,
   currentEnvironment = 'cyberpunk-void',
   currentBackground,
+  currentAmbient = 'none',
+  onAmbientChange,
   className = '',
 }: BackgroundSelectorProps) {
   const { user } = useAuth();
   const { isPro } = useUserRole();
   const [isOpen, setIsOpen] = useState(false);
-  const [tab, setTab] = useState<'preset' | 'image'>('preset');
+  const [tab, setTab] = useState<'preset' | 'image' | 'ambient'>('preset');
   const [backgrounds, setBackgrounds] = useState<BackgroundItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -93,6 +97,16 @@ export default function BackgroundSelector({
     BackgroundManager.setCurrentBackground(background.id);
     setActiveType('image');
     showConfirm('img:' + background.id);
+    setIsOpen(false);
+  };
+
+  const handleAmbientSelect = (effect: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves') => {
+    if (effect !== 'none' && !isPro) {
+      toast.error('Efek ambient hanya tersedia untuk user Pro');
+      return;
+    }
+    onAmbientChange(effect);
+    showConfirm('ambient:' + effect);
     setIsOpen(false);
   };
 
@@ -159,7 +173,7 @@ export default function BackgroundSelector({
 
           {/* Tabs */}
           <div className="shrink-0 flex gap-1 p-1 rounded-lg" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)' }}>
-            {(['preset', 'image'] as const).map((t) => (
+            {(['preset', 'image', 'ambient'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -169,7 +183,7 @@ export default function BackgroundSelector({
                   : { color: 'rgba(192,168,255,0.5)' }
                 }
               >
-                {t === 'preset' ? 'Preset Warna' : 'Gambar'}
+                {t === 'preset' ? 'Preset Warna' : t === 'image' ? 'Gambar' : 'Ambient'}
               </button>
             ))}
           </div>
@@ -283,6 +297,53 @@ export default function BackgroundSelector({
                         {bg.name}
                       </span>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Ambient tab */}
+          {tab === 'ambient' && (
+            <div className="space-y-4">
+              {!isPro && (
+                <div className="flex items-center gap-2 p-3 rounded-lg" style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)' }}>
+                  <Crown className="w-4 h-4 text-yellow-400 shrink-0" />
+                  <span className="text-xs text-yellow-400">Efek ambient (Sakura, Hujan, Salju) adalah fitur Pro</span>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-3 p-0.5 pb-2">
+                {[
+                  { id: 'none',   label: 'Tanpa Efek', icon: '🚫', pro: false },
+                  { id: 'sakura', label: 'Bunga Sakura', icon: '🌸', pro: true },
+                  { id: 'rain',   label: 'Hujan Deras', icon: '🌧️', pro: true },
+                  { id: 'snow',   label: 'Salju Lembut', icon: '❄️', pro: true },
+                  { id: 'leaves', label: 'Daun Gugur',  icon: '🍃', pro: true },
+                ].map((eff) => {
+                  const isActive = currentAmbient === eff.id;
+                  const canAccess = !eff.pro || isPro;
+                  
+                  return (
+                    <button
+                      key={eff.id}
+                      onClick={() => canAccess && handleAmbientSelect(eff.id as any)}
+                      className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all active:scale-95 ${
+                        isActive ? 'border-primary bg-primary/10' : 'border-border/40 hover:border-primary/40 bg-secondary/20'
+                      }`}
+                      style={{ opacity: canAccess ? 1 : 0.6 }}
+                    >
+                      <span className="text-3xl mb-2">{eff.icon}</span>
+                      <span className="text-xs font-semibold">{eff.label}</span>
+                      {eff.pro && !isPro && (
+                        <Crown className="absolute top-2 right-2 w-3 h-3 text-yellow-400" />
+                      )}
+                      {isActive && (
+                        <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-white" />
+                        </div>
+                      )}
+                    </button>
                   );
                 })}
               </div>

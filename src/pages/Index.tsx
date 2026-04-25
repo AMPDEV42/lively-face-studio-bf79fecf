@@ -50,12 +50,17 @@ export default function Index() {
     false // Always start closed for both desktop and mobile
   );
   const [hasUnread, setHasUnread] = useState(false);
+  const lastInteractionTime = useRef(Date.now());
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [ambientEffect, setAmbientEffect] = useState<'none' | 'sakura' | 'rain' | 'snow' | 'leaves'>(() => 
+    (localStorage.getItem('vrm.ambient') as any) || 'none'
+  );
+
   const viewerRef = useRef<VrmViewerHandle>(null);
 
   const { connectAudioElement, getAudioLevel } = useAudioAnalyser();
-  const { findMatch, findClipByName } = useVrmaTriggers();
+  const { clips, findMatch, findClipByName } = useVrmaTriggers();
   const userLangPref =
     (typeof window !== 'undefined'
       ? (localStorage.getItem('vrm.lang') as LangCode | null)
@@ -117,6 +122,11 @@ export default function Index() {
     loadActive();
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  const handleAmbientChange = useCallback((effect: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves') => {
+    setAmbientEffect(effect);
+    localStorage.setItem('vrm.ambient', effect);
+  }, []);
 
   const handleSpeakStart = useCallback(
     (audioUrl: string, messageText?: string) => {
@@ -201,7 +211,43 @@ export default function Index() {
       if (!v) setHasUnread(false);
       return !v;
     });
+    lastInteractionTime.current = Date.now();
   }, []);
+
+  const handleLevelUp = useCallback((level: number) => {
+    // Cari animasi kategori 'reaction' atau 'emote' yang bahagia
+    const reactionClips = clips.filter(c => c.category === 'reaction' || c.category === 'emote');
+    if (reactionClips.length > 0 && viewerRef.current?.isVrmLoaded()) {
+      const randomClip = reactionClips[Math.floor(Math.random() * reactionClips.length)];
+      const result = findClipByName(randomClip.name);
+      if (result) {
+        viewerRef.current.playVrmaUrl(result.url, { loop: false, fadeIn: 0.5 }).catch(console.warn);
+      }
+    }
+  }, [clips, findClipByName]);
+
+  // Deep Idle (Boredom V2) Implementation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const idleTime = Date.now() - lastInteractionTime.current;
+      if (idleTime > 60000 && !isSpeaking) {
+        // Reset timer immediately to avoid spamming
+        lastInteractionTime.current = Date.now();
+        
+        // Pilih animasi idle dari library (Mixamo VRMA)
+        const idleClips = clips.filter(c => c.category === 'idle');
+        if (idleClips.length > 0 && viewerRef.current?.isVrmLoaded()) {
+          const randomIdle = idleClips[Math.floor(Math.random() * idleClips.length)];
+          const result = findClipByName(randomIdle.name);
+          if (result) {
+            viewerRef.current.playVrmaUrl(result.url, { loop: false, fadeIn: 0.8 }).catch(console.warn);
+          }
+        }
+      }
+    }, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, [clips, isSpeaking, findClipByName]);
 
   // Global keyboard shortcuts
   useKeyboardShortcuts({
@@ -241,6 +287,8 @@ export default function Index() {
               audioElement={audioEl}
               currentMessage={spokenMessage}
               getAudioLevel={audioConnected ? getAudioLevel : undefined}
+              onLevelUp={handleLevelUp}
+              ambientEffect={ambientEffect}
               className="w-full h-full"
             />
           </ErrorBoundary>
@@ -294,6 +342,8 @@ export default function Index() {
                       onBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
                       onEnvironmentChange={(preset) => viewerRef.current?.setEnvironment(preset)}
                       currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
+                      currentAmbient={ambientEffect}
+                      onAmbientChange={handleAmbientChange}
                     />
                   </span>
                 </TooltipTrigger>
@@ -343,6 +393,7 @@ export default function Index() {
         onUnreadChange={setHasUnread}
         personality={personality}
         isSpeaking={isSpeaking}
+        availableAnimations={clips.map(c => c.name)}
       />
     </div>
   );

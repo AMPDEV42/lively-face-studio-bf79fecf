@@ -33,6 +33,7 @@ interface ChatPanelProps {
   onToggle?: () => void;
   onUnreadChange?: (hasUnread: boolean) => void;
   isSpeaking?: boolean;
+  availableAnimations?: string[];
 }
 
 export default function ChatPanel({
@@ -48,6 +49,7 @@ export default function ChatPanel({
   onToggle,
   onUnreadChange,
   isSpeaking = false,
+  availableAnimations = [],
 }: ChatPanelProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -254,11 +256,15 @@ export default function ChatPanel({
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const animContext = availableAnimations.length > 0 
+      ? `\n\n[ADMIN: Anda dapat melakukan gerakan tubuh dengan menyelipkan tag "[ANIM:NamaAnimasi]" di AKHIR pesanmu. Gunakan HANYA satu tag per pesan. Daftar gerakan Mixamo yang tersedia: ${availableAnimations.join(', ')}]`
+      : "";
+
     try {
       await streamChat({
         messages: contextMessages,
         onDelta: upsertAssistant,
-        systemPrompt: personality,
+        systemPrompt: (personality || "") + animContext,
         signal: ctrl.signal,
         onDone: async () => {
           setIsLoading(false);
@@ -308,6 +314,36 @@ export default function ChatPanel({
     if (!text || isLoading) return;
 
     onUserMessage?.(text);
+
+    // --- Slash Commands Interceptor ---
+    if (text.startsWith('/')) {
+      const parts = text.slice(1).split(' ');
+      const cmd = parts[0].toLowerCase();
+      const arg = parts.slice(1).join(' ');
+
+      if (cmd === 'anim' || cmd === 'play' || availableAnimations.includes(text.slice(1))) {
+        const animName = arg || text.slice(1);
+        onSpeakStart('', `[ANIM:${animName}]`); // Trigger animation locally
+        setInput('');
+        return;
+      }
+      
+      // Shortcut commands for popular animations
+      const shortcuts: Record<string, string> = {
+        'dance': 'Silly_Dance',
+        'wave': 'Wave',
+        'bow': 'Bow',
+        'think': 'Thinking',
+        'laugh': 'Laughing'
+      };
+      
+      if (shortcuts[cmd]) {
+        onSpeakStart('', `[ANIM:${shortcuts[cmd]}]`);
+        setInput('');
+        return;
+      }
+    }
+
     const userMsg: ChatMessage = { role: 'user', content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
@@ -336,11 +372,15 @@ export default function ChatPanel({
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const animContext = availableAnimations.length > 0 
+      ? `\n\n[ADMIN: Anda dapat melakukan gerakan tubuh dengan menyelipkan tag "[ANIM:NamaAnimasi]" di AKHIR pesanmu. Gunakan HANYA satu tag per pesan. Daftar gerakan Mixamo yang tersedia: ${availableAnimations.join(', ')}]`
+      : "";
+
     try {
       await streamChat({
         messages: [...messages, userMsg],
         onDelta: upsertAssistant,
-        systemPrompt: personality,
+        systemPrompt: (personality || "") + animContext,
         signal: ctrl.signal,
         onDone: async () => {
           setIsLoading(false);
