@@ -106,14 +106,14 @@ export default function BackgroundSelector({
   };
 
   return (
-    <div className={`absolute bottom-4 left-16 z-20 ${className}`}>
+    <div className="relative">
       {/* Toggle Button */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
           <Button
             variant="outline"
             size="icon"
-            className="h-10 w-10 cyber-glass border-neon-purple-bright hover-neon-glow"
+            className="h-9 w-9 border-border/60 backdrop-blur-md shadow-md bg-secondary/70 hover:bg-secondary/90 text-foreground/70 hover:text-foreground transition-colors"
             title={`Background: ${getCurrentBackgroundName()}`}
           >
             <Image className="w-4 h-4" />
