@@ -25,11 +25,11 @@ const TARGET_DIST     = 2.0;  // metres in front for neutral gaze
 const MAX_HEAD_YAW   = 0.40; // ~23°
 const MAX_HEAD_PITCH = 0.28; // ~16°
 
-// Micro-saccade config
-const SACCADE_INTERVAL_MIN = 1.5;  // seconds between saccades
-const SACCADE_INTERVAL_MAX = 4.0;
-const SACCADE_AMPLITUDE    = 0.012; // world units — very subtle
-const SACCADE_DURATION     = 0.08;  // seconds per saccade
+// Micro-saccade config (Anime/Companion style - fast, expressive eyes)
+const SACCADE_INTERVAL_MIN = 0.5;  // seconds between saccades (more frequent darting)
+const SACCADE_INTERVAL_MAX = 2.5;
+const SACCADE_AMPLITUDE    = 0.025; // world units — increased for visible cartoon eye movement
+const SACCADE_DURATION     = 0.12;  // slightly longer so it registers well on 60fps
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _mouseNdcX    = 0;

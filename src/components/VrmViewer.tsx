@@ -373,11 +373,10 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   // ── Render loop ───────────────────────────────────────────────────────────
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
-    if (!isVisibleRef.current) return;
 
     const now = performance.now();
-    // Target: 60fps desktop, 30fps mobile
-    const targetInterval = isMobileRef.current ? 1000 / 30 : 1000 / 60;
+    // Target: 60fps desktop, 30fps mobile. Drops strictly to 10fps if hidden tab to save battery.
+    const targetInterval = !isVisibleRef.current ? 1000 / 10 : (isMobileRef.current ? 1000 / 30 : 1000 / 60);
     const elapsed = now - lastFrameTimeRef.current;
     if (elapsed < targetInterval) return;
     lastFrameTimeRef.current = now - (elapsed % targetInterval);
@@ -465,7 +464,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       orbitControlsRef.current.update();
     }
 
-    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+    // Hanya draw scene jika tab peramban benar-benar sedang dibuka (visibilitas tak tersembunyi), menghemat drastis beban GPU.
+    if (rendererRef.current && sceneRef.current && cameraRef.current && isVisibleRef.current) {
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     }
   }, []);

@@ -26,6 +26,7 @@ const PRESET_LABELS: Record<string, string> = {
   'sunset-gradient': 'Sunset',
   'space-void': 'Space',
   'transparent': 'Transparan',
+  'green-screen': 'Green Screen',
 };
 
 // Generate a CSS background string for each preset (for preview swatches)
