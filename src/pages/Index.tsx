@@ -11,6 +11,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
 import { MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -249,7 +250,9 @@ export default function Index() {
       {/* Content Layer - VRM Viewer area (for controls only) */}
       <div className="flex-1 relative min-w-0 scanlines z-30 pointer-events-none">
         {/* Right-side vertical control column — all controls in one column */}
-        <div className="absolute top-3 md:top-4 right-3 md:right-4 flex flex-col gap-2 z-40 pointer-events-auto">
+        <TooltipProvider delayDuration={600}>
+        <div className="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] flex flex-col gap-2 z-40 pointer-events-auto max-h-[calc(100dvh-1.5rem)] overflow-y-auto overflow-x-visible scrollbar-none"
+          style={{ scrollbarWidth: 'none' }}>
           {/* User menu — identity, stands alone */}
           <UserMenu />
 
@@ -257,18 +260,24 @@ export default function Index() {
           <div className="h-px mx-1" style={{ background: 'rgba(168,85,247,0.25)' }} />
 
           {/* Chat + scene controls — one logical group */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleToggleChat}
-            className={`relative h-9 w-9 btn-overlay transition-all ${chatOpen ? 'active' : ''}`}
-            title={`${chatOpen ? 'Tutup' : 'Buka'} chat (Ctrl+K)`}
-          >
-            {chatOpen ? <X className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
-            {!chatOpen && hasUnread && (
-              <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background animate-pulse neon-glow-purple-strong" />
-            )}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleToggleChat}
+                className={`relative h-10 w-10 btn-overlay transition-all ${chatOpen ? 'active' : ''}`}
+              >
+                {chatOpen ? <X className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                {!chatOpen && hasUnread && (
+                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background animate-pulse neon-glow-purple-strong" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="panel-overlay border-0 text-xs text-foreground/90">
+              {chatOpen ? 'Tutup chat' : 'Buka chat'} <span className="opacity-40 ml-1">Ctrl+K</span>
+            </TooltipContent>
+          </Tooltip>
 
           {modelUrl && (
             <>
@@ -278,21 +287,44 @@ export default function Index() {
                 isFreeMode={isCameraFree}
                 currentPreset={currentCameraPreset}
               />
-              <BackgroundSelector
-                onBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
-                onEnvironmentChange={(preset) => viewerRef.current?.setEnvironment(preset)}
-                currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
-              />
-              <LightingControls
-                onLightingChange={(config) => viewerRef.current?.setLighting(config)}
-              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <BackgroundSelector
+                      onBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
+                      onEnvironmentChange={(preset) => viewerRef.current?.setEnvironment(preset)}
+                      currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
+                    />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="panel-overlay border-0 text-xs text-foreground/90">
+                  Background & Environment
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <LightingControls
+                      onLightingChange={(config) => viewerRef.current?.setLighting(config)}
+                    />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="panel-overlay border-0 text-xs text-foreground/90">
+                  Pencahayaan
+                </TooltipContent>
+              </Tooltip>
             </>
           )}
         </div>
+        </TooltipProvider>
 
         {/* Top bar — app name only */}
-        <div className="absolute top-0 left-0 right-0 flex items-center px-3 py-2.5 md:px-4 md:py-3 z-40 pointer-events-none"
-          style={{ background: 'linear-gradient(to bottom, rgba(6,4,14,0.55) 0%, rgba(6,4,14,0.15) 70%, transparent 100%)', paddingBottom: '3rem' }}>
+        <div className="absolute top-0 left-0 right-0 flex items-center px-3 md:px-4 z-40 pointer-events-none"
+          style={{
+            paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+            paddingBottom: '3rem',
+            background: 'linear-gradient(to bottom, rgba(6,4,14,0.55) 0%, rgba(6,4,14,0.15) 70%, transparent 100%)'
+          }}>
           <div className="flex items-center gap-2 pointer-events-auto">
             <div className="w-7 h-7 rounded-lg btn-overlay flex items-center justify-center">
               <span className="text-xs font-bold text-neon-purple">V</span>

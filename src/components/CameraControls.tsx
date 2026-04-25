@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Camera, Move3d, Check } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { CameraPreset } from '@/components/VrmViewer';
@@ -41,18 +42,24 @@ export default function CameraControls({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          className={`h-9 w-9 btn-overlay shadow-md transition-colors ${
-            isOpen || isFreeMode ? 'active' : ''
-          }`}
-          title="Camera Controls"
-        >
-          <Camera className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className={`h-10 w-10 btn-overlay shadow-md transition-colors ${
+                isOpen || isFreeMode ? 'active' : ''
+              }`}
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="panel-overlay border-0 text-xs text-foreground/90">
+          Kamera
+        </TooltipContent>
+      </Tooltip>
 
       <PopoverContent
         side={isMobile ? 'bottom' : 'left'}

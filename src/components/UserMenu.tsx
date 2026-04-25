@@ -100,18 +100,18 @@ export default function UserMenu() {
 
         <DropdownMenuItem
           onClick={() => navigate('/profile')}
-          className="flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
+          className="flex items-center gap-2 px-2 py-2.5 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
         >
-          <UserIcon className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+          <UserIcon className="w-4 h-4" style={{ color: '#a78bfa' }} />
           <span className="flex-1">Profil</span>
           <ChevronRight className="w-3 h-3 opacity-40" />
         </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => navigate('/settings')}
-          className="flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
+          className="flex items-center gap-2 px-2 py-2.5 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
         >
-          <SettingsIcon className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+          <SettingsIcon className="w-4 h-4" style={{ color: '#a78bfa' }} />
           <span className="flex-1">Pengaturan</span>
           <ChevronRight className="w-3 h-3 opacity-40" />
         </DropdownMenuItem>
@@ -119,9 +119,9 @@ export default function UserMenu() {
         {isAdmin && (
           <DropdownMenuItem
             onClick={() => navigate('/admin/animations')}
-            className="flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
+            className="flex items-center gap-2 px-2 py-2.5 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
           >
-            <Wand2 className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+            <Wand2 className="w-4 h-4" style={{ color: '#a78bfa' }} />
             <span className="flex-1">Animation Studio</span>
             <ChevronRight className="w-3 h-3 opacity-40" />
           </DropdownMenuItem>
@@ -131,9 +131,9 @@ export default function UserMenu() {
 
         <DropdownMenuItem
           onClick={handleSignOut}
-          className="flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+          className="flex items-center gap-2 px-2 py-2.5 rounded-md text-sm cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <LogOut className="w-4 h-4" />
           <span>Keluar</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -728,29 +728,97 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       cleanupLookAt();
       cancelAnimationFrame(rafRef.current);
       if (cameraAnimationRef.current) cancelAnimationFrame(cameraAnimationRef.current);
+
+      // Dispose VRM model — geometry, materials, textures
+      const vrm = vrmRef.current;
+      if (vrm) {
+        vrm.scene.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.geometry?.dispose();
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            mats.forEach((m) => {
+              if (m) {
+                // Dispose all texture maps on the material
+                Object.values(m).forEach((val) => {
+                  if (val instanceof THREE.Texture) val.dispose();
+                });
+                m.dispose();
+              }
+            });
+          }
+        });
+        try { VRMUtils.deepDispose(vrm.scene); } catch (_) { /* ok */ }
+        vrmRef.current = null;
+      }
+
+      // Dispose hidden scene if model never became visible
+      if (vrmSceneHiddenRef.current) {
+        vrmSceneHiddenRef.current.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.geometry?.dispose();
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            mats.forEach((m) => { m?.dispose(); });
+          }
+        });
+        vrmSceneHiddenRef.current = null;
+      }
+
+      // Clear mixer
+      if (mixerRef.current) {
+        mixerRef.current.stopAllAction();
+        mixerRef.current.uncacheRoot(mixerRef.current.getRoot());
+        mixerRef.current = null;
+      }
+
+      // Dispose scene objects
+      sceneRef.current?.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry?.dispose();
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m) => {
+            if (m) {
+              Object.values(m).forEach((val) => {
+                if (val instanceof THREE.Texture) val.dispose();
+              });
+              m.dispose();
+            }
+          });
+        }
+      });
+      sceneRef.current?.clear();
+
       renderer.dispose();
+      renderer.forceContextLoss();
       renderer.domElement.parentNode?.removeChild(renderer.domElement);
       orbitControlsRef.current?.dispose();
       orbitControlsRef.current = null;
-      mixerRef.current = null;
       environmentManagerRef.current?.dispose();
       environmentManagerRef.current = null;
       lightingManagerRef.current?.dispose();
       lightingManagerRef.current = null;
+
+      // Clear window debug refs
+      if (typeof window !== 'undefined') {
+        delete (window as any).scene;
+        delete (window as any).camera;
+        delete (window as any).renderer;
+        delete (window as any).environmentManager;
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelUrl]);
 
   return (
     <div ref={containerRef} className={`relative w-full h-full ${className ?? ''}`}>
-      {/* HTML image background — always cover, never affected by Three.js tone mapping */}
+      {/* HTML image background — fade transition, never affected by Three.js tone mapping */}
       {bgImageUrl && (
         <img
+          key={bgImageUrl}
           src={bgImageUrl}
           alt=""
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-          style={{ zIndex: 0 }}
+          style={{ zIndex: 0, animation: 'bgFadeIn 0.4s ease-out forwards' }}
         />
       )}
       {!modelUrl && !loading && (
