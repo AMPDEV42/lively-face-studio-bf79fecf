@@ -13,6 +13,7 @@ export interface TriggerClip {
   category: string;
   file_path: string;
   keywords: Partial<Record<LangCode, string[]>>;
+  url: string;
 }
 
 export interface MatchResult {
@@ -77,6 +78,7 @@ export function useVrmaTriggers() {
           category: d.category,
           file_path: d.file_path,
           keywords,
+          url: supabase.storage.from('vrma-animations').getPublicUrl(d.file_path).data.publicUrl,
         };
       });
       // Sort by category priority so findMatch returns highest-priority first.

@@ -358,6 +358,7 @@ export default function Index() {
               onLevelUp={handleLevelUp}
               ambientEffect={ambientEffect}
               showSubtitles={showSubtitles}
+              clips={clips}
               className="w-full h-full"
             />
           </ErrorBoundary>
