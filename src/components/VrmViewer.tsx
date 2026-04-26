@@ -78,10 +78,11 @@ interface VrmViewerProps {
   onLevelUp?: (newLevel: number) => void;
   ambientEffect?: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves';
   showSubtitles?: boolean;
+  clips?: any[];
 }
 
 const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer(
-  { modelUrl, isSpeaking = false, isWebSpeechActive = false, audioElement, currentMessage, className, getAudioLevel, onLevelUp, ambientEffect = 'none', showSubtitles = true },
+  { modelUrl, isSpeaking = false, isWebSpeechActive = false, audioElement, currentMessage, className, getAudioLevel, onLevelUp, ambientEffect = 'none', showSubtitles = true, clips = [] },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -646,14 +647,15 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
         // Setup Shoulder Hitboxes
         ['leftUpperArm', 'rightUpperArm'].forEach(bone => {
-          const boneNode = vrm.humanoid?.getNormalizedBoneNode(bone as any);
+          const boneNode = vrm.humanoid?.getNormalizedBoneNode(bone as any) || vrm.humanoid?.getBoneNode(bone as any);
           if (boneNode) {
-            const hitboxGeom = new THREE.SphereGeometry(0.18, 12, 12);
-            const hitboxMat = new THREE.MeshBasicMaterial({ visible: false });
+            const hitboxGeom = new THREE.SphereGeometry(0.3, 16, 16);
+            // DEBUG: Show red wireframe spheres to verify placement
+            const hitboxMat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, visible: false, depthTest: false, transparent: true, opacity: 0.1 }); 
             const hitboxMesh = new THREE.Mesh(hitboxGeom, hitboxMat);
             hitboxMesh.name = `shouldertap_hitbox_${bone}`;
-            // Position slightly outward on the shoulder
-            hitboxMesh.position.set(bone === 'leftUpperArm' ? 0.05 : -0.05, 0, 0);
+            hitboxMesh.position.set(bone === 'leftUpperArm' ? 0.1 : -0.1, 0, 0);
+            hitboxMesh.renderOrder = 999;
             boneNode.add(hitboxMesh);
           }
         });
@@ -984,7 +986,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
              forceNeutral(false); // Resume following mouse
            }
          }}
-                   onPointerDown={(e) => { 
+                             onPointerDown={(e) => { 
             lastPointerY.current = e.clientY; 
             pointerSpeedY.current = 0; 
             if (cameraRef.current && sceneRef.current) {
@@ -1001,11 +1003,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                   shoulderMeshes.push(child as THREE.Mesh);
                 }
               });
-              const intersects = rc.intersectObjects(shoulderMeshes);
+              const intersects = rc.intersectObjects(shoulderMeshes, true);
               if (intersects.length > 0) {
                 const ex = e.clientX;
                 const ey = e.clientY;
-                if (vrmRef.current && !isSpeaking) {
+                if (vrmRef.current) {
                   applyMoodOverride('surprised', 2, vrmRef.current);
                   saveAffection(1);
                   const reactionClips = clips.filter(c => c.category === 'reaction');
@@ -1015,11 +1017,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                   }
                   const id = tapticIdCounter.current++;
                   setTapticParticles(prev => [...prev, { id, x: ex, y: ey, char: '💢' }]);
-                  setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id)), 800);
+                  setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id)), 1000);
                 }
               }
             }
           }}>
+
 
       
       {/* Taptic Particles Rendering */}
