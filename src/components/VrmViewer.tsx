@@ -37,6 +37,7 @@ import {
   type CameraPresetData,
 } from '@/lib/camera-presets';
 import { useVrmaAnimations } from '@/hooks/useVrmaAnimations';
+import { playHeadpatSfx, playShoulderTapSfx, preloadHeadpatSfx, preloadTapSfx } from '@/lib/interaction-sfx';
 
 export type { CameraPreset };
 
@@ -116,6 +117,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const lightingManagerRef = useRef<LightingManager | null>(null);
 
   isSpeakingRef.current = isSpeaking;
+
+  // Preload interaction SFX banks on mount
+  useEffect(() => {
+    preloadHeadpatSfx();
+    preloadTapSfx();
+  }, []);
 
   // Pause/resume idle expression saat speaking berubah
   useEffect(() => {
@@ -944,12 +951,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           if (vrmRef.current) {
             applyMoodOverride('happy', 3, vrmRef.current);
             saveAffection(2);
-            // Play Sparkle Sound
+            // Play TTS Headpat Sound (local bank)
             const interactionVol = parseFloat(localStorage.getItem('vrm.interactionVolume') || '0.6');
-            console.log("[SFX] Playing Headpat sound at vol:", interactionVol);
-            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
-            audio.volume = interactionVol;
-            audio.play().catch(e => console.warn("[SFX] Play failed:", e));
+            playHeadpatSfx(interactionVol);
           }
         }
       } else if (name.startsWith('shouldertap_hitbox')) {
@@ -1039,12 +1043,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                   if (vrmRef.current) {
                     applyMoodOverride('surprised', 2, vrmRef.current);
                     saveAffection(1);
-                    // Play Tap Sound
+                    // Play TTS Shoulder Tap Sound (local bank)
                     const interactionVol = parseFloat(localStorage.getItem('vrm.interactionVolume') || '0.6');
-                    console.log("[SFX] Playing Shoulder Tap sound at vol:", interactionVol);
-                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
-                    audio.volume = interactionVol;
-                    audio.play().catch(e => console.warn("[SFX] Play failed:", e));
+                    playShoulderTapSfx(interactionVol);
                     
                     const reactionClips = clips.filter(c => c.category === 'reaction');
                     if (reactionClips.length > 0) {
