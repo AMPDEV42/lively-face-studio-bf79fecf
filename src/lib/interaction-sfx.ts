@@ -44,6 +44,7 @@ function _preloadBank(files: string[], pool: HTMLAudioElement[]): void {
   for (const src of files) {
     const audio = new Audio(src);
     audio.preload = 'auto';
+    audio.crossOrigin = 'anonymous'; // Important for Web Audio API
     audio.load();
     pool.push(audio);
   }
@@ -65,6 +66,15 @@ export function preloadTapSfx(): void {
   console.log('[SFX] Tap bank preloaded:', tapFiles.length, 'files');
 }
 
+/** Get the preloaded audio pools for analyser setup */
+export function getHeadpatPool(): HTMLAudioElement[] {
+  return _headpatPool;
+}
+
+export function getTapPool(): HTMLAudioElement[] {
+  return _tapPool;
+}
+
 function _pickRandom(length: number, lastIdx: number): number {
   if (length <= 1) return 0;
   let idx: number;
@@ -74,66 +84,68 @@ function _pickRandom(length: number, lastIdx: number): number {
   return idx;
 }
 
-async function _playFromPool(
-  pool: HTMLAudioElement[],
-  files: string[],
-  volume: number,
-  lastIdx: number,
-  setLast: (i: number) => void,
-  label: string
-): Promise<void> {
-  if (pool.length === 0) {
-    // Fallback: files not preloaded yet, create on-the-fly
-    const idx = _pickRandom(files.length, lastIdx);
-    setLast(idx);
-    const audio = new Audio(files[idx]);
-    audio.volume = Math.max(0, Math.min(1, volume));
-    await audio.play().catch(e => console.warn(`[SFX] ${label} play failed:`, e));
-    return;
-  }
-
-  const idx = _pickRandom(pool.length, lastIdx);
-  setLast(idx);
-  const audio = pool[idx];
-
-  // Reset to start if it was previously played
-  audio.currentTime = 0;
-  audio.volume = Math.max(0, Math.min(1, volume));
-
-  await audio.play().catch(e => console.warn(`[SFX] ${label} play failed:`, e));
-  console.log(`[SFX] ${label} → ${files[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
-}
-
-/** Play a random headpat sound. Respects cooldown to prevent spam. */
-export function playHeadpatSfx(volume = 0.6): void {
+/** Play a random headpat sound. Respects cooldown to prevent spam. Returns audio element for lip sync. */
+export function playHeadpatSfx(volume = 0.6): HTMLAudioElement | null {
   const now = Date.now();
-  if (now - _lastHeadpatTime < COOLDOWN_MS) return;
+  if (now - _lastHeadpatTime < COOLDOWN_MS) return null;
   _lastHeadpatTime = now;
 
-  _playFromPool(
-    _headpatPool,
-    headpatFiles,
-    volume,
-    _lastHeadpatIdx,
-    (i) => { _lastHeadpatIdx = i; },
-    'Headpat'
-  );
+  // Pick the audio element that will be played
+  if (_headpatPool.length === 0) {
+    // Fallback: create on-the-fly
+    const idx = _pickRandom(headpatFiles.length, _lastHeadpatIdx);
+    _lastHeadpatIdx = idx;
+    const audio = new Audio(headpatFiles[idx]);
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.play().catch(e => console.warn(`[SFX] Headpat play failed:`, e));
+    console.log(`[SFX] Headpat → ${headpatFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+    return audio;
+  }
+
+  // Use preloaded pool
+  const idx = _pickRandom(_headpatPool.length, _lastHeadpatIdx);
+  _lastHeadpatIdx = idx;
+  const audio = _headpatPool[idx];
+
+  // Reset to start and play
+  audio.currentTime = 0;
+  audio.volume = Math.max(0, Math.min(1, volume));
+  audio.play().catch(e => console.warn(`[SFX] Headpat play failed:`, e));
+  console.log(`[SFX] Headpat → ${headpatFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+  
+  return audio;
 }
 
-/** Play a random shoulder tap sound. Respects cooldown to prevent spam. */
-export function playShoulderTapSfx(volume = 0.6): void {
+/** Play a random shoulder tap sound. Respects cooldown to prevent spam. Returns audio element for lip sync. */
+export function playShoulderTapSfx(volume = 0.6): HTMLAudioElement | null {
   const now = Date.now();
-  if (now - _lastTapTime < COOLDOWN_MS) return;
+  if (now - _lastTapTime < COOLDOWN_MS) return null;
   _lastTapTime = now;
 
-  _playFromPool(
-    _tapPool,
-    tapFiles,
-    volume,
-    _lastTapIdx,
-    (i) => { _lastTapIdx = i; },
-    'ShoulderTap'
-  );
+  // Pick the audio element that will be played
+  if (_tapPool.length === 0) {
+    // Fallback: create on-the-fly
+    const idx = _pickRandom(tapFiles.length, _lastTapIdx);
+    _lastTapIdx = idx;
+    const audio = new Audio(tapFiles[idx]);
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.play().catch(e => console.warn(`[SFX] ShoulderTap play failed:`, e));
+    console.log(`[SFX] ShoulderTap → ${tapFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+    return audio;
+  }
+
+  // Use preloaded pool
+  const idx = _pickRandom(_tapPool.length, _lastTapIdx);
+  _lastTapIdx = idx;
+  const audio = _tapPool[idx];
+
+  // Reset to start and play
+  audio.currentTime = 0;
+  audio.volume = Math.max(0, Math.min(1, volume));
+  audio.play().catch(e => console.warn(`[SFX] ShoulderTap play failed:`, e));
+  console.log(`[SFX] ShoulderTap → ${tapFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+  
+  return audio;
 }
 
 /** Check if audio files are available (at least one headpat file loads) */
