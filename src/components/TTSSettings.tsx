@@ -6,11 +6,14 @@ import {
   listWebSpeechVoices,
   setWebSpeechVoice,
   getWebSpeechVoice,
+  getWebSpeechConfig,
+  setWebSpeechConfig,
   speakWithWebSpeech,
   stopWebSpeech,
   type WebSpeechVoiceInfo,
 } from '@/lib/web-speech-tts';
 import { toast } from 'sonner';
+import { generateVitsAudio, UMAMUSUME_SPEAKERS } from '@/lib/vits-tts';
 import type { TTSProvider } from '@/hooks/useTTSProvider';
 
 interface VoiceRow {
@@ -46,6 +49,14 @@ export default function TTSSettings({
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [webVoices, setWebVoices] = useState<WebSpeechVoiceInfo[]>([]);
   const [selectedWebURI, setSelectedWebURI] = useState<string | null>(getWebSpeechVoice());
+  const [vitsSpeaker, setVitsSpeaker] = useState(() => {
+    const stored = localStorage.getItem('vrm.vits_speaker');
+    if (stored && UMAMUSUME_SPEAKERS.includes(stored)) return stored;
+    return UMAMUSUME_SPEAKERS[0];
+  });
+  const [vitsLang, setVitsLang] = useState(() => localStorage.getItem('vrm.vits_lang') || '日本語');
+  const [autoTranslate, setAutoTranslate] = useState(() => localStorage.getItem('vrm.vits_auto_translate') !== 'false');
+  const [vitsCustomUrl, setVitsCustomUrl] = useState(() => localStorage.getItem('vrm.vits_custom_url') || '');
 
   // Load web speech voices (async — voices populate after voiceschanged)
   useEffect(() => {
@@ -126,6 +137,36 @@ export default function TTSSettings({
       lang: voice.lang,
       onEnd: () => setPreviewingId(null),
       onError: () => { setPreviewingId(null); toast.error('Gagal memutar preview'); },
+    });
+  };
+
+  const handlePreviewVits = async () => {
+    if (previewingId) return;
+    setPreviewingId('vits_preview');
+    try {
+      const url = await generateVitsAudio({
+        text: "Konnichiwa! O-genki desu ka?",
+        speaker: vitsSpeaker,
+        language: vitsLang,
+        speed: 1.0
+      });
+      const audio = new Audio(url);
+      audio.onended = () => setPreviewingId(null);
+      audio.onerror = () => { setPreviewingId(null); toast.error('Gagal memutar VITS'); };
+      await audio.play();
+    } catch (err) {
+      console.error("[VITS SSE Error]", err);
+      toast.error('Gagal memutar preview VITS');
+      setPreviewingId(null);
+    }
+  };
+
+  const handleToggleAutoTranslate = () => {
+    setAutoTranslate(prev => {
+      const next = !prev;
+      localStorage.setItem('vrm.vits_auto_translate', String(next));
+      toast.success(next ? "Auto-Translate Aktif" : "Auto-Translate Mati");
+      return next;
     });
   };
 
@@ -234,6 +275,148 @@ export default function TTSSettings({
           )}
         </div>
 
+        {/* Hugging Face VITS card */}
+        <div
+          className={`rounded-xl border transition-all ${
+            provider === 'vits'
+              ? 'border-primary/50 bg-primary/5'
+              : 'border-border/50 bg-secondary/30'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => handleToggleCard('vits')}
+            className={`w-full flex items-start gap-3 p-3.5 text-left cursor-pointer`}
+          >
+            <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+              provider === 'vits' ? 'bg-primary/15' : 'bg-secondary'
+            }`}>
+              <Volume2 className="w-4 h-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground">Hugging Face (VITS)</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-bold border border-indigo-500/20 animate-pulse">NEW</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-medium border border-indigo-500/20">ANIME</span>
+                {provider === 'vits' && (
+                  <CheckCircle className="w-3.5 h-3.5 text-primary" />
+                )}
+                <ChevronDown
+                  className={`ml-auto w-4 h-4 text-muted-foreground transition-transform ${
+                    expanded === 'vits' ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Kualitas audio anime tinggi via VITS — lebih ekspresif
+              </p>
+            </div>
+          </button>
+
+          {expanded === 'vits' && (
+            <div className="border-t border-border/40 p-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium text-muted-foreground">Pilih Karakter Anime</label>
+                <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                  {UMAMUSUME_SPEAKERS.map((s) => (
+                    <div
+                      key={s}
+                      onClick={() => {
+                        setVitsSpeaker(s);
+                        localStorage.setItem('vrm.vits_speaker', s);
+                        const displayName = s.includes(' ') ? s.split(' ')[1] : s;
+                        toast.success(`Karakter ${displayName} dipilih`);
+                      }}
+                      className={`text-xs px-3 py-2 rounded-lg border transition-all cursor-pointer ${
+                        vitsSpeaker === s
+                          ? 'border-primary/40 bg-primary/8 text-primary font-medium'
+                          : 'border-border/40 bg-card hover:bg-secondary/50 text-foreground'
+                      }`}
+                    >
+                      {s.split(' (')[0]} {/* Show Chinese + English name, hide series */}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground">Bahasa</label>
+                  <select
+                    value={vitsLang}
+                    onChange={(e) => {
+                      setVitsLang(e.target.value);
+                      localStorage.setItem('vrm.vits_lang', e.target.value);
+                    }}
+                    className="w-full bg-secondary border border-border/50 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-primary outline-none"
+                  >
+                    <option value="日本語">Japanese (日本語)</option>
+                    <option value="English">English</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-end">
+                  <button
+                    onClick={handlePreviewVits}
+                    disabled={!!previewingId}
+                    className="w-full h-[34px] flex items-center justify-center gap-2 rounded-lg bg-secondary hover:bg-secondary/80 text-xs font-medium border border-border/50 transition-all"
+                  >
+                    {previewingId === 'vits_preview' ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> Memproses…</>
+                    ) : (
+                      <><Play className="w-4 h-4 text-primary" /> Preview Suara</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-[11px] font-medium text-foreground">Auto-Translate to JP</p>
+                  <p className="text-[9px] text-muted-foreground">Terjemahkan teks chat ke Jepang untuk TTS</p>
+                </div>
+                <button
+                  onClick={handleToggleAutoTranslate}
+                  className={`w-9 h-5 rounded-full transition-colors relative ${autoTranslate ? 'bg-primary' : 'bg-secondary'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${autoTranslate ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-muted-foreground">Private Mirror URL (Gradio)</label>
+                  {vitsCustomUrl && (
+                    <button 
+                      onClick={() => { setVitsCustomUrl(''); localStorage.removeItem('vrm.vits_custom_url'); }}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      Reset Default
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="https://user-space.hf.space"
+                  value={vitsCustomUrl}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setVitsCustomUrl(val);
+                    if (val) localStorage.setItem('vrm.vits_custom_url', val);
+                    else localStorage.removeItem('vrm.vits_custom_url');
+                  }}
+                  className="w-full bg-secondary border border-border/50 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary outline-none font-mono"
+                />
+                <p className="text-[9px] text-muted-foreground">Duplicate Space di HF untuk menghindari antrean publik.</p>
+              </div>
+
+              <div className="px-3 py-2.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10 text-[10px] text-muted-foreground leading-relaxed">
+                <p>💡 <b>Tips:</b> Gunakan karakter <b>Gold Ship</b> atau <b>Rice Shower</b> untuk ekspresi anime yang sangat kental.</p>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Web Speech card */}
         <div
           className={`rounded-xl border transition-all ${
@@ -333,6 +516,43 @@ export default function TTSSettings({
                       Reset ke pilihan otomatis
                     </button>
                   )}
+
+                  <div className="pt-2 border-t border-border/40 space-y-3">
+                    <p className="text-[11px] font-medium text-foreground">Kustomisasi Karakter Suara</p>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] text-muted-foreground">Nada (Pitch)</label>
+                        <span className="text-[10px] tabular-nums">{getWebSpeechConfig().pitch.toFixed(2)}x</span>
+                      </div>
+                      <input 
+                        type="range" min="0.5" max="2.0" step="0.05"
+                        defaultValue={getWebSpeechConfig().pitch}
+                        onMouseUp={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          setWebSpeechConfig(val, getWebSpeechConfig().rate);
+                          toast.success('Pitch tersimpan');
+                        }}
+                        className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] text-muted-foreground">Kecepatan (Rate)</label>
+                        <span className="text-[10px] tabular-nums">{getWebSpeechConfig().rate.toFixed(2)}x</span>
+                      </div>
+                      <input 
+                        type="range" min="0.5" max="2.0" step="0.05"
+                        defaultValue={getWebSpeechConfig().rate}
+                        onMouseUp={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          setWebSpeechConfig(getWebSpeechConfig().pitch, val);
+                          toast.success('Kecepatan tersimpan');
+                        }}
+                        className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
                 </>
               )}
             </div>

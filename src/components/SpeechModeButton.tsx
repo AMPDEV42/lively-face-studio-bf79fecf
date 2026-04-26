@@ -1,4 +1,4 @@
-import { Radio, Mic } from 'lucide-react';
+import { Radio, Mic, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { SpeechRecognitionStatus } from '@/hooks/useSpeechRecognition';
 
@@ -18,24 +18,40 @@ export function SpeechModeButton({
   if (!sttSupported) return null;
 
   const isListening = sttStatus === 'listening';
+  const isStarting = sttStatus === 'requesting' || sttStatus === 'starting';
 
   return (
     <Button
       type="button"
-      variant={speechMode ? 'default' : 'outline'}
-      size="sm"
+      size="icon"
       onClick={onToggle}
-      className={`h-8 gap-1.5 text-xs ${
+      disabled={isStarting}
+      className={`h-10 w-10 shrink-0 shadow-sm transition-all ${
         speechMode
           ? isListening
-            ? 'bg-destructive/20 text-destructive border-destructive/40 hover:bg-destructive/30 animate-pulse'
-            : 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30'
-          : 'border-border/60 text-muted-foreground hover:text-foreground'
+            ? 'bg-destructive hover:bg-destructive/90 text-white animate-pulse neon-glow-magenta border-0'
+            : isStarting
+            ? 'bg-primary/60 text-primary-foreground cursor-wait neon-glow-purple border-0'
+            : 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow-purple hover-neon-lift border-0'
+          : 'btn-overlay'
       }`}
-      title="Speech Mode — bicara langsung ke asisten"
+      title={
+        isStarting
+          ? 'Menyiapkan mikrofon… tunggu sebentar'
+          : speechMode
+          ? isListening
+            ? 'Mendengarkan - klik untuk berhenti'
+            : 'Speech Mode aktif - klik untuk matikan'
+          : 'Aktifkan Speech Mode - bicara langsung ke asisten'
+      }
     >
-      {speechMode ? <Radio className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-      {speechMode ? (isListening ? 'Mendengarkan…' : 'Speech Mode') : 'Voice'}
+      {isStarting ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : speechMode ? (
+        <Radio className="w-4 h-4" />
+      ) : (
+        <Mic className="w-4 h-4" />
+      )}
     </Button>
   );
 }

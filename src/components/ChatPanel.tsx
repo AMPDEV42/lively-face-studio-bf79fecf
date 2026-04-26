@@ -8,13 +8,14 @@ import {
   Send, Volume2, ChevronDown, X, Bot, User,
   Square, Plus, History, Trash2, Pencil, Check,
   Search, Download, RefreshCw, MoreVertical, Upload, Wifi, WifiOff,
-  Mic, MicOff, Radio,
+  Mic, MicOff, Radio
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SpeechModeButton } from '@/components/SpeechModeButton';
 import { streamChat, generateTTS, parseAnimTag, isOnline, type ChatMessage } from '@/lib/chat-api';
+import { generateVitsAudio, translateToJapanese } from '@/lib/vits-tts';
 import { useConversations } from '@/hooks/useConversations';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,13 +27,16 @@ interface ChatPanelProps {
   onUserMessage?: (text: string) => void;
   voiceId?: string;
   personality?: string;
-  ttsProvider?: 'elevenlabs' | 'webspeech';
+  ttsProvider?: 'elevenlabs' | 'webspeech' | 'vits';
   onTTSRateLimit?: () => void;
   isMobile?: boolean;
   isOpen?: boolean;
   onToggle?: () => void;
   onUnreadChange?: (hasUnread: boolean) => void;
   isSpeaking?: boolean;
+  showSubtitles?: boolean;
+  onToggleSubtitles?: () => void;
+  availableAnimations?: string[];
 }
 
 export default function ChatPanel({
@@ -48,6 +52,9 @@ export default function ChatPanel({
   onToggle,
   onUnreadChange,
   isSpeaking = false,
+  showSubtitles = true,
+  onToggleSubtitles,
+  availableAnimations = [],
 }: ChatPanelProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -254,11 +261,15 @@ export default function ChatPanel({
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const animContext = availableAnimations.length > 0 
+      ? `\n\n[ADMIN: Anda dapat melakukan gerakan tubuh dengan menyelipkan tag "[ANIM:NamaAnimasi]" di AKHIR pesanmu. Gunakan HANYA satu tag per pesan. Daftar gerakan Mixamo yang tersedia: ${availableAnimations.join(', ')}]`
+      : "";
+
     try {
       await streamChat({
         messages: contextMessages,
         onDelta: upsertAssistant,
-        systemPrompt: personality,
+        systemPrompt: (personality || "") + animContext,
         signal: ctrl.signal,
         onDone: async () => {
           setIsLoading(false);
@@ -272,7 +283,26 @@ export default function ChatPanel({
             }
             setLastAssistantText(assistantSoFar);
             setIsTTSLoading(true);
-            const ttsResult = await generateTTS(ttsText, voiceId, 2, ttsProvider === 'elevenlabs');
+            let ttsResult;
+            if (ttsProvider === 'vits') {
+              const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
+              const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
+              const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
+              
+              let ttsInput = ttsText;
+              if (lang === '日本語' && autoTranslate) {
+                ttsInput = await translateToJapanese(ttsText);
+              }
+
+              try {
+                const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
+                ttsResult = { url, error: null, source: 'vits' as const };
+              } catch (err) {
+                ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
+              }
+            } else {
+              ttsResult = await generateTTS(ttsText, voiceId, 2, ttsProvider === 'elevenlabs');
+            }
             setIsTTSLoading(false);
             if (ttsResult.source === 'webspeech' && ttsProvider === 'elevenlabs') onTTSRateLimit?.();
             if (ttsResult.url) onSpeakStart(ttsResult.url, assistantSoFar);
@@ -285,14 +315,33 @@ export default function ChatPanel({
       toast.error(e instanceof Error ? e.message : 'Regenerasi gagal');
       setIsLoading(false);
     }
-  }, [isLoading, messages, personality, voiceId, onSpeakStart]);
+  }, [isLoading, messages, personality, voiceId, ttsProvider, onTTSRateLimit, onSpeakStart]);
 
   // Retry TTS for last response
   const handleRetryTTS = useCallback(async (ttsText?: string, originalText?: string) => {
     const text = ttsText ?? lastAssistantText;
     if (!text) return;
     setIsTTSLoading(true);
-    const ttsResult = await generateTTS(text, voiceId, 2, ttsProvider === 'elevenlabs');
+    let ttsResult;
+    if (ttsProvider === 'vits') {
+      const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
+      const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
+      const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
+      
+      let ttsInput = text;
+      if (lang === '日本語' && autoTranslate) {
+        ttsInput = await translateToJapanese(text);
+      }
+
+      try {
+        const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
+        ttsResult = { url, error: null, source: 'vits' as const };
+      } catch (err) {
+        ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
+      }
+    } else {
+      ttsResult = await generateTTS(text, voiceId, 2, ttsProvider === 'elevenlabs');
+    }
     setIsTTSLoading(false);
     if (ttsResult.source === 'webspeech' && ttsProvider === 'elevenlabs') onTTSRateLimit?.();
     if (ttsResult.url) {
@@ -308,6 +357,36 @@ export default function ChatPanel({
     if (!text || isLoading) return;
 
     onUserMessage?.(text);
+
+    // --- Slash Commands Interceptor ---
+    if (text.startsWith('/')) {
+      const parts = text.slice(1).split(' ');
+      const cmd = parts[0].toLowerCase();
+      const arg = parts.slice(1).join(' ');
+
+      if (cmd === 'anim' || cmd === 'play' || availableAnimations.includes(text.slice(1))) {
+        const animName = arg || text.slice(1);
+        onSpeakStart('', `[ANIM:${animName}]`); // Trigger animation locally
+        setInput('');
+        return;
+      }
+      
+      // Shortcut commands for popular animations
+      const shortcuts: Record<string, string> = {
+        'dance': 'Silly_Dance',
+        'wave': 'Wave',
+        'bow': 'Bow',
+        'think': 'Thinking',
+        'laugh': 'Laughing'
+      };
+      
+      if (shortcuts[cmd]) {
+        onSpeakStart('', `[ANIM:${shortcuts[cmd]}]`);
+        setInput('');
+        return;
+      }
+    }
+
     const userMsg: ChatMessage = { role: 'user', content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
@@ -336,11 +415,15 @@ export default function ChatPanel({
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const animContext = availableAnimations.length > 0 
+      ? `\n\n[ADMIN: Anda dapat melakukan gerakan tubuh dengan menyelipkan tag "[ANIM:NamaAnimasi]" di AKHIR pesanmu. Gunakan HANYA satu tag per pesan. Daftar gerakan Mixamo yang tersedia: ${availableAnimations.join(', ')}]`
+      : "";
+
     try {
       await streamChat({
         messages: [...messages, userMsg],
         onDelta: upsertAssistant,
-        systemPrompt: personality,
+        systemPrompt: (personality || "") + animContext,
         signal: ctrl.signal,
         onDone: async () => {
           setIsLoading(false);
@@ -360,10 +443,30 @@ export default function ChatPanel({
             loadConversations();
             setLastAssistantText(assistantSoFar);
             setIsTTSLoading(true);
-            const ttsResult = await generateTTS(ttsText, voiceId, 2, ttsProvider === 'elevenlabs');
+            let ttsResult;
+            if (ttsProvider === 'vits') {
+              const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
+              const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
+              const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
+              
+              let ttsInput = ttsText;
+              if (lang === '日本語' && autoTranslate) {
+                ttsInput = await translateToJapanese(ttsText);
+                console.log("[VITS] Translated for TTS:", ttsInput);
+              }
+
+              try {
+                const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
+                ttsResult = { url, error: null, source: 'vits' as const };
+              } catch (err) {
+                console.error('[VITS] Failed:', err);
+                ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
+              }
+            } else {
+              ttsResult = await generateTTS(ttsText, voiceId, 2, ttsProvider === 'elevenlabs');
+            }
             setIsTTSLoading(false);
             if (ttsResult.source === 'webspeech' && ttsProvider === 'elevenlabs') {
-              // ElevenLabs fell back to Web Speech — notify parent to update provider state
               onTTSRateLimit?.();
             }
             if (ttsResult.url) {
@@ -385,7 +488,7 @@ export default function ChatPanel({
     }
   }, [
     input, isLoading, messages, personality, voiceId, isMobile, isOpen,
-    onUserMessage, onSpeakStart, onUnreadChange,
+    onUserMessage, onSpeakStart, onUnreadChange, ttsProvider,
     ensureConversation, saveMessage, maybeSetTitle, loadConversations, handleRetryTTS,
   ]);
 
@@ -424,40 +527,78 @@ export default function ChatPanel({
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   };
 
+  // ── Visual viewport offset for mobile keyboard ────────────────────────────
+  // When soft keyboard opens on mobile, visualViewport shrinks.
+  // We track the offset so the input bar stays just above the keyboard.
+  const [kbOffset, setKbOffset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      // offsetTop = distance from top of layout viewport to top of visual viewport
+      // height = visible area height (shrinks when keyboard opens)
+      const hidden = window.innerHeight - vv.height - vv.offsetTop;
+      setKbOffset(Math.max(0, hidden));
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
   // ── Shared UI pieces ──────────────────────────────────────────────────────
 
   const inputBar = (
     <div className="space-y-2">
       {/* Offline banner */}
       {!online && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-destructive/40 text-xs text-destructive neon-glow-magenta">
           <WifiOff className="w-3.5 h-3.5 shrink-0" />
           <span>Tidak ada koneksi internet</span>
         </div>
       )}
 
-      {/* STT interim transcript */}
-      {speechMode && stt.status === 'listening' && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/8 border border-primary/20 text-xs text-primary/80 animate-pulse">
-          <Radio className="w-3.5 h-3.5 shrink-0" />
-          <span>{stt.transcript || 'Mendengarkan…'}</span>
+      {/* STT starting - mic warming up */}
+      {speechMode && (stt.status === 'requesting' || stt.status === 'starting') && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs text-primary/60 loading-bar">
+          <Mic className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+          <span>Menyiapkan mikrofon… tunggu sebentar</span>
         </div>
       )}
+
+      {/* STT ready and listening */}
+      {speechMode && stt.status === 'listening' && stt.isReady && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple-bright text-xs text-primary/80 pulse-neon">
+          <Radio className="w-3.5 h-3.5 shrink-0" />
+          <span>{stt.transcript || 'Siap mendengarkan — mulai bicara'}</span>
+        </div>
+      )}
+
+      {/* STT listening but not ready yet */}
+      {speechMode && stt.status === 'listening' && !stt.isReady && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs text-primary/60">
+          <Mic className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+          <span>Hampir siap… tunggu sebentar</span>
+        </div>
+      )}
+
       {/* Countdown before auto-send */}
       {speechMode && sendCountdown !== null && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-secondary/60 border border-border/40 text-xs">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs">
           <span className="text-foreground/70 truncate flex-1">{pendingTranscriptRef.current}</span>
           <span className="text-muted-foreground shrink-0">Kirim dalam {sendCountdown}s</span>
         </div>
       )}
       {speechMode && stt.error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-destructive/40 text-xs text-destructive">
           <MicOff className="w-3.5 h-3.5 shrink-0" />
           <span>{stt.error}</span>
         </div>
       )}
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-2 w-full">
         {/* Speech mode toggle */}
         <SpeechModeButton
           speechMode={speechMode}
@@ -469,7 +610,29 @@ export default function ChatPanel({
           }}
         />
 
-        <div className="flex-1">
+        {/* CC Toggle */}
+        <Button
+          type="button"
+          size="icon"
+          onClick={onToggleSubtitles}
+          className={`h-10 w-10 shrink-0 btn-overlay transition-all ${
+            showSubtitles ? 'text-primary neon-glow-purple brightness-125' : 'text-muted-foreground opacity-40'
+          }`}
+          title={showSubtitles ? 'CC Aktif' : 'CC Mati'}
+        >
+          <div className="flex flex-col items-center gap-0.5">
+            <span className={`text-[10px] font-bold border rounded-[3px] px-0.5 leading-tight transition-colors ${
+              showSubtitles 
+                ? 'border-primary text-primary bg-primary/10 shadow-[0_0_8px_rgba(168,85,247,0.4)]' 
+                : 'border-muted-foreground/40 text-muted-foreground opacity-60'
+            }`}>CC</span>
+            <div className={`w-1 h-1 rounded-full transition-all duration-300 ${
+              showSubtitles ? 'bg-primary shadow-[0_0_5px_#a855f7] scale-100' : 'bg-muted-foreground/20 scale-50'
+            }`} />
+          </div>
+        </Button>
+
+        <div className="flex-1 min-w-0">
           <Textarea
             ref={textareaRef}
             value={input}
@@ -481,18 +644,27 @@ export default function ChatPanel({
             }
             disabled={isLoading || !online}
             rows={1}
-            className="resize-none min-h-[40px] max-h-[120px] bg-secondary/50 border-border/60 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors scrollbar-thin"
+            className="resize-none min-h-[40px] max-h-[120px] panel-overlay text-sm placeholder:text-muted-foreground/50 focus:border-neon-purple-bright transition-all scrollbar-thin w-full"
             style={{ height: 'auto' }}
           />
         </div>
         {isLoading ? (
           <Button type="button" size="icon" onClick={handleStop}
-            className="h-10 w-10 shrink-0 bg-destructive/80 hover:bg-destructive text-white shadow-sm" title="Hentikan">
+            className="h-10 w-10 shrink-0 bg-destructive hover:bg-destructive/90 text-white shadow-sm neon-glow-magenta border-0" title="Hentikan">
             <Square className="w-3.5 h-3.5 fill-current" />
           </Button>
         ) : (
-          <Button type="button" size="icon" onClick={() => handleSend()} disabled={!input.trim() || !online}
-            className="h-10 w-10 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm disabled:opacity-40">
+          <Button
+            type="button"
+            size="icon"
+            onClick={() => handleSend()}
+            disabled={!input.trim() || !online}
+            className={`h-10 w-10 shrink-0 shadow-sm border-0 transition-all ${
+              input.trim() && online
+                ? 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow-purple hover-neon-lift'
+                : 'btn-overlay opacity-60 cursor-not-allowed'
+            }`}
+          >
             <Send className="w-4 h-4" />
           </Button>
         )}
@@ -646,44 +818,63 @@ export default function ChatPanel({
     if (!isOpen) {
       const hasUnread = messages.length > 0 && messages[messages.length - 1]?.role === 'assistant';
       return (
-        <div className="absolute bottom-0 left-0 right-0 z-20 px-3 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-background/98 via-background/90 to-transparent">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">{inputBar}</div>
-            {messages.length > 0 && (
-              <Button variant="outline" size="icon" onClick={onToggle}
-                className="relative h-10 w-10 shrink-0 border-border/60 bg-secondary/70 backdrop-blur-md touch-manipulation">
-                <ChevronDown className="w-4 h-4 rotate-180" />
-                {hasUnread && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background animate-pulse" />}
-              </Button>
-            )}
+        <div className="absolute bottom-0 left-0 right-0 z-20">
+          <div className="px-3 sm:px-4 pt-8"
+            style={{
+              paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+              paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+              paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+              background: 'linear-gradient(to top, rgba(6,4,14,0.80) 0%, rgba(6,4,14,0.4) 50%, transparent 100%)',
+              transform: kbOffset > 0 ? `translateY(-${kbOffset}px)` : undefined,
+              transition: 'transform 0.15s ease-out',
+            }}>
+            <div className="max-w-2xl mx-auto">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">{inputBar}</div>
+                {messages.length > 0 && (
+                  <Button variant="outline" size="icon" onClick={onToggle}
+                    className="relative h-10 w-10 shrink-0 btn-overlay touch-manipulation">
+                    <ChevronDown className="w-4 h-4 rotate-180" />
+                    {hasUnread && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background animate-pulse" />}
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       );
     }
 
     return (
-      <div className="absolute inset-0 z-20 flex flex-col bg-background/97 backdrop-blur-xl animate-slide-up">
+      <div className="absolute inset-0 z-50 flex flex-col animate-slide-up scanlines"
+        style={{ background: 'rgba(6,4,14,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
         {showHistory ? historyPanel : (
           <>
-            <div className="flex items-center justify-between px-4 border-b border-border/50"
+            <div className="flex items-center justify-between px-4 border-b border-neon-purple corner-accent"
               style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))', paddingBottom: '0.875rem' }}>
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center neon-glow-purple">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-foreground leading-none">Chat</h2>
+                  <h2 className="text-sm font-semibold text-foreground leading-none text-neon-purple">Chat</h2>
                   <p className="text-[10px] text-muted-foreground mt-0.5">{messages.length} pesan</p>
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setShowHistory(true)}><History className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={startNewConversation}><Plus className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8 text-muted-foreground touch-manipulation"><X className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover-neon-glow touch-manipulation" onClick={() => setShowHistory(true)}><History className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover-neon-glow touch-manipulation" onClick={startNewConversation}><Plus className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={onToggle} className="h-10 w-10 text-muted-foreground touch-manipulation hover-neon-glow"><X className="w-4 h-4" /></Button>
               </div>
             </div>
             <ScrollArea className="flex-1 py-4 px-3" ref={scrollRef}>{messageList}</ScrollArea>
-            <div className="px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-border/50 bg-background/80">{inputBar}</div>
+            <div className="px-3 pt-2 border-t border-neon-purple"
+              style={{
+                paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+                background: 'rgba(6,4,14,0.85)',
+                transform: kbOffset > 0 ? `translateY(-${kbOffset}px)` : undefined,
+                transition: 'transform 0.15s ease-out',
+              }}>{inputBar}</div>
           </>
         )}
       </div>
@@ -692,43 +883,43 @@ export default function ChatPanel({
 
   // ── Desktop ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-card/70 backdrop-blur-xl border-l border-border/50">
+    <div className="flex flex-col h-full cyber-glass-strong backdrop-blur-xl border-l border-neon-purple-bright scanlines">
       {showHistory ? historyPanel : (
         <>
-          <div className="px-3.5 py-3 border-b border-border/50 flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+          <div className="px-3.5 py-3 border-b border-neon-purple flex items-center gap-2 corner-accent">
+            <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 neon-glow-purple">
               <Bot className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-sm font-semibold text-foreground leading-none truncate">
+              <h2 className="text-sm font-semibold text-foreground leading-none truncate text-neon-purple">
                 {conversations.find(c => c.id === activeId)?.title ?? 'Chat'}
               </h2>
               <p className="text-[10px] text-muted-foreground mt-0.5">{messages.length} pesan</p>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setShowHistory(true)} title="Riwayat">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground hover-neon-glow" onClick={() => setShowHistory(true)} title="Riwayat">
                 <History className="w-3.5 h-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={startNewConversation} title="Percakapan baru">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground hover-neon-glow" onClick={startNewConversation} title="Percakapan baru">
                 <Plus className="w-3.5 h-3.5" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground hover-neon-glow">
                     <MoreVertical className="w-3.5 h-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/60">
-                  <DropdownMenuItem onClick={handleExport} className="text-xs gap-2">
+                <DropdownMenuContent align="end" className="w-48 cyber-glass-strong backdrop-blur-xl border-neon-purple-bright">
+                  <DropdownMenuItem onClick={handleExport} className="text-xs gap-2 hover-neon-glow">
                     <Download className="w-3.5 h-3.5" /> Export JSON
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleImport} className="text-xs gap-2">
+                  <DropdownMenuItem onClick={handleImport} className="text-xs gap-2 hover-neon-glow">
                     <Upload className="w-3.5 h-3.5" /> Import JSON
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={handleRegenerate}
                     disabled={isLoading || messages.length < 2}
-                    className="text-xs gap-2"
+                    className="text-xs gap-2 hover-neon-glow"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> Regenerasi
                   </DropdownMenuItem>
@@ -746,7 +937,7 @@ export default function ChatPanel({
 
           <ScrollArea className="flex-1 py-4 px-3 scrollbar-thin" ref={scrollRef}>{messageList}</ScrollArea>
 
-          <div className="px-3 py-3 border-t border-border/50 bg-background/40">
+          <div className="px-3 py-3 border-t border-neon-purple cyber-glass">
             {inputBar}
             <p className="text-[10px] text-muted-foreground/40 text-center mt-1.5">Enter kirim · Shift+Enter baris baru</p>
           </div>
@@ -771,15 +962,15 @@ const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage })
   return (
     <div className={`group flex items-end gap-2 animate-msg-in ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center mb-0.5 ${
-        isUser ? 'bg-primary/20 border border-primary/30' : 'bg-secondary border border-border/60'
+        isUser ? 'bg-primary/20 border border-neon-purple-bright neon-glow-purple' : 'bg-secondary border border-neon-purple cyber-glass'
       }`}>
         {isUser ? <User className="w-3 h-3 text-primary" /> : <Bot className="w-3 h-3 text-muted-foreground" />}
       </div>
       <div className="relative max-w-[82%]">
         <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
           isUser
-            ? 'bg-primary text-primary-foreground rounded-br-sm'
-            : 'bg-secondary/80 text-secondary-foreground border border-border/40 rounded-bl-sm'
+            ? 'bg-primary text-primary-foreground rounded-br-sm neon-glow-purple border border-neon-purple-bright'
+            : 'cyber-glass text-secondary-foreground border border-neon-purple rounded-bl-sm'
         }`}>
           {msg.role === 'assistant' ? (
             <div className="prose prose-sm prose-invert max-w-none [&>p]:mb-1.5 [&>p:last-child]:mb-0 [&>ul]:mt-1 [&>ol]:mt-1">
@@ -792,7 +983,7 @@ const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage })
         {/* Copy button — appears on hover */}
         <button
           onClick={handleCopy}
-          className={`absolute -bottom-5 ${isUser ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1`}
+          className={`absolute -bottom-5 ${isUser ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/60 hover:text-primary flex items-center gap-1`}
         >
           {copied ? '✓ Disalin' : 'Salin'}
         </button>
@@ -808,13 +999,13 @@ function LoadingIndicators({ isLoading, isTTSLoading, messages }: {
     <>
       {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
         <div className="flex items-end gap-2 animate-msg-in">
-          <div className="w-6 h-6 rounded-full bg-secondary border border-border/60 flex items-center justify-center shrink-0">
+          <div className="w-6 h-6 rounded-full cyber-glass border border-neon-purple flex items-center justify-center shrink-0 pulse-neon">
             <Bot className="w-3 h-3 text-muted-foreground" />
           </div>
-          <div className="bg-secondary/80 border border-border/40 rounded-2xl rounded-bl-sm px-4 py-3">
+          <div className="cyber-glass border border-neon-purple rounded-2xl rounded-bl-sm px-4 py-3 loading-bar">
             <div className="flex gap-1.5 items-center">
               {[0, 150, 300].map((delay) => (
-                <span key={delay} className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+                <span key={delay} className="w-1.5 h-1.5 bg-primary/80 rounded-full animate-bounce neon-glow-purple" style={{ animationDelay: `${delay}ms` }} />
               ))}
             </div>
           </div>
@@ -822,11 +1013,11 @@ function LoadingIndicators({ isLoading, isTTSLoading, messages }: {
       )}
       {isTTSLoading && (
         <div className="flex items-end gap-2 animate-msg-in">
-          <div className="w-6 h-6 rounded-full bg-secondary border border-border/60 flex items-center justify-center shrink-0">
+          <div className="w-6 h-6 rounded-full cyber-glass border border-neon-purple flex items-center justify-center shrink-0 pulse-neon">
             <Bot className="w-3 h-3 text-muted-foreground" />
           </div>
-          <div className="bg-secondary/60 border border-border/40 rounded-2xl rounded-bl-sm px-3.5 py-2 flex items-center gap-2">
-            <Volume2 className="w-3.5 h-3.5 text-primary animate-pulse" />
+          <div className="cyber-glass border border-neon-purple rounded-2xl rounded-bl-sm px-3.5 py-2 flex items-center gap-2">
+            <Volume2 className="w-3.5 h-3.5 text-primary animate-pulse neon-glow-purple" />
             <span className="text-xs text-muted-foreground">Generating speech…</span>
           </div>
         </div>

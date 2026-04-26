@@ -25,11 +25,11 @@ const TARGET_DIST     = 2.0;  // metres in front for neutral gaze
 const MAX_HEAD_YAW   = 0.40; // ~23°
 const MAX_HEAD_PITCH = 0.28; // ~16°
 
-// Micro-saccade config
-const SACCADE_INTERVAL_MIN = 1.5;  // seconds between saccades
-const SACCADE_INTERVAL_MAX = 4.0;
-const SACCADE_AMPLITUDE    = 0.012; // world units — very subtle
-const SACCADE_DURATION     = 0.08;  // seconds per saccade
+// Micro-saccade config (Anime/Companion style - fast, expressive eyes)
+const SACCADE_INTERVAL_MIN = 0.5;  // seconds between saccades (more frequent darting)
+const SACCADE_INTERVAL_MAX = 2.5;
+const SACCADE_AMPLITUDE    = 0.025; // world units — increased for visible cartoon eye movement
+const SACCADE_DURATION     = 0.12;  // slightly longer so it registers well on 60fps
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _mouseNdcX    = 0;
@@ -38,6 +38,7 @@ let _lastMoveTime = 0;
 let _mouseInside  = false;  // true only while pointer is inside the container
 let _enabled      = true;
 let _ready        = false;
+let _forcedNeutral = false;
 
 // Smoothed world-space targets
 const _eyeTarget     = new THREE.Vector3(); // current smoothed eye target
@@ -103,6 +104,39 @@ export function setLookAtEnabled(v: boolean): void {
   if (!v) { _headYaw = 0; _headPitch = 0; }
 }
 
+/** 
+ * Force the character to look straight ahead smoothly (standard lerp).
+ * Useful during interactions like headpats where you want a natural return to center.
+ */
+export function forceNeutral(v: boolean): void {
+  _forcedNeutral = v;
+}
+
+/** 
+ * Force reset head and eyes to neutral immediately. 
+ * Useful before disabling look-at to prevent "stuck" tilted poses.
+ */
+export function resetLookAt(vrm: VRM): void {
+  _headYaw = 0;
+  _headPitch = 0;
+
+  // Reset internal eye target
+  const headBone = vrm.humanoid?.getNormalizedBoneNode('head');
+  if (headBone) {
+    headBone.getWorldPosition(_headPos);
+    _neutralTarget.set(_headPos.x, _headPos.y, _headPos.z + TARGET_DIST);
+    _eyeTarget.copy(_neutralTarget);
+    _goalTarget.copy(_neutralTarget);
+    vrm.lookAt?.lookAt(_neutralTarget);
+  }
+
+  // Reset bone rotations
+  ['neck', 'head'].forEach(bone => {
+    const node = vrm.humanoid?.getNormalizedBoneNode(bone as any);
+    if (node) node.rotation.set(0, 0, 0);
+  });
+}
+
 /** Smooth ease-in-out for natural motion */
 function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -118,8 +152,8 @@ export function updateLookAt(
   if (!_enabled || !vrm.lookAt || !vrm.humanoid) return;
 
   const now  = performance.now() / 1000;
-  // Idle when: mouse left container OR hasn't moved for IDLE_AFTER seconds
-  const idle = !_mouseInside || _lastMoveTime === 0 || (now - _lastMoveTime) > IDLE_AFTER;
+  // Idle when: forced, OR mouse left container OR hasn't moved for IDLE_AFTER seconds
+  const idle = _forcedNeutral || !_mouseInside || _lastMoveTime === 0 || (now - _lastMoveTime) > IDLE_AFTER;
 
   // Get head world position
   const headBone = vrm.humanoid.getNormalizedBoneNode('head');

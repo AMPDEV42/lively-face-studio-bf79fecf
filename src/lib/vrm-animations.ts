@@ -5,33 +5,97 @@ import type { MoodName } from './sentiment';
 // ============================================
 // 1. AUTO RANDOM BLINKING
 // ============================================
+//
+// Referensi biomechanics:
+//   - Rata-rata 12-17 kedip/menit saat istirahat, turun saat fokus/bicara
+//   - Fase tutup: ~150ms, fase buka: ~200-250ms (asimetris)
+//   - Partial blink: ~15% kejadian, mata hanya menutup 50-80%
+//   - Kedip ganda: kedip ke-2 lebih cepat (reflex facilitation)
+//   - Interval mengikuti distribusi gamma (bukan uniform)
+//   - Saat TTS aktif: interval lebih panjang (manusia jarang kedip saat bicara)
 
-let blinkTimer = 0;
-let nextBlinkIn = randomBlinkInterval();
+const BLINK_CLOSE_FAST   = 0.10; // spontaneous close
+const BLINK_CLOSE_SLOW   = 0.16; // tired/relaxed close
+const BLINK_HOLD_MIN     = 0.06;
+const BLINK_HOLD_MAX     = 0.14;
+const BLINK_OPEN_NORMAL  = 0.20;
+const BLINK_OPEN_SLOW    = 0.28; // overshoot recovery
+const INTER_BLINK_GAP    = 0.18; // jeda antar kedip dalam burst (lebih cepat dari sebelumnya)
 
-// Blink state machine — driven purely by delta, no gsap dependency
-type BlinkPhase = 'idle' | 'closing' | 'closed' | 'opening';
+type BlinkPhase = 'idle' | 'closing' | 'closed' | 'opening' | 'inter';
+
 let blinkPhase: BlinkPhase = 'idle';
 let blinkPhaseTimer = 0;
+let blinkTimer = 0;
+let nextBlinkIn = _scheduleNextBlink(false);
+let blinksRemaining = 0;
 
-const BLINK_CLOSE_DURATION = 0.15; // detik menutup mata
-const BLINK_HOLD_DURATION  = 0.10; // detik mata tertutup penuh
-const BLINK_OPEN_DURATION  = 0.20; // detik membuka mata (lebih lambat = lebih natural)
+// Parameter per-kedip yang di-randomize saat burst dimulai
+let _closeSpeed  = BLINK_CLOSE_FAST;
+let _openSpeed   = BLINK_OPEN_NORMAL;
+let _holdTime    = BLINK_HOLD_MIN;
+let _peakValue   = 1.0; // 1.0 = full blink, <1 = partial blink
+let _isSpeakingBlink = false; // flag dari luar
 
-// Expose untuk guard di applyPS / applyStd
+// Gamma-like distribution: lebih natural dari uniform
+// Menjumlahkan beberapa random → distribusi condong ke tengah
+function _gamma2(min: number, range: number): number {
+  return min + (Math.random() + Math.random()) * 0.5 * range;
+}
+
+function _scheduleNextBlink(speaking: boolean): number {
+  if (speaking) {
+    // Saat bicara: jarang kedip, 5-12 detik
+    return _gamma2(5, 7);
+  }
+  // 5% jeda panjang (fokus/melamun)
+  if (Math.random() < 0.05) return _gamma2(10, 10);
+  // Normal: distribusi gamma-like 2-8 detik
+  return _gamma2(2, 6);
+}
+
+function _scheduleBurst(): number {
+  const r = Math.random();
+  if (r < 0.72) return 1;  // 72% tunggal
+  if (r < 0.92) return 2;  // 20% ganda
+  return 3;                 //  8% triple
+}
+
+// Randomize parameter fisik untuk satu kedip
+function _randomizeBlinkParams(isSecondInBurst: boolean): void {
+  // Partial blink: 15% kemungkinan
+  _peakValue = Math.random() < 0.15
+    ? 0.5 + Math.random() * 0.3  // 50-80% tutup
+    : 0.92 + Math.random() * 0.08; // 92-100% tutup (hampir selalu penuh)
+
+  // Kedip ke-2 dalam burst lebih cepat (reflex facilitation)
+  if (isSecondInBurst) {
+    _closeSpeed = BLINK_CLOSE_FAST * 0.8;
+    _openSpeed  = BLINK_OPEN_NORMAL * 0.85;
+    _holdTime   = BLINK_HOLD_MIN;
+  } else {
+    // Variasi normal: kadang lebih lambat (lelah/rileks)
+    const tired = Math.random() < 0.2;
+    _closeSpeed = tired ? BLINK_CLOSE_SLOW : _gamma2(BLINK_CLOSE_FAST, BLINK_CLOSE_SLOW - BLINK_CLOSE_FAST);
+    _openSpeed  = tired ? BLINK_OPEN_SLOW  : _gamma2(BLINK_OPEN_NORMAL, BLINK_OPEN_SLOW - BLINK_OPEN_NORMAL);
+    _holdTime   = _gamma2(BLINK_HOLD_MIN, BLINK_HOLD_MAX - BLINK_HOLD_MIN);
+  }
+}
+
 export function getIsBlinking(): boolean {
   return blinkPhase !== 'idle';
 }
 
-function randomBlinkInterval(): number {
-  return 4 + Math.random() * 5; // 4 - 9 detik antar kedip
+/** Dipanggil dari VrmViewer saat isSpeaking berubah */
+export function setBlinkSpeakingMode(speaking: boolean): void {
+  _isSpeakingBlink = speaking;
+  // Reschedule interval saat mode berubah
+  if (blinkPhase === 'idle') {
+    nextBlinkIn = _scheduleNextBlink(speaking);
+    blinkTimer = 0;
+  }
 }
 
-/**
- * Langsung tulis ke morphTargetInfluences setelah vrm.update() selesai.
- * Ini satu-satunya cara yang dijamin bekerja karena vrm.update() bisa
- * menimpa nilai via overrideBlink multiplier.
- */
 function applyBlinkDirect(vrm: VRM, value: number): void {
   const em = vrm.expressionManager;
   if (!em) return;
@@ -44,17 +108,13 @@ function applyBlinkDirect(vrm: VRM, value: number): void {
   for (const name of names) {
     const expr = em.getExpression(name);
     if (!expr) continue;
-
-    // Akses _binds → primitives[] → morphTargetInfluences langsung
-    // @ts-ignore
+    // @ts-expect-error — _binds is private
     const binds = expr._binds as Array<{
       primitives?: Array<{ morphTargetInfluences?: number[] }>;
       index?: number;
       weight?: number;
     }>;
-
     if (!binds?.length) continue;
-
     for (const bind of binds) {
       if (!bind.primitives || bind.index == null || bind.weight == null) continue;
       for (const mesh of bind.primitives) {
@@ -68,21 +128,18 @@ function applyBlinkDirect(vrm: VRM, value: number): void {
 
 export function updateBlink(delta: number, vrm: VRM): void {
   if (!vrm.expressionManager) return;
-
-  const setEyes = (v: number) => {
-    applyBlinkDirect(vrm, v);
-  };
+  const setEyes = (v: number) => applyBlinkDirect(vrm, v);
 
   if (blinkPhase === 'idle') {
     blinkTimer += delta;
+    setEyes(0);
     if (blinkTimer >= nextBlinkIn) {
       blinkTimer = 0;
-      nextBlinkIn = randomBlinkInterval();
+      blinksRemaining = _scheduleBurst();
+      _randomizeBlinkParams(false);
       blinkPhase = 'closing';
       blinkPhaseTimer = 0;
-    } else {
-      // Pastikan mata terbuka penuh saat idle
-      setEyes(0);
+      console.log('[Blink] Starting blink - burst:', blinksRemaining, 'peak:', _peakValue.toFixed(2));
     }
     return;
   }
@@ -90,24 +147,45 @@ export function updateBlink(delta: number, vrm: VRM): void {
   blinkPhaseTimer += delta;
 
   if (blinkPhase === 'closing') {
-    const t = Math.min(blinkPhaseTimer / BLINK_CLOSE_DURATION, 1);
-    setEyes(t * t);
+    // Kurva ease-in kuadratik: akselerasi di awal (otot levator inhibition)
+    const t = Math.min(blinkPhaseTimer / _closeSpeed, 1);
+    setEyes(t * t * _peakValue);
     if (t >= 1) { blinkPhase = 'closed'; blinkPhaseTimer = 0; }
 
   } else if (blinkPhase === 'closed') {
-    setEyes(1);
-    if (blinkPhaseTimer >= BLINK_HOLD_DURATION) {
+    setEyes(_peakValue);
+    if (blinkPhaseTimer >= _holdTime) {
       blinkPhase = 'opening';
       blinkPhaseTimer = 0;
     }
 
   } else if (blinkPhase === 'opening') {
-    const t = Math.min(blinkPhaseTimer / BLINK_OPEN_DURATION, 1);
-    setEyes(1 - (1 - t) * (1 - t));
+    // Kurva ease-out + slight overshoot pada akhir (orbicularis rebound)
+    const t = Math.min(blinkPhaseTimer / _openSpeed, 1);
+    // ease-out cubic: lebih lambat di akhir
+    const eased = 1 - Math.pow(1 - t, 3);
+    setEyes(_peakValue * (1 - eased));
     if (t >= 1) {
       setEyes(0);
-      blinkPhase = 'idle';
-      blinkTimer = 0;
+      blinksRemaining--;
+      if (blinksRemaining > 0) {
+        blinkPhase = 'inter';
+        blinkPhaseTimer = 0;
+        // Randomize params untuk kedip berikutnya (lebih cepat)
+        _randomizeBlinkParams(true);
+      } else {
+        blinkPhase = 'idle';
+        blinkTimer = 0;
+        nextBlinkIn = _scheduleNextBlink(_isSpeakingBlink);
+        console.log('[Blink] Complete - next in', nextBlinkIn.toFixed(1), 'seconds');
+      }
+    }
+
+  } else if (blinkPhase === 'inter') {
+    setEyes(0);
+    if (blinkPhaseTimer >= INTER_BLINK_GAP) {
+      blinkPhase = 'closing';
+      blinkPhaseTimer = 0;
     }
   }
 }
@@ -138,7 +216,7 @@ export function detectExpressionMode(vrm: VRM): 'perfectsync' | 'standard' {
   // List all available expressions for debugging
   const allExpressions: string[] = [];
   try {
-    // @ts-ignore — access internal map to enumerate all expressions
+    // @ts-expect-error — access internal map to enumerate all expressions
     const map = vrm.expressionManager._expressionMap ?? vrm.expressionManager.expressionMap;
     if (map) {
       for (const key of Object.keys(map)) {
@@ -151,7 +229,7 @@ export function detectExpressionMode(vrm: VRM): 'perfectsync' | 'standard' {
   console.log('[Expressions] Expression details:');
   for (const key of allExpressions) {
     const expr = vrm.expressionManager.getExpression(key);
-    // @ts-ignore
+    // @ts-expect-error — private properties
     const binds = expr?.binds ?? expr?._binds ?? [];
     console.log(`  ${key}: ${binds.length} bind(s)`);
   }
@@ -162,7 +240,7 @@ export function detectExpressionMode(vrm: VRM): 'perfectsync' | 'standard' {
   for (const k of psKeys) {
     const expr = vrm.expressionManager.getExpression(k);
     if (expr) {
-      // @ts-ignore
+      // @ts-expect-error — private properties
       const binds = expr.binds ?? expr._binds ?? [];
       if (binds.length > 0) psCount++;
     }
@@ -448,6 +526,17 @@ export function setIdleMoodEnabled(enabled: boolean): void {
   _idleEnabled = enabled;
 }
 
+/** Reset all mood state to neutral — call when a new VRM model is loaded. */
+export function resetMoodState(): void {
+  _currentPS = { ...PS_MOOD_PRESETS.neutral };
+  _targetPS  = { ...PS_MOOD_PRESETS.neutral };
+  _currentStd = { ...STD_MOOD_PRESETS.neutral };
+  _targetStd  = { ...STD_MOOD_PRESETS.neutral };
+  _activeMoodName = 'neutral';
+  _idleMoodTimer = 0;
+  _nextIdleMoodIn = 5 + Math.random() * 4;
+}
+
 // Pre-computed key arrays — avoids Object.keys() allocation every frame
 const PS_KEYS = Object.keys(PS_ZERO) as (keyof PerfectSyncWeights)[];
 const STD_KEYS = Object.keys(STD_ZERO) as (keyof StandardWeights)[];
@@ -520,7 +609,7 @@ export function updateMicroExpressions(elapsed: number, vrm: VRM, delta = 0.016)
     }
   }
 
-  const noise = Math.sin(elapsed * 3.7) * 0.012;
+  const noise = Math.sin(elapsed * 1.8) * 0.008;
   const mode = detectExpressionMode(vrm);
 
   if (mode === 'perfectsync') {
@@ -555,10 +644,24 @@ const JAW_SCALE     = 0.28;
 const SMOOTH_OPEN   = 0.18;
 const SMOOTH_CLOSE  = 0.08;
 
-export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016): void {
+export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016, freqData?: Uint8Array): void {
   if (!vrm.expressionManager) return;
 
-  // Asymmetric smoothing: open fast, close slowly — avoids "stuck open" look
+  // 1. Voice Energy Analysis (High-frequency detection)
+  let excitement = 0;
+  if (freqData && freqData.length > 0) {
+    // Analyze upper-mid to high frequencies (approx indices 40-60 in a 128-fft)
+    let highSum = 0;
+    const startIdx = Math.floor(freqData.length * 0.5);
+    const endIdx = freqData.length;
+    for (let i = startIdx; i < endIdx; i++) {
+        highSum += freqData[i];
+    }
+    const highAvg = highSum / (endIdx - startIdx);
+    excitement = Math.pow(highAvg / 128, 2); // Squared to emphasize peaks
+  }
+
+  // 2. Base Lip Sync Logic
   const smoothing = audioLevel > _smoothedMouth ? SMOOTH_OPEN : SMOOTH_CLOSE;
   _smoothedMouth += (audioLevel - _smoothedMouth) * smoothing;
 
@@ -579,6 +682,7 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016): void
   const blend = _shapeTimer / SHAPE_DURATION;
 
   if (mode === 'perfectsync') {
+    // 3. Voice-to-Emotion modulation
     const em = vrm.expressionManager;
 
     // Clear shape blendshapes
@@ -588,8 +692,26 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016): void
     em.setValue('MouthSmileLeft',  Math.max(0, _currentPS.MouthSmileLeft  * (1 - mouthValue * 0.5)));
     em.setValue('MouthSmileRight', Math.max(0, _currentPS.MouthSmileRight * (1 - mouthValue * 0.5)));
 
-    const primary   = MOUTH_SHAPES_PS[_currentShape];
-    const secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % 3];
+    // Eye Widening & Brow Raise based on excitement (Voice-to-Emotion)
+    const eyeWide = Math.max(_currentPS.EyeWideLeft, excitement * 0.6);
+    const browUp = Math.max(_currentPS.BrowOuterUpLeft, excitement * 0.4);
+    em.setValue('EyeWideLeft', eyeWide);
+    em.setValue('EyeWideRight', eyeWide);
+    em.setValue('BrowOuterUpLeft', browUp);
+    em.setValue('BrowOuterUpRight', browUp);
+
+    // Wibu / Anime Enhancement:
+    // If audio is very loud, strongly emphasize 'MouthFunnel' (O shape) or MouthPucker (U shape)
+    // Audio volume correlates loosely with plosives or loud screams (kyaa~!)
+    const isLoud = mouthValue > (maxMouth * 0.6);
+    let primary = MOUTH_SHAPES_PS[_currentShape];
+    let secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % 3];
+
+    if (isLoud) {
+      if (_currentShape === 0) primary = 'MouthFunnel';
+      else primary = 'MouthPucker';
+    }
+
     em.setValue(primary,   mouthValue * (1 - blend * 0.35));
     em.setValue(secondary, mouthValue * blend * 0.35);
 
@@ -603,6 +725,13 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016): void
   } else {
     const em = vrm.expressionManager;
     for (const s of MOUTH_SHAPES_STD) em.setValue(s, 0);
+
+    // Apply voice-to-emotion to standard surprised/happy based on excitement
+    const surprisedBase = Math.max(_currentStd.surprised, excitement * 0.5);
+    const happyExtra = Math.max(_currentStd.happy, excitement * 0.3);
+    em.setValue('surprised', surprisedBase);
+    em.setValue('happy', happyExtra);
+
     const primary   = MOUTH_SHAPES_STD[_currentShape];
     const secondary = MOUTH_SHAPES_STD[(_currentShape + 1) % 3];
     em.setValue(primary,   mouthValue * (1 - blend * 0.35));
@@ -658,22 +787,46 @@ function getBones(vrm: VRM) {
   return cached;
 }
 
+// Gesture intensity for smooth fade in/out
+let _gestureIntensity = 1.0; // 0.0 = no gestures, 1.0 = full gestures
+let _targetGestureIntensity = 1.0;
+const GESTURE_FADE_SPEED = 0.15; // Reduced from 0.25 - extremely slow fade for maximum natural transition
+
+export function setGestureIntensity(target: number, immediate = false): void {
+  _targetGestureIntensity = Math.max(0, Math.min(1, target));
+  if (immediate) {
+    _gestureIntensity = _targetGestureIntensity;
+  }
+}
+
 export function updateIdleMicroGestures(
   elapsed: number,
   vrm: VRM,
   drivenBones?: Set<string>,
+  delta = 0.016,
 ): void {
   if (!vrm.humanoid) return;
+
+  // Smooth lerp toward target intensity
+  if (Math.abs(_gestureIntensity - _targetGestureIntensity) > 0.01) {
+    const lerpSpeed = GESTURE_FADE_SPEED * delta;
+    _gestureIntensity += (_targetGestureIntensity - _gestureIntensity) * lerpSpeed;
+  } else {
+    _gestureIntensity = _targetGestureIntensity;
+  }
 
   const isDriven = (name: string) => !!drivenBones?.has(name);
   const { spine, chest, upperChest, head, neck } = getBones(vrm);
 
+  // Apply gestures with current intensity multiplier
   if (spine && !isDriven('spine')) {
-    spine.rotation.z += Math.sin(elapsed * 0.35) * 0.0002;
+    spine.rotation.z += Math.sin(elapsed * 0.35) * 0.001 * _gestureIntensity;
+    spine.rotation.x += Math.sin(elapsed * 0.7) * 0.0005 * _gestureIntensity;
   }
 
-  const breathX      = Math.sin(elapsed * 0.7) * 0.0006;
-  const breathUpperX = Math.sin(elapsed * 0.7 + 0.3) * 0.0003;
+  // Anime / Companion breathing is slightly more noticeable than base VRM
+  const breathX      = Math.sin(elapsed * 0.7) * 0.0025 * _gestureIntensity;
+  const breathUpperX = Math.sin(elapsed * 0.7 + 0.3) * 0.0015 * _gestureIntensity;
 
   if (chest && !isDriven('chest'))           chest.rotation.x      += breathX;
   if (upperChest && !isDriven('upperChest')) upperChest.rotation.x += breathUpperX;
@@ -683,6 +836,34 @@ export function updateIdleMicroGestures(
   // Only apply breathing to chest/upperChest to avoid conflict
   if (neck && !isDriven('neck')) { neck.rotation.z = 0; }
   if (head && !isDriven('head')) { head.rotation.z = 0; }
+
+  // --- Boredom Stretching Mechanics & Otonomi Gestur ---
+  // Memicu peregangan pundak/tubuh ringan setiap rentang waktu ketika dibiarkan idle.
+  // Kami menjadwalkannya dengan modulo rotasi waktu absolut, misalnya 45 detik.
+  const BOREDOM_CYCLE = 45; // detik
+  const stretchPhase = (elapsed % BOREDOM_CYCLE);
+  
+  // 4 detik terakhir dari siklus 45 detik adalah fase merenggangkan (stretch) bahu
+  if (stretchPhase > BOREDOM_CYCLE - 4) { 
+    const t = stretchPhase - (BOREDOM_CYCLE - 4); // berjalan dari 0 ke 4
+    const curve = Math.sin((t / 4) * Math.PI); // Parabola memuncak di detik ke 2
+    
+    const leftShoulder  = vrm.humanoid.getNormalizedBoneNode('leftShoulder');
+    const rightShoulder = vrm.humanoid.getNormalizedBoneNode('rightShoulder');
+    const leftUpperArm  = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+
+    // Manggutkan pinggang
+    if (spine && !isDriven('spine')) spine.rotation.x -= curve * 0.08 * _gestureIntensity;
+    
+    // Angkat dan putar bahu layaknya peregangan rileks
+    if (leftShoulder && !isDriven('leftShoulder')) leftShoulder.rotation.z += curve * 0.15 * _gestureIntensity;
+    if (rightShoulder && !isDriven('rightShoulder')) rightShoulder.rotation.z -= curve * 0.15 * _gestureIntensity;
+    
+    // Lengan atas mundur sedikit
+    if (leftUpperArm && !isDriven('leftUpperArm')) leftUpperArm.rotation.x -= curve * 0.2 * _gestureIntensity;
+    if (rightUpperArm && !isDriven('rightUpperArm')) rightUpperArm.rotation.x -= curve * 0.2 * _gestureIntensity;
+  }
 }
 
 // ============================================

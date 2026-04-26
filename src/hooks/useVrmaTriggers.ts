@@ -13,6 +13,7 @@ export interface TriggerClip {
   category: string;
   file_path: string;
   keywords: Partial<Record<LangCode, string[]>>;
+  url: string;
 }
 
 export interface MatchResult {
@@ -63,6 +64,7 @@ export function useVrmaTriggers() {
         .select('id, name, category, file_path, trigger_keywords_i18n, trigger_keywords')
         .eq('is_active', true);
       if (error || !data || cancelled) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mapped: TriggerClip[] = data.map((d: any) => {
         const i18n = (d.trigger_keywords_i18n ?? {}) as Partial<Record<LangCode, string[]>>;
         // If i18n is empty but legacy flat array has values, fall back by treating them as 'en'.
@@ -76,6 +78,7 @@ export function useVrmaTriggers() {
           category: d.category,
           file_path: d.file_path,
           keywords,
+          url: supabase.storage.from('vrma-animations').getPublicUrl(d.file_path).data.publicUrl,
         };
       });
       // Sort by category priority so findMatch returns highest-priority first.

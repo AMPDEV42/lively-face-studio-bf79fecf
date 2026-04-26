@@ -77,6 +77,8 @@ export function listWebSpeechVoices(): WebSpeechVoiceInfo[] {
 }
 
 const VOICE_STORAGE_KEY = 'vrm.webspeech_voice';
+const PITCH_STORAGE_KEY = 'vrm.webspeech_pitch';
+const RATE_STORAGE_KEY = 'vrm.webspeech_rate';
 
 export function setWebSpeechVoice(voiceURI: string | null): void {
   try {
@@ -87,6 +89,26 @@ export function setWebSpeechVoice(voiceURI: string | null): void {
 
 export function getWebSpeechVoice(): string | null {
   try { return localStorage.getItem(VOICE_STORAGE_KEY); } catch { return null; }
+}
+
+export function setWebSpeechConfig(pitch: number, rate: number): void {
+  try {
+    localStorage.setItem(PITCH_STORAGE_KEY, pitch.toString());
+    localStorage.setItem(RATE_STORAGE_KEY, rate.toString());
+  } catch { /* ignore */ }
+}
+
+export function getWebSpeechConfig(): { pitch: number; rate: number } {
+  try {
+    const p = localStorage.getItem(PITCH_STORAGE_KEY);
+    const r = localStorage.getItem(RATE_STORAGE_KEY);
+    return {
+      pitch: p ? parseFloat(p) : 0.95,
+      rate: r ? parseFloat(r) : 1.08,
+    };
+  } catch {
+    return { pitch: 0.95, rate: 1.08 };
+  }
 }
 
 /** Pick voice: stored URI first, then heuristic match for lang */
@@ -134,11 +156,13 @@ export function speakWithWebSpeech(text: string, opts: WebSpeechTTSOptions = {})
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
 
-  const rateJitter  = (Math.random() - 0.5) * 0.06;
-  const pitchJitter = (Math.random() - 0.5) * 0.08;
+  const rateJitter  = (Math.random() - 0.5) * 0.03; // reduced jitter to honor user config
+  const pitchJitter = (Math.random() - 0.5) * 0.04;
+  
+  const { pitch: sysPitch, rate: sysRate } = getWebSpeechConfig();
 
-  utterance.rate   = opts.rate   ?? (1.08 + rateJitter);
-  utterance.pitch  = opts.pitch  ?? (0.95 + pitchJitter);
+  utterance.rate   = opts.rate   ?? (sysRate + rateJitter);
+  utterance.pitch  = opts.pitch  ?? (sysPitch + pitchJitter);
   utterance.volume = opts.volume ?? 1.0;
 
   // Explicit voiceURI from caller wins

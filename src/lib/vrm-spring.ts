@@ -57,10 +57,25 @@ export function initSpringBones(vrm: VRM): void {
   _hasBuiltinSpring = false;
 
   // Check if VRM has built-in spring bone manager
-  // @ts-ignore — springBoneManager is part of @pixiv/three-vrm but not in types
+  // @ts-expect-error — springBoneManager is part of @pixiv/three-vrm but not in types
   if (vrm.springBoneManager) {
     _hasBuiltinSpring = true;
-    console.log('[Spring] VRM has built-in spring bones — using native system');
+    const mgr = vrm.springBoneManager as any;
+    const joints = mgr.joints || mgr.springBones || [];
+    
+    if (joints.length > 0) {
+      console.log(`[Spring] VRM has ${joints.length} spring joints — injecting anime bounciness`);
+    }
+
+    for (const j of joints) {
+      // Handle both v1 (settings object) and v2 (direct properties or similar)
+      const s = j.settings || j; 
+      if (s) {
+        if (typeof s.dragForce === 'number') s.dragForce *= 0.7;
+        if (typeof s.stiffnessForce === 'number') s.stiffnessForce *= 1.5;
+        if (typeof s.gravityPower === 'number') s.gravityPower *= 0.5;
+      }
+    }
     return;
   }
 
@@ -77,9 +92,10 @@ export function initSpringBones(vrm: VRM): void {
       bone: obj,
       restRotation: obj.quaternion.clone(),
       velocity: new THREE.Vector3(),
-      stiffness: 80 + Math.random() * 40,  // 80–120
-      damping: 0.85 + Math.random() * 0.1, // 0.85–0.95
-      gravity: 0.3 + Math.random() * 0.2,  // 0.3–0.5
+      // Anime physics: tinggi stiffness & drag rendah -> bouncy, ringan, & snappy
+      stiffness: 120 + Math.random() * 60,   // 120–180 (Lebih kencang/snappy)
+      damping: 0.70 + Math.random() * 0.15,  // 0.70–0.85 (Lebih membal sblm berhenti)
+      gravity: 0.15 + Math.random() * 0.1,   // 0.15–0.25 (Fluffy/ringan)
     });
     count++;
   });

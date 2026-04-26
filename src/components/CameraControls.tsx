@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Camera, Move3d, Check } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { CameraPreset } from '@/components/VrmViewer';
@@ -41,26 +42,30 @@ export default function CameraControls({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          className={`absolute top-[3.75rem] right-3 md:right-4 h-9 w-9 border-border/60 backdrop-blur-md shadow-md transition-colors z-20 ${
-            isOpen || isFreeMode
-              ? 'bg-primary/20 border-primary/40 text-primary'
-              : 'bg-secondary/70 hover:bg-secondary/90 text-foreground/70 hover:text-foreground'
-          }`}
-          title="Camera Controls"
-        >
-          <Camera className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className={`h-10 w-10 btn-overlay shadow-md transition-colors ${
+                isOpen || isFreeMode ? 'active' : ''
+              }`}
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="panel-overlay border-0 text-xs text-foreground/90">
+          Kamera
+        </TooltipContent>
+      </Tooltip>
 
       <PopoverContent
         side={isMobile ? 'bottom' : 'left'}
         align={isMobile ? 'end' : 'start'}
         sideOffset={8}
-        className="p-0 overflow-hidden bg-card/95 backdrop-blur-xl border-border/60 shadow-xl"
+        className="p-0 overflow-hidden panel-overlay shadow-xl"
         style={{ width: isMobile ? 'min(calc(100vw - 1.5rem), 22rem)' : '17rem' }}
       >
         {/* Header */}
