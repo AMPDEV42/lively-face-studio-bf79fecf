@@ -37,7 +37,7 @@ import {
   type CameraPresetData,
 } from '@/lib/camera-presets';
 import { useVrmaAnimations } from '@/hooks/useVrmaAnimations';
-import { playHeadpatSfx, playShoulderTapSfx, preloadHeadpatSfx, preloadTapSfx } from '@/lib/interaction-sfx';
+import { playHeadpatSfx, playShoulderTapSfx, preloadHeadpatSfx, preloadTapSfx, getHeadpatPool, getTapPool } from '@/lib/interaction-sfx';
 
 export type { CameraPreset };
 
@@ -100,6 +100,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const isVisibleRef = useRef(true);
   const isMobileRef = useRef(false);
   const manualBlendshapeRef = useRef(false); // true = skip auto mood expressions
+  
+  // Interaction audio - simple speaking flag (no audio analysis needed)
+  const interactionAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [isInteractionSpeaking, setIsInteractionSpeaking] = useState(false);
+  const isInteractionSpeakingRef = useRef(false); // Ref for immediate access in render loop
 
   // Camera
   const orbitControlsRef = useRef<OrbitControls | null>(null);
@@ -116,17 +121,19 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const environmentManagerRef = useRef<EnvironmentManager | null>(null);
   const lightingManagerRef = useRef<LightingManager | null>(null);
 
-  isSpeakingRef.current = isSpeaking;
+  isSpeakingRef.current = isSpeaking || isInteractionSpeaking; // Include interaction speaking
 
   // Preload interaction SFX banks on mount
   useEffect(() => {
     preloadHeadpatSfx();
     preloadTapSfx();
+    console.log('[Interaction Audio] Audio files preloaded');
   }, []);
 
   // Pause/resume idle expression saat speaking berubah
   useEffect(() => {
-    if (isSpeaking) {
+    const speaking = isSpeaking || isInteractionSpeaking;
+    if (speaking) {
       // Start fade out when TTS begins
       isFadingOutRef.current = true;
       // Fade out body gestures smoothly
@@ -141,8 +148,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       setGestureIntensity(1.0); // Target 1, will lerp smoothly
       console.log('[Body Gestures] Fading in...');
     }
-    setBlinkSpeakingMode(isSpeaking);
-  }, [isSpeaking]);
+    setBlinkSpeakingMode(speaking);
+  }, [isSpeaking, isInteractionSpeaking]);
+  
+  // Sync ref with state
+  useEffect(() => {
+    isInteractionSpeakingRef.current = isInteractionSpeaking;
+  }, [isInteractionSpeaking]);
 
   // Mood override dari AI reply
   useEffect(() => {
@@ -450,10 +462,21 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       // Lip sync can run in parallel with fade out - mouth movements override fading expressions
       if (isSpeakingRef.current) {
         vrm.expressionManager?.setValue('aa', 0);
-        const level = isWebSpeechActiveRef.current
-          ? getWebSpeechLipLevel(delta)
-          : (getAudioLevelRef.current?.() ?? 0);
-        const freqData = getFrequencyDataRef.current?.();
+        
+        // For interaction audio: use higher constant level for more visible mouth animation
+        // For main TTS audio: use actual audio level for precise lip sync
+        const level = isInteractionSpeakingRef.current
+          ? 0.75 // Higher constant level for more visible talking animation (was 0.35)
+          : (isWebSpeechActiveRef.current
+            ? getWebSpeechLipLevel(delta)
+            : (getAudioLevelRef.current?.() ?? 0));
+        
+        // Debug: log lip sync activity every 30 frames (~0.5s)
+        if (frameCountRef.current % 30 === 0 && isInteractionSpeakingRef.current) {
+          console.log('[Mouth Animation] Active - level:', level);
+        }
+        
+        const freqData = !isInteractionSpeakingRef.current ? getFrequencyDataRef.current?.() : undefined;
         updateLipSync(level, vrm, delta, freqData);
       }
 
@@ -862,6 +885,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const pointerSpeedY = useRef(0);
   const lastPointerY = useRef(0);
   const isPattingRef = useRef(false);
+  const lastHeadpatTriggerTime = useRef(0); // Track last headpat trigger locally
+  const lastShoulderTapTime = useRef(0); // Track last shoulder tap trigger
+  const hasPlayedSoundThisSession = useRef(false); // Track if sound already played in current patting session
   
   // Taptic particle pop
   const [tapticParticles, setTapticParticles] = useState<{id: number, x: number, y: number, char: string}[]>([]);
@@ -927,17 +953,21 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       if (name === 'headpat_hitbox') {
         if (!isPattingRef.current) {
           isPattingRef.current = true;
+          hasPlayedSoundThisSession.current = false; // Reset flag when starting new patting session
           forceNeutral(true); // Lerp back to center smoothly
         }
         
         const sensitivity = parseInt(localStorage.getItem('vrm.interactionSensitivity') || '20');
+        
+        // Check if speed threshold is met for visual feedback
         if (pointerSpeedY.current > sensitivity) {
           pointerSpeedY.current = 0; // reset
+          
+          // Visual feedback: particles (always show during patting)
           const emojis = ['✨', '💕', '⭐', '🌸'];
           const randomChar = emojis[Math.floor(Math.random() * emojis.length)];
           const id = tapticIdCounter.current++;
           
-          // Spawn multiple particles if enabled
           const showParticles = localStorage.getItem('vrm.showParticles') !== 'false';
           if (showParticles) {
             setTapticParticles(prev => [
@@ -948,12 +978,43 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id && p.id !== id + 10000)), 1000);
           }
           
-          if (vrmRef.current) {
+          // Audio & major effects: only once per session
+          const now = Date.now();
+          const HEADPAT_COOLDOWN = 2500; // 2.5 seconds cooldown between sessions
+          
+          if (!hasPlayedSoundThisSession.current && 
+              (now - lastHeadpatTriggerTime.current) > HEADPAT_COOLDOWN && 
+              vrmRef.current) {
+            
+            hasPlayedSoundThisSession.current = true; // Mark sound as played for this session
+            lastHeadpatTriggerTime.current = now; // Update last trigger time
+            
             applyMoodOverride('happy', 3, vrmRef.current);
             saveAffection(2);
-            // Play TTS Headpat Sound (local bank)
+            
+            // Play headpat voice line (pre-recorded TTS audio)
             const interactionVol = parseFloat(localStorage.getItem('vrm.interactionVolume') || '0.6');
-            playHeadpatSfx(interactionVol);
+            const audio = playHeadpatSfx(interactionVol);
+            
+            // Simple mouth animation - no audio analysis needed
+            if (audio) {
+              interactionAudioRef.current = audio;
+              
+              // Start mouth animation immediately
+              isInteractionSpeakingRef.current = true;
+              setIsInteractionSpeaking(true);
+              console.log('[Interaction] Headpat audio playing, mouth animation started');
+              
+              // Stop mouth animation when audio ends
+              const onEnded = () => {
+                isInteractionSpeakingRef.current = false;
+                setIsInteractionSpeaking(false);
+                interactionAudioRef.current = null;
+                console.log('[Interaction] Headpat audio ended, mouth animation stopped');
+              };
+              audio.addEventListener('ended', onEnded, { once: true });
+              audio.addEventListener('error', onEnded, { once: true });
+            }
           }
         }
       } else if (name.startsWith('shouldertap_hitbox')) {
@@ -962,6 +1023,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     } else {
       if (isPattingRef.current) {
         isPattingRef.current = false;
+        hasPlayedSoundThisSession.current = false; // Reset flag when patting session ends
         setLookAtEnabled(true);
       }
     }
@@ -1006,6 +1068,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
          onPointerUp={() => {
            if (isPattingRef.current) {
              isPattingRef.current = false;
+             hasPlayedSoundThisSession.current = false; // Reset flag when mouse released
              forceNeutral(false); // Resume following mouse
            }
          }}
@@ -1040,12 +1103,37 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                 }
 
                 if (name.startsWith('shouldertap_hitbox') && !isPattingRef.current) {
-                  if (vrmRef.current) {
+                  const now = Date.now();
+                  const SHOULDER_TAP_COOLDOWN = 3000; // 3 seconds cooldown between shoulder taps (prevents spam)
+                  
+                  if ((now - lastShoulderTapTime.current) > SHOULDER_TAP_COOLDOWN && vrmRef.current) {
+                    lastShoulderTapTime.current = now; // Update last trigger time
+                    
                     applyMoodOverride('surprised', 2, vrmRef.current);
                     saveAffection(1);
-                    // Play TTS Shoulder Tap Sound (local bank)
+                    // Play shoulder tap voice line (pre-recorded TTS audio)
                     const interactionVol = parseFloat(localStorage.getItem('vrm.interactionVolume') || '0.6');
-                    playShoulderTapSfx(interactionVol);
+                    const audio = playShoulderTapSfx(interactionVol);
+                    
+                    // Simple mouth animation - no audio analysis needed
+                    if (audio) {
+                      interactionAudioRef.current = audio;
+                      
+                      // Start mouth animation immediately
+                      isInteractionSpeakingRef.current = true;
+                      setIsInteractionSpeaking(true);
+                      console.log('[Interaction] Shoulder tap audio playing, mouth animation started');
+                      
+                      // Stop mouth animation when audio ends
+                      const onEnded = () => {
+                        isInteractionSpeakingRef.current = false;
+                        setIsInteractionSpeaking(false);
+                        interactionAudioRef.current = null;
+                        console.log('[Interaction] Shoulder tap audio ended, mouth animation stopped');
+                      };
+                      audio.addEventListener('ended', onEnded, { once: true });
+                      audio.addEventListener('error', onEnded, { once: true });
+                    }
                     
                     const reactionClips = clips.filter(c => c.category === 'reaction');
                     if (reactionClips.length > 0) {
