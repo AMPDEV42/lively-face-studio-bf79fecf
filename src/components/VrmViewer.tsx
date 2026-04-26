@@ -649,12 +649,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         ['leftUpperArm', 'rightUpperArm'].forEach(bone => {
           const boneNode = vrm.humanoid?.getNormalizedBoneNode(bone as any) || vrm.humanoid?.getBoneNode(bone as any);
           if (boneNode) {
-            const hitboxGeom = new THREE.SphereGeometry(0.3, 16, 16);
+            const hitboxGeom = new THREE.SphereGeometry(0.2, 16, 16);
             // DEBUG: Show red wireframe spheres to verify placement
             const hitboxMat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, visible: false, depthTest: false, transparent: true, opacity: 0.1 }); 
             const hitboxMesh = new THREE.Mesh(hitboxGeom, hitboxMat);
             hitboxMesh.name = `shouldertap_hitbox_${bone}`;
-            hitboxMesh.position.set(bone === 'leftUpperArm' ? 0.1 : -0.1, 0, 0);
+            hitboxMesh.position.set(bone === 'leftUpperArm' ? 0.08 : -0.08, 0, 0);
             hitboxMesh.renderOrder = 999;
             boneNode.add(hitboxMesh);
           }
@@ -997,27 +997,38 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
               const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
               const rc = new THREE.Raycaster();
               rc.setFromCamera({ x, y }, cameraRef.current);
-              const shoulderMeshes: THREE.Mesh[] = [];
+              const interactableMeshes: THREE.Mesh[] = [];
               sceneRef.current.traverse(child => {
-                if (child.name.startsWith('shouldertap_hitbox')) {
-                  shoulderMeshes.push(child as THREE.Mesh);
+                if (child.name === 'headpat_hitbox' || child.name.startsWith('shouldertap_hitbox')) {
+                  interactableMeshes.push(child as THREE.Mesh);
                 }
               });
-              const intersects = rc.intersectObjects(shoulderMeshes, true);
+              
+              const intersects = rc.intersectObjects(interactableMeshes, true);
               if (intersects.length > 0) {
+                const hitObj = intersects[0].object;
+                const name = hitObj.name;
                 const ex = e.clientX;
                 const ey = e.clientY;
-                if (vrmRef.current) {
-                  applyMoodOverride('surprised', 2, vrmRef.current);
-                  saveAffection(1);
-                  const reactionClips = clips.filter(c => c.category === 'reaction');
-                  if (reactionClips.length > 0) {
-                    const clip = reactionClips[Math.floor(Math.random() * reactionClips.length)];
-                    playVrmaUrl(clip.url, { loop: false, fadeIn: 0.3 }).catch(console.warn);
+
+                // Priority: If hitting head, ignore everything else (it's a pat start)
+                if (name === 'headpat_hitbox') {
+                  return; 
+                }
+
+                if (name.startsWith('shouldertap_hitbox') && !isPattingRef.current) {
+                  if (vrmRef.current) {
+                    applyMoodOverride('surprised', 2, vrmRef.current);
+                    saveAffection(1);
+                    const reactionClips = clips.filter(c => c.category === 'reaction');
+                    if (reactionClips.length > 0) {
+                      const clip = reactionClips[Math.floor(Math.random() * reactionClips.length)];
+                      playVrmaUrl(clip.url, { loop: false, fadeIn: 0.3 }).catch(console.warn);
+                    }
+                    const id = tapticIdCounter.current++;
+                    setTapticParticles(prev => [...prev, { id, x: ex, y: ey, char: '💢' }]);
+                    setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id)), 1000);
                   }
-                  const id = tapticIdCounter.current++;
-                  setTapticParticles(prev => [...prev, { id, x: ex, y: ey, char: '💢' }]);
-                  setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id)), 1000);
                 }
               }
             }
