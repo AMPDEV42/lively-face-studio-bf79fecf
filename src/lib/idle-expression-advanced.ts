@@ -26,36 +26,37 @@ interface ExpressionSlot {
 // ── Expression Pool ───────────────────────────────────────────────────────────
 const EXPRESSIONS: ExpressionSlot[] = [
   // Regular expressions - durasi lebih panjang untuk lebih natural
-  { name: 'happy',     weight: 2.0, minDuration: 3,   maxDuration: 8,  baseIntensity: 0.65, intensityVariation: 0.15, mood: 'positive' },
-  { name: 'relaxed',   weight: 2.0, minDuration: 4,   maxDuration: 10, baseIntensity: 0.70, intensityVariation: 0.10, mood: 'positive' },
-  { name: 'surprised', weight: 0.5, minDuration: 2,   maxDuration: 4,  baseIntensity: 0.55, intensityVariation: 0.15, mood: 'neutral' },
-  { name: 'sad',       weight: 0.4, minDuration: 3,   maxDuration: 6,  baseIntensity: 0.45, intensityVariation: 0.10, mood: 'negative' },
+  { name: 'happy',     weight: 1.0, minDuration: 3,   maxDuration: 8,  baseIntensity: 0.08, intensityVariation: 0.03, mood: 'positive' },
+  { name: 'relaxed',   weight: 1.0, minDuration: 4,   maxDuration: 10, baseIntensity: 0.12, intensityVariation: 0.04, mood: 'positive' },
+  { name: 'surprised', weight: 0.2, minDuration: 2,   maxDuration: 4,  baseIntensity: 0.10, intensityVariation: 0.03, mood: 'neutral' },
+  { name: 'sad',       weight: 0.1, minDuration: 3,   maxDuration: 6,  baseIntensity: 0.06, intensityVariation: 0.02, mood: 'negative' },
   
-  // Micro-expressions - dikurangi weight dan frekuensi
-  { name: 'happy',     weight: 1.0, minDuration: 0.5, maxDuration: 1.5, baseIntensity: 0.30, intensityVariation: 0.10, isMicro: true, mood: 'positive' },
-  { name: 'surprised', weight: 0.8, minDuration: 0.4, maxDuration: 1.0, baseIntensity: 0.25, intensityVariation: 0.10, isMicro: true, mood: 'neutral' },
-  { name: 'relaxed',   weight: 0.8, minDuration: 0.6, maxDuration: 1.5, baseIntensity: 0.35, intensityVariation: 0.08, isMicro: true, mood: 'positive' },
+  // Micro-expressions - dikurangi intensity dan frekuensi
+  { name: 'happy',     weight: 0.3, minDuration: 0.5, maxDuration: 1.2, baseIntensity: 0.05, intensityVariation: 0.02, isMicro: true, mood: 'positive' },
+  { name: 'surprised', weight: 0.2, minDuration: 0.4, maxDuration: 0.8, baseIntensity: 0.05, intensityVariation: 0.02, isMicro: true, mood: 'neutral' },
+  { name: 'relaxed',   weight: 0.3, minDuration: 0.6, maxDuration: 1.2, baseIntensity: 0.08, intensityVariation: 0.02, isMicro: true, mood: 'positive' },
 ];
 
 // Neutral configuration - DIPERPANJANG untuk lebih natural
-const NEUTRAL_WEIGHT = 6.0; // Increased weight - lebih sering neutral
-const NEUTRAL_MIN = 5;      // Increased from 2.5 - minimal 5 detik
-const NEUTRAL_MAX = 15;     // Increased from 8 - maksimal 15 detik
-const NEUTRAL_LONG_PAUSE_CHANCE = 0.20; // Increased from 0.12 - 20% chance pause panjang
-const NEUTRAL_LONG_MIN = 15; // Increased from 12
-const NEUTRAL_LONG_MAX = 30; // Increased from 20
+const NEUTRAL_WEIGHT = 30.0; // Stabilizing at 30.0 (high but not excessive)
+const NEUTRAL_MIN = 12;     
+const NEUTRAL_MAX = 45;     
+const NEUTRAL_LONG_PAUSE_CHANCE = 0.40; 
+const NEUTRAL_LONG_MIN = 45; 
+const NEUTRAL_LONG_MAX = 120; 
 
 // Emotional momentum
-const MOOD_MOMENTUM_BOOST = 2.2; // Boost untuk mood yang sama
+const MOOD_MOMENTUM_BOOST = 1.2; 
 
 // Lerp speed range (variable per transition)
-const LERP_SPEED_MIN = 0.2;  // Reduced from 0.4 - extremely slow
-const LERP_SPEED_MAX = 0.6;  // Reduced from 1.0 - extremely slow
-const LERP_SPEED_RESUME = 0.1; // Reduced from 0.2 - extremely slow for first transition after TTS
+// INCREASED to avoid "slowly closing eyes" effect
+const LERP_SPEED_MIN = 0.8; 
+const LERP_SPEED_MAX = 1.8; 
+const LERP_SPEED_RESUME = 0.5; 
 
 // Intensity fluctuation during hold
-const INTENSITY_FLUCTUATION_SPEED = 0.3; // Cycles per second
-const INTENSITY_FLUCTUATION_AMOUNT = 0.08; // ±8%
+const INTENSITY_FLUCTUATION_SPEED = 0.15; 
+const INTENSITY_FLUCTUATION_AMOUNT = 0.0; // OFF - keep eyes stable
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _enabled = true;
