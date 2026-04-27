@@ -28,7 +28,7 @@ import { initLookAt, updateLookAt, setLookAtEnabled, forceNeutral } from '@/lib/
 import { initSpringBones, updateSpringBones } from '@/lib/vrm-spring';
 import { getWebSpeechLipLevel } from '@/lib/web-speech-tts';
 import { createEnvironmentManager, type EnvironmentManager } from '@/lib/vrm-environment';
-import { createLightingManager, type LightingManager, type LightingConfig } from '@/lib/vrm-lighting';
+import { createLightingManager, type LightingManager, type LightingConfig, LIGHTING_PRESETS } from '@/lib/vrm-lighting';
 import type { PlayVrmaOptions } from '@/lib/vrma-player';
 import {
   computeAdaptivePresets,
@@ -38,6 +38,7 @@ import {
 } from '@/lib/camera-presets';
 import { useVrmaAnimations } from '@/hooks/useVrmaAnimations';
 import { playHeadpatSfx, playShoulderTapSfx, preloadHeadpatSfx, preloadTapSfx, getHeadpatPool, getTapPool } from '@/lib/interaction-sfx';
+import { HolographicHud } from './HolographicHud';
 
 export type { CameraPreset };
 
@@ -138,6 +139,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       isFadingOutRef.current = true;
       // Fade out body gestures smoothly
       setGestureIntensity(0.0); // Target 0, will lerp smoothly
+      
+      // Trigger a subtle "focused" or "ready" look
+      if (vrmRef.current) {
+        applyMoodOverride('neutral', 1, vrmRef.current);
+      }
+      
       console.log('[Idle Expression] Starting fade out for TTS...');
       console.log('[Body Gestures] Fading out...');
     } else {
@@ -146,6 +153,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       setIdleExpressionPaused(false);
       // Fade in body gestures smoothly
       setGestureIntensity(1.0); // Target 1, will lerp smoothly
+      
+      // Small "thinking" or "relaxed" transition after talking
+      if (vrmRef.current) {
+        applyMoodOverride(Math.random() > 0.5 ? 'relaxed' : 'neutral', 2, vrmRef.current);
+      }
+      
       console.log('[Body Gestures] Fading in...');
     }
     setBlinkSpeakingMode(speaking);
@@ -227,7 +240,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         if (mixer && clips.length > 0) {
           const idleClip = clips[idleCurrentIndexRef.current % clips.length];
           idleClipRef.current = idleClip;
-          const idleAction = playVRMA(mixer, idleClip, { loop: true, fadeIn: 0.25 });
+          const fadeIn = idleActionRef.current?.isRunning() ? 1.0 : 2.0;
+          const idleAction = playVRMA(mixer, idleClip, { loop: true, fadeIn });
           if (idleAction) {
             idleActionRef.current = idleAction;
             vrmaPlayingRef.current = true;
@@ -240,12 +254,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         } else if (mixer && vrmaPlayingRef.current) {
           isReturnToRestRef.current = true;
           const actions = (mixer as unknown as { _actions: THREE.AnimationAction[] })._actions ?? [];
-          actions.forEach((a) => { try { a.fadeOut(0.5); } catch (_) { /* ok */ } });
+          actions.forEach((a) => { try { a.fadeOut(1.2); } catch (_) { /* ok */ } });
           setTimeout(() => {
             isReturnToRestRef.current = false;
             vrmaPlayingRef.current = false;
             restartIdleLoop();
-          }, 600);
+          }, 1300);
         }
       }
 
@@ -361,6 +375,26 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     },
     setImageBackground: (imageUrl: string) => {
       setBgImageUrl(imageUrl);
+      
+      // Auto-update lighting based on background name
+      if (lightingManagerRef.current) {
+        const urlLower = imageUrl.toLowerCase();
+        let preset = 'studio';
+        
+        if (urlLower.includes('cyberpunk') || urlLower.includes('neon')) preset = 'cyberpunk';
+        else if (urlLower.includes('nightmarket') || urlLower.includes('sunset')) preset = 'sunset';
+        else if (urlLower.includes('space') || urlLower.includes('void')) preset = 'night-outdoor';
+        else if (urlLower.includes('lab') || urlLower.includes('hologram')) preset = 'neon';
+        
+        const config = LIGHTING_PRESETS[preset];
+        if (config) {
+          lightingManagerRef.current.updateLighting(config);
+          // Save for persistence
+          localStorage.setItem('vrm.lightingPreset', preset);
+          localStorage.setItem('vrm.rimLightIntensity', config.rimLightIntensity.toString());
+        }
+      }
+
       // Clear any Three.js scene background so the HTML img layer shows through
       if (sceneRef.current) {
         sceneRef.current.background = null;
@@ -418,6 +452,49 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     const elapsedTime = clockRef.current.getElapsedTime();
     const vrm = vrmRef.current;
     frameCountRef.current++;
+
+    // --- Atmospheric Camera Handheld Jitter ---
+    if (cameraRef.current && !cameraFreeRef.current && !isPattingRef.current) {
+      // Use noise-like random movement for handheld feel
+      const noise = (Math.sin(elapsedTime * 0.4) + Math.sin(elapsedTime * 0.72) + Math.cos(elapsedTime * 0.28)) / 3;
+      const noiseY = (Math.cos(elapsedTime * 0.5) + Math.sin(elapsedTime * 0.91) + Math.sin(elapsedTime * 0.47)) / 3;
+      
+      const jitterIntensity = isSpeaking ? 0.008 : 0.004;
+      cameraRef.current.position.y += noiseY * jitterIntensity * delta;
+      cameraRef.current.position.x += noise * jitterIntensity * 0.5 * delta;
+    }
+
+    // --- Cinematic Camera Zoom (Action Cut) ---
+    if (cameraRef.current && isSpeaking && !cameraFreeRef.current) {
+      // Zoom in slightly when speaking a long message (indicating deep conversation)
+      const targetZ = currentMessage.length > 50 ? 0.7 : (isMobileRef.current ? 1.4 : 1.2);
+      cameraRef.current.position.z = THREE.MathUtils.lerp(cameraRef.current.position.z, targetZ, delta * 0.5);
+    } else if (cameraRef.current && !cameraFreeRef.current) {
+      // Return to distance
+      const baseZ = isMobileRef.current ? 1.4 : 1.2;
+      cameraRef.current.position.z = THREE.MathUtils.lerp(cameraRef.current.position.z, baseZ, delta * 0.5);
+    }
+
+    // --- Cinematic Camera Float ---
+
+    // --- Cinematic Camera Float ---
+    if (cameraRef.current && !cameraFreeRef.current && !isPattingRef.current) {
+      const floatAmount = 0.005;
+      const freq = 0.5;
+      cameraRef.current.position.y += Math.sin(elapsedTime * freq) * floatAmount * delta;
+      cameraRef.current.position.x += Math.cos(elapsedTime * freq * 0.7) * floatAmount * 0.5 * delta;
+    }
+
+    // --- Dynamic Light Pulsing ---
+    if (lightingManagerRef.current && !isMobileRef.current) {
+      const pulseIntensity = 0.05;
+      const baseRim = parseFloat(localStorage.getItem('vrm.rimLightIntensity') || '0.3');
+      const pulse = Math.sin(elapsedTime * 0.8) * pulseIntensity;
+      
+      const config = lightingManagerRef.current.getCurrentConfig();
+      config.rimLightIntensity = baseRim + pulse;
+      lightingManagerRef.current.updateLighting(config);
+    }
 
     if (vrm) {
       // 1. Update mixer first — VRMA clips drive bones
@@ -484,7 +561,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       // CRITICAL: Automatically paused when speaking to prevent interference with lip sync
       // When paused, all idle expression weights are cleared to 0
       if (!manualBlendshapeRef.current && !isFadingOutRef.current) {
-        updateIdleExpression(delta, vrm);
+        const result = updateIdleExpression(delta, vrm);
+      if (result && result.name !== lastMoodRef.current) {
+        lastMoodRef.current = result.name;
+        setCurrentMoodName(result.name);
+        
+        // Trigger floating AR label on significant mood shift
+        if (result.name !== 'neutral' && Math.random() > 0.4) {
+          const id = floatingLabelCounter.current++;
+          setFloatingLabel({ text: result.name.toUpperCase() + '!', id });
+          setTimeout(() => setFloatingLabel(null), 1500);
+        }
+      }
       }
 
       // 6. Apply all expression weights to morph targets - MUST be called after setting values
@@ -502,7 +590,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
 
       // 8. Spring bones — secondary motion (hair, accessories, etc.)
-      updateSpringBones(delta, vrm);
+      const dist = cameraRef.current ? cameraRef.current.position.length() : 0;
+      const skipFrequency = dist > 4 ? 4 : (isMobileRef.current ? 2 : 1);
+      if (frameCountRef.current % skipFrequency === 0) {
+        updateSpringBones(delta * skipFrequency, vrm);
+      }
     }
 
     if (orbitControlsRef.current?.enabled) {
@@ -626,6 +718,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     container.appendChild(renderer.domElement);
     renderer.domElement.style.position = 'relative';
     renderer.domElement.style.zIndex = '1';
+    renderer.domElement.style.cursor = 'inherit'; // Ensure it inherits from container
     rendererRef.current = renderer;
 
     // OrbitControls (disabled by default)
@@ -886,12 +979,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const lastPointerY = useRef(0);
   const isPattingRef = useRef(false);
   const lastHeadpatTriggerTime = useRef(0); // Track last headpat trigger locally
+  const lastAffectionGainTime = useRef(0); // Cooldown for persistent interaction gain
   const lastShoulderTapTime = useRef(0); // Track last shoulder tap trigger
   const hasPlayedSoundThisSession = useRef(false); // Track if sound already played in current patting session
+  const [isShaking, setIsShaking] = useState(false);
+  const [isHoveringHitbox, setIsHoveringHitbox] = useState(false);
+  const [isPatting, setIsPatting] = useState(false);
   
-  // Taptic particle pop
-  const [tapticParticles, setTapticParticles] = useState<{id: number, x: number, y: number, char: string}[]>([]);
-  const tapticIdCounter = useRef(0);
+  // HUD & Floating Label states
+  const [currentMoodName, setCurrentMoodName] = useState('neutral');
+  const [floatingLabel, setFloatingLabel] = useState<{ text: string, id: number } | null>(null);
+  const floatingLabelCounter = useRef(0);
+  const lastMoodRef = useRef('neutral');
 
   const saveAffection = (addAmount: number) => {
     setAffection(prev => {
@@ -918,7 +1017,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
   const handlePointerMoveHitbox = (e: React.PointerEvent<HTMLDivElement>) => {
     if (cameraFreeRef.current || !cameraRef.current || !sceneRef.current) return;
-    if (e.buttons !== 1) return; // Only process on drag (mouse down + move)
 
     const container = containerRef.current;
     if (!container) return;
@@ -926,12 +1024,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     const rect = container.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-    const deltaY = e.clientY - lastPointerY.current;
-    lastPointerY.current = e.clientY;
-    
-    // Akumulasi speed patokan y (sapuan atas-bawah)
-    pointerSpeedY.current += Math.abs(deltaY);
 
     const rc = new THREE.Raycaster();
     rc.setFromCamera({ x, y }, cameraRef.current);
@@ -944,42 +1036,59 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     });
 
     const intersects = rc.intersectObjects(allHitMeshes);
-    if (intersects.length > 0) {
+    const isHit = intersects.length > 0;
+    setIsHoveringHitbox(isHit);
+
+    // Direct DOM update for high performance/no lag
+    if (containerRef.current) {
+      containerRef.current.style.cursor = isHit ? (isPattingRef.current ? 'grabbing' : 'pointer') : 'default';
+    }
+
+    if (e.buttons !== 1) {
+      // If not dragging, but we WERE patting (unlikely but safe), clean up
+      if (isPattingRef.current) {
+        isPattingRef.current = false;
+        setIsPatting(false);
+        setLookAtEnabled(true);
+        if (containerRef.current) {
+          containerRef.current.style.cursor = isHit ? 'pointer' : 'default';
+        }
+      }
+      return; 
+    }
+
+    const deltaY = e.clientY - lastPointerY.current;
+    lastPointerY.current = e.clientY;
+    
+    // Akumulasi speed patokan y (sapuan atas-bawah)
+    pointerSpeedY.current += Math.abs(deltaY);
+
+    if (isHit) {
       const hitObj = intersects[0].object;
       const name = hitObj.name;
-      const ex = e.clientX;
-      const ey = e.clientY;
-
+      
       if (name === 'headpat_hitbox') {
         if (!isPattingRef.current) {
           isPattingRef.current = true;
+          setIsPatting(true);
           hasPlayedSoundThisSession.current = false; // Reset flag when starting new patting session
           forceNeutral(true); // Lerp back to center smoothly
         }
         
         const sensitivity = parseInt(localStorage.getItem('vrm.interactionSensitivity') || '20');
         
-        // Check if speed threshold is met for visual feedback
+        // Check if speed threshold is met for interaction gain
         if (pointerSpeedY.current > sensitivity) {
-          pointerSpeedY.current = 0; // reset
-          
-          // Visual feedback: particles (always show during patting)
-          const emojis = ['✨', '💕', '⭐', '🌸'];
-          const randomChar = emojis[Math.floor(Math.random() * emojis.length)];
-          const id = tapticIdCounter.current++;
-          
-          const showParticles = localStorage.getItem('vrm.showParticles') !== 'false';
-          if (showParticles) {
-            setTapticParticles(prev => [
-              ...prev, 
-              { id, x: ex, y: ey, char: randomChar },
-              { id: id + 10000, x: ex + (Math.random() - 0.5) * 50, y: ey + (Math.random() - 0.5) * 50, char: '💖' }
-            ]);
-            setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id && p.id !== id + 10000)), 1000);
+          pointerSpeedY.current = 0; // RESET SPEED
+          const now = Date.now();
+
+          // Increment Affection on sustained interaction (Throttled)
+          if (now - lastAffectionGainTime.current > 1000) {
+            lastAffectionGainTime.current = now;
+            saveAffection(1); // Gain 1 affection point per second of patting
           }
           
           // Audio & major effects: only once per session
-          const now = Date.now();
           const HEADPAT_COOLDOWN = 2500; // 2.5 seconds cooldown between sessions
           
           if (!hasPlayedSoundThisSession.current && 
@@ -989,8 +1098,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             hasPlayedSoundThisSession.current = true; // Mark sound as played for this session
             lastHeadpatTriggerTime.current = now; // Update last trigger time
             
-            applyMoodOverride('happy', 3, vrmRef.current);
-            saveAffection(2);
+            // Affection-based expression
+            const affectionLevel = Math.floor(affection / 100);
+            let mood: string = 'happy';
+            if (affectionLevel >= 2 && Math.random() > 0.7) mood = 'relaxed';
+            else if (affectionLevel < 1 && Math.random() > 0.6) mood = 'embarrassed';
+            
+            applyMoodOverride(mood, 3, vrmRef.current);
             
             // Play headpat voice line (pre-recorded TTS audio)
             const interactionVol = parseFloat(localStorage.getItem('vrm.interactionVolume') || '0.6');
@@ -1021,8 +1135,10 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         // --- Shoulder Tap Reaction (on move - subtle) ---
       }
     } else {
+      setIsHoveringHitbox(false);
       if (isPattingRef.current) {
         isPattingRef.current = false;
+        setIsPatting(false);
         hasPlayedSoundThisSession.current = false; // Reset flag when patting session ends
         setLookAtEnabled(true);
       }
@@ -1063,17 +1179,26 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   }, []);
 
   return (
-    <div ref={containerRef} className={`relative w-full h-full ${className ?? ''}`}
+    <div ref={containerRef} 
+         className={`relative w-full h-full overflow-hidden ${isShaking ? 'animate-vibrate-subtle' : ''} ${className ?? ''}`}
          onPointerMove={handlePointerMoveHitbox}
          onPointerUp={() => {
+           if (containerRef.current) {
+             containerRef.current.style.cursor = isHoveringHitbox ? 'pointer' : 'default';
+           }
            if (isPattingRef.current) {
              isPattingRef.current = false;
+             setIsPatting(false);
              hasPlayedSoundThisSession.current = false; // Reset flag when mouse released
              forceNeutral(false); // Resume following mouse
            }
          }}
-                             onPointerDown={(e) => { 
+         onPointerDown={(e) => { 
             lastPointerY.current = e.clientY; 
+            // Update cursor immediately on click
+            if (isHoveringHitbox && containerRef.current) {
+              containerRef.current.style.cursor = 'grabbing';
+            }
             pointerSpeedY.current = 0; 
             if (cameraRef.current && sceneRef.current) {
               const container = containerRef.current;
@@ -1109,8 +1234,17 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                   if ((now - lastShoulderTapTime.current) > SHOULDER_TAP_COOLDOWN && vrmRef.current) {
                     lastShoulderTapTime.current = now; // Update last trigger time
                     
-                    applyMoodOverride('surprised', 2, vrmRef.current);
+                    const affectionLevel = Math.floor(affection / 100);
+                    let mood: string = 'surprised';
+                    if (affectionLevel < 1) mood = 'angry';
+                    else if (affectionLevel > 2 && Math.random() > 0.5) mood = 'happy';
+                    
+                    applyMoodOverride(mood, 2, vrmRef.current);
                     saveAffection(1);
+                    
+                    // Visual screen shake
+                    setIsShaking(true);
+                    setTimeout(() => setIsShaking(false), 200);
                     // Play shoulder tap voice line (pre-recorded TTS audio)
                     const interactionVol = parseFloat(localStorage.getItem('vrm.interactionVolume') || '0.6');
                     const audio = playShoulderTapSfx(interactionVol);
@@ -1135,28 +1269,37 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                       audio.addEventListener('error', onEnded, { once: true });
                     }
                     
-                    const reactionClips = clips.filter(c => c.category === 'reaction');
-                    if (reactionClips.length > 0) {
-                      const clip = reactionClips[Math.floor(Math.random() * reactionClips.length)];
-                      playVrmaUrl(clip.url, { loop: false, fadeIn: 0.3 }).catch(console.warn);
-                    }
-                    const id = tapticIdCounter.current++;
-                    setTapticParticles(prev => [...prev, { id, x: ex, y: ey, char: '💢' }]);
-                    setTimeout(() => setTapticParticles(prev => prev.filter(p => p.id !== id)), 1000);
+                      const reactionClips = clips.filter(c => c.category === 'reaction');
+                      if (reactionClips.length > 0) {
+                        const clip = reactionClips[Math.floor(Math.random() * reactionClips.length)];
+                        playVrmaUrl(clip.url, { loop: false, fadeIn: 1.0 }).catch(console.warn);
+                      }
                   }
                 }
               }
             }
           }}>
+          
+          <HolographicHud 
+            affection={affection} 
+            currentMood={currentMoodName} 
+            isSpeaking={isSpeaking}
+            fps={isMobileRef.current ? 30 : 60}
+          />
 
-
-      
-      {/* Taptic Particles Rendering */}
-      {tapticParticles.map(p => (
-        <div key={p.id} className="taptic-particle pointer-events-none z-[99999]" style={{ position: 'fixed', left: p.x - 16 + 'px', top: p.y - 16 + 'px', fontSize: '32px', textShadow: '0 0 10px rgba(236,72,153,1)' }}>
-          {p.char}
-        </div>
-      ))}
+          {/* Floating AR Mood Label */}
+          {floatingLabel && (
+            <div 
+              className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-full z-[100] animate-mood-label pointer-events-none"
+              key={floatingLabel.id}
+            >
+              <div className="px-3 py-1 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-md">
+                <span className="text-[10px] font-mono font-bold text-cyan-200 tracking-tighter drop-shadow-[0_0_8px_cyan]">
+                   {floatingLabel.text}
+                </span>
+              </div>
+            </div>
+          )}
 
       {/* Ambient Aura Rendering */}
       {ambientEffect !== 'none' && (
@@ -1243,25 +1386,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       {/* Companion HUD Overlay (Lovometer & Cinematic Subtitles) */}
       <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between overflow-hidden">
         
-        {/* Top Header Region for Lovometer */}
-        <div className="absolute top-0 left-0 right-0 flex justify-center sm:justify-start sm:ml-40 mt-3 md:mt-4 pointer-events-none">
-          {/* Lovometer - Affection level indicator */}
-          <div className="bg-background/80 backdrop-blur-md border px-3 py-1.5 flex items-center gap-2 pointer-events-auto shadow-md select-none transition-all rounded-full border-pink-500/20 max-w-[160px] h-8">
-            <span className="text-[11px] font-bold tracking-widest text-pink-400 drop-shadow-sm font-mono leading-none">
-              LV.{Math.floor(affection / 100)}
-            </span>
-            <div className="relative flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden shadow-inner w-16">
-              <div 
-                className="absolute left-0 top-0 bottom-0 bg-pink-500 transition-all duration-500 ease-out"
-                style={{ width: `${affection % 100}%` }}
-              />
-            </div>
-            <span className="text-sm cursor-pointer hover:scale-125 transition-transform drop-shadow-md leading-none" 
-                  title="Affection Level (Peningkatan melalui obrolan & sentuhan wajah)">
-              💖
-            </span>
-          </div>
-        </div>
+        {/* Top Header Region (Empty, keeping for structure/padding if needed) */}
+        <div className="absolute top-0 left-0 right-0 pointer-events-none h-16" />
 
         {/* Floating Subtitle - Positioned at bottom center with safe margin */}
         {showSubtitles && isSpeaking && currentMessage && (

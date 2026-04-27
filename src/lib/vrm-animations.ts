@@ -627,9 +627,10 @@ export function updateMicroExpressions(elapsed: number, vrm: VRM, delta = 0.016)
 
 let _smoothedMouth = 0;
 let _currentShape = 0;
-const MOUTH_SHAPES_STD = ['aa', 'ih', 'ou'] as const;
+const MOUTH_SHAPES_STD = ['aa', 'ih', 'ou', 'ee', 'oh'] as const;
 // ARKit mouth shapes for lip sync — JawOpen is driven separately at reduced weight
-const MOUTH_SHAPES_PS = ['MouthFunnel', 'MouthPucker', 'MouthLeft'] as const;
+// Blending these creates sophisticated organic mouth movements
+const MOUTH_SHAPES_PS = ['MouthFunnel', 'MouthPucker', 'MouthUpperUpLeft', 'MouthLowerDownLeft', 'MouthSmileLeft'] as const;
 let _shapeTimer = 0;
 
 // Shape hold duration: longer = more natural, less mechanical
@@ -675,10 +676,12 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016, freqD
   _shapeTimer += delta;
   if (_shapeTimer >= SHAPE_DURATION) {
     _shapeTimer = 0;
-    _currentShape = (_currentShape + 1) % 3;
+    const pool = mode === 'perfectsync' ? MOUTH_SHAPES_PS : MOUTH_SHAPES_STD;
+    _currentShape = (_currentShape + 1) % pool.length;
   }
 
   // Cross-blend between current and next shape for smooth transitions
+  const pool = mode === 'perfectsync' ? MOUTH_SHAPES_PS : MOUTH_SHAPES_STD;
   const blend = _shapeTimer / SHAPE_DURATION;
 
   if (mode === 'perfectsync') {
@@ -705,7 +708,7 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016, freqD
     // Audio volume correlates loosely with plosives or loud screams (kyaa~!)
     const isLoud = mouthValue > (maxMouth * 0.6);
     let primary = MOUTH_SHAPES_PS[_currentShape];
-    let secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % 3];
+    let secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % MOUTH_SHAPES_PS.length];
 
     if (isLoud) {
       if (_currentShape === 0) primary = 'MouthFunnel';
@@ -733,7 +736,7 @@ export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016, freqD
     em.setValue('happy', happyExtra);
 
     const primary   = MOUTH_SHAPES_STD[_currentShape];
-    const secondary = MOUTH_SHAPES_STD[(_currentShape + 1) % 3];
+    const secondary = MOUTH_SHAPES_STD[(_currentShape + 1) % MOUTH_SHAPES_STD.length];
     em.setValue(primary,   mouthValue * (1 - blend * 0.35));
     em.setValue(secondary, mouthValue * blend * 0.35);
   }

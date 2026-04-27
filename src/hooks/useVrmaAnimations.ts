@@ -186,19 +186,13 @@ export function useVrmaAnimations(
 
     const clip = clips[idleCurrentIndexRef.current % clips.length];
     idleClipRef.current = clip;
-    try {
-      const action = mixer.clipAction(clip);
-      action.reset();
-      action.setLoop(THREE.LoopRepeat, Infinity);
-      action.enabled = true;
-      action.weight = 1;
-      action.fadeIn(1.2); // Increased from 0.4 to 1.2 for slower transition
-      action.play();
+    
+    // Use centralized playVRMA for consistent crossfading
+    const action = playVRMA(mixer, clip, { loop: true, fadeIn: 1.5 });
+    if (action) {
       idleActionRef.current = action;
       vrmaPlayingRef.current = true;
       activeDrivenBonesRef.current = getClipDrivenBones(clip);
-    } catch (e) {
-      console.warn('[VRMA Idle] Could not restart:', e);
     }
   }, []);
 
@@ -223,19 +217,12 @@ export function useVrmaAnimations(
 
     const nextClip = clips[nextIdx];
     idleClipRef.current = nextClip;
-    try {
-      idleActionRef.current?.fadeOut(1.8); // Increased from 0.6 to 1.8 for slower fade out
-      const newAction = mixer.clipAction(nextClip);
-      newAction.reset();
-      newAction.setLoop(THREE.LoopRepeat, Infinity);
-      newAction.enabled = true;
-      newAction.weight = 1;
-      newAction.fadeIn(1.8); // Increased from 0.6 to 1.8 for slower fade in
-      newAction.play();
+    
+    // Use centralized playVRMA for consistent crossfading
+    const newAction = playVRMA(mixer, nextClip, { loop: true, fadeIn: 1.8 });
+    if (newAction) {
       idleActionRef.current = newAction;
       activeDrivenBonesRef.current = getClipDrivenBones(nextClip);
-    } catch (e) {
-      console.warn('[VRMA Idle] Failed to switch clip:', e);
     }
   }, []);
 
@@ -293,7 +280,7 @@ export function useVrmaAnimations(
     const clip = clips[idx];
     vrmaPlayingRef.current = true;
 
-    const fadeIn = idleActionRef.current?.isRunning() ? 0.8 : 1.0; // Increased from 0.25/0.3 to 0.8/1.0 for slower transition
+    const fadeIn = idleActionRef.current?.isRunning() ? 1.0 : 1.2; 
     const action = playVRMA(mixer, clip, { loop: false, fadeIn });
     if (!action) { vrmaPlayingRef.current = false; return; }
 

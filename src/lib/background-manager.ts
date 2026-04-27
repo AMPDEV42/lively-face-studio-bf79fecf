@@ -21,6 +21,14 @@ export const DEFAULT_BACKGROUNDS: BackgroundItem[] = [
     thumbnail: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.45.05.png',
   },
   {
+    id: 'night-market',
+    name: 'Night Market',
+    url: '/backgrounds/thumbs/NightMarket.png', // Fallback will generate if missing
+    type: 'default',
+    isPro: false,
+    thumbnail: '/backgrounds/thumbs/NightMarket.png',
+  },
+  {
     id: 'neon-grid',
     name: 'Neon Grid',
     url: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.49.24.png',
@@ -148,6 +156,7 @@ export class BackgroundManager {
   private static generateFallbackImage(backgroundId: string): string {
     const colorMap: Record<string, string[]> = {
       'cyberpunk-city': ['#0a0a1f', '#1a0a2e', '#16213e', '#0f3460'],
+      'night-market': ['#1a0a2e', '#2d0a1a', '#3e1621', '#600f34'],
       'neon-grid': ['#0f0f23', '#1a1a3a', '#2d1b69', '#1e3a8a'],
       'space-station': ['#000000', '#1a1a2e', '#16213e', '#0f172a'],
       'digital-void': ['#0c0c0c', '#1a0a2e', '#2d1b69', '#1e1b4b'],

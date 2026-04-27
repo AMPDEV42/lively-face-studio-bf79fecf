@@ -353,31 +353,47 @@ export function applyMoodOverride(
 ): void {
   if (!_enabled || manualMode) return;
   
-  const moodMap: Record<string, string> = {
-    'happy': 'happy',
-    'sad': 'sad',
-    'angry': 'angry',
-    'surprised': 'surprised',
-    'relaxed': 'relaxed',
-    'neutral': 'neutral',
-  };
-  
-  const expressionName = moodMap[moodName.toLowerCase()] || 'neutral';
+  const normalizedMood = moodName.toLowerCase();
   const weights: Record<string, number> = {};
-  
-  if (expressionName !== 'neutral') {
-    weights[expressionName] = 0.90;
+  let expressionName = 'neutral';
+  let intensity = 0.40; // Reduced from 0.90 - much more subtle
+
+  if (normalizedMood === 'happy') {
+    expressionName = 'happy';
+    weights['happy'] = intensity;
+  } else if (normalizedMood === 'sad') {
+    expressionName = 'sad';
+    weights['sad'] = intensity * 0.8;
+  } else if (normalizedMood === 'angry') {
+    expressionName = 'angry';
+    weights['angry'] = intensity * 0.7;
+  } else if (normalizedMood === 'surprised') {
+    expressionName = 'surprised';
+    weights['surprised'] = intensity * 0.9;
+  } else if (normalizedMood === 'relaxed') {
+    expressionName = 'relaxed';
+    weights['relaxed'] = intensity;
+  } else if (normalizedMood === 'embarrassed') {
+    expressionName = 'relaxed'; // Fallback
+    weights['relaxed'] = intensity * 0.7;
+    weights['happy'] = intensity * 0.3;
+  } else if (normalizedMood === 'thinking') {
+    expressionName = 'relaxed';
+    weights['relaxed'] = intensity * 0.5;
   }
-  
+
   _targetWeights = weights;
-  _baseTargetIntensity = 0.90;
+  _baseTargetIntensity = intensity;
   _transitioning = true;
   _inMoodOverride = true;
   _moodOverrideTimer = 0;
   _moodOverrideDuration = duration;
   _activeName = expressionName;
   
-  console.log('[Idle Expression] Mood override:', expressionName, 'for', duration, 'seconds');
+  // Use a slightly faster lerp for overrides so they feel responsive
+  _lerpSpeed = 1.2;
+  
+  console.log(`[Idle Expression] Mood override: ${normalizedMood} (${expressionName}) for ${duration}s @ ${intensity.toFixed(2)}`);
 }
 
 export function setIdleExpressionManual(manual: boolean): void {
@@ -502,4 +518,9 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
       try { em.setValue(camel, clamped); } catch (_) { /* ok */ }
     }
   }
+  // Return current state for HUD/Feedback
+  return {
+    name: _activeName,
+    mood: _currentMood
+  };
 }
