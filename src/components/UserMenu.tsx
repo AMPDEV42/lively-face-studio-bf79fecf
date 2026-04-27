@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { LogOut, User as UserIcon, Settings as SettingsIcon, Crown, Wand2, ChevronRight } from 'lucide-react';
+import { LogOut, User as UserIcon, Settings as SettingsIcon, Crown, Wand2, ChevronRight, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -58,18 +58,12 @@ export default function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="relative h-9 w-9 rounded-full transition-all overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          style={{ boxShadow: '0 0 0 2px rgba(168,85,247,0.5), 0 2px 10px rgba(0,0,0,0.7)' }}
+          className="relative flex items-center justify-center h-10 w-10 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary btn-overlay"
+          title="Menu"
         >
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={profile?.avatar_url ?? undefined} alt={displayName} />
-            <AvatarFallback className="text-xs font-bold"
-              style={{ background: 'rgba(10,8,20,0.90)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.5)' }}>
-              {initial}
-            </AvatarFallback>
-          </Avatar>
+          <Menu className="w-5 h-5" />
           {/* Online dot */}
-          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2"
+          <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-green-400 border-2"
             style={{ borderColor: 'rgba(6,4,14,1)' }} />
         </button>
       </DropdownMenuTrigger>

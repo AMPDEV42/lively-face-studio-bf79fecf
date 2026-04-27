@@ -365,16 +365,7 @@ export default function Index() {
             </div>
           }
         >
-          <ErrorBoundary
-            fallback={
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center space-y-2">
-                  <p className="text-sm text-muted-foreground">Gagal memuat viewer 3D</p>
-                  <p className="text-xs text-muted-foreground/60">Coba refresh halaman</p>
-                </div>
-              </div>
-            }
-          >
+          <ErrorBoundary>
             <VrmViewer
               ref={viewerRef}
               modelUrl={modelUrl}
@@ -398,8 +389,9 @@ export default function Index() {
       <div className="flex-1 relative min-w-0 scanlines z-30 pointer-events-none">
         {/* Right-side vertical control column — all controls in one column */}
         <TooltipProvider delayDuration={600}>
-        <div className="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] flex flex-col gap-2 z-40 pointer-events-auto max-h-[calc(100dvh-1.5rem)] overflow-y-auto overflow-x-visible scrollbar-none"
+        <div className="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] z-40 pointer-events-auto max-h-[calc(100dvh-1.5rem)] overflow-y-auto scrollbar-none"
           style={{ scrollbarWidth: 'none' }}>
+          <div className="flex flex-col gap-2 px-1 py-0.5">
           {/* User menu — identity, stands alone */}
           <UserMenu />
 
@@ -436,15 +428,15 @@ export default function Index() {
               />
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span>
+                  <div>
                     <BackgroundSelector
                       onBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
                       onEnvironmentChange={handleEnvironmentChange}
                       currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
-                      currentAmbient={ambientEffect}
+                      ambientEffect={ambientEffect}
                       onAmbientChange={handleAmbientChange}
                     />
-                  </span>
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent side="left" className="panel-overlay border-0 text-xs text-foreground/90">
                   Background & Environment
@@ -457,6 +449,7 @@ export default function Index() {
               />
             </>
           )}
+          </div>
         </div>
         </TooltipProvider>
 

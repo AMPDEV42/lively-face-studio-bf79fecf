@@ -845,12 +845,21 @@ export default function ChatPanel({
       );
     }
 
+    // Swipe-down to close
+    const swipeStartY = useRef(0);
+    const handleTouchStart = (e: React.TouchEvent) => { swipeStartY.current = e.touches[0].clientY; };
+    const handleTouchEnd = (e: React.TouchEvent) => {
+      const delta = e.changedTouches[0].clientY - swipeStartY.current;
+      if (delta > 80) onToggle?.();
+    };
+
     return (
       <div className="absolute inset-0 z-50 flex flex-col animate-slide-up scanlines"
         style={{ background: 'rgba(6,4,14,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
         {showHistory ? historyPanel : (
           <>
             <div className="flex items-center justify-between px-4 border-b border-neon-purple corner-accent"
+              onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}
               style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))', paddingBottom: '0.875rem' }}>
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center neon-glow-purple">

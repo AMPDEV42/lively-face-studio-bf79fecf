@@ -61,6 +61,7 @@ export default function BackgroundSelector({
 }: BackgroundSelectorProps) {
   const { user } = useAuth();
   const { isPro } = useUserRole();
+  const currentAmbient = ambientEffect;
   const [isOpen, setIsOpen] = useState(false);
   const [tab, setTab] = useState<'preset' | 'image' | 'ambient'>('preset');
   const [backgrounds, setBackgrounds] = useState<BackgroundItem[]>([]);

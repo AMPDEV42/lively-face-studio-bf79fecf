@@ -138,37 +138,37 @@
   .bg-item:hover { filter: brightness(1.2); outline-color: rgba(168,85,247,0.6) !important; }
 
   .btn-overlay {
-    background: rgba(10, 8, 20, 0.75) !important;
-    backdrop-filter: blur(12px) saturate(1.5);
-    -webkit-backdrop-filter: blur(12px) saturate(1.5);
-    border: 1px solid rgba(168, 85, 247, 0.45) !important;
-    color: rgba(220, 200, 255, 0.9) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(168,85,247,0.1);
+    background: rgba(15, 10, 30, 0.72) !important;
+    backdrop-filter: blur(16px) saturate(1.8) brightness(0.9);
+    -webkit-backdrop-filter: blur(16px) saturate(1.8) brightness(0.9);
+    border: 1px solid rgba(168, 85, 247, 0.55) !important;
+    color: rgba(220, 200, 255, 0.95) !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
     transition: all 0.2s ease;
   }
 
   .btn-overlay:hover {
-    background: rgba(20, 12, 40, 0.88) !important;
-    border-color: rgba(168, 85, 247, 0.75) !important;
+    background: rgba(30, 15, 55, 0.85) !important;
+    border-color: rgba(168, 85, 247, 0.85) !important;
     color: #c084fc !important;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.6), 0 0 8px rgba(168,85,247,0.35);
+    box-shadow: 0 2px 16px rgba(0,0,0,0.5), 0 0 10px rgba(168,85,247,0.4);
   }
 
   .btn-overlay.active,
   .btn-overlay[data-active="true"] {
-    background: rgba(88, 28, 135, 0.65) !important;
-    border-color: rgba(168, 85, 247, 0.85) !important;
+    background: rgba(88, 28, 135, 0.75) !important;
+    border-color: rgba(168, 85, 247, 0.9) !important;
     color: #e9d5ff !important;
-    box-shadow: 0 0 10px rgba(168,85,247,0.4), 0 2px 8px rgba(0,0,0,0.5);
+    box-shadow: 0 0 12px rgba(168,85,247,0.5), 0 2px 8px rgba(0,0,0,0.5);
   }
 
   /* Panel cards that float over background image */
   .panel-overlay {
-    background: rgba(8, 5, 18, 0.88) !important;
-    backdrop-filter: blur(24px) saturate(1.8);
-    -webkit-backdrop-filter: blur(24px) saturate(1.8);
-    border: 1px solid rgba(168, 85, 247, 0.35) !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.1);
+    background: rgba(8, 5, 18, 0.92) !important;
+    backdrop-filter: blur(28px) saturate(2);
+    -webkit-backdrop-filter: blur(28px) saturate(2);
+    border: 1px solid rgba(168, 85, 247, 0.4) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);
   }
 
 

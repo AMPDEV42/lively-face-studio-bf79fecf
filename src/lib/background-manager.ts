@@ -176,24 +176,72 @@ export class BackgroundManager {
 
   // Get custom uploaded backgrounds
   static async getCustomBackgrounds(): Promise<BackgroundItem[]> {
-    // Temporarily disable Supabase completely - use localStorage only
-    console.log('[BackgroundManager] Using localStorage only (Supabase temporarily disabled)');
-    return this.getLocalStorageBackgrounds();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return this.getLocalStorageBackgrounds();
+
+      const { data, error } = await supabase.storage
+        .from(this.BUCKET_NAME)
+        .list(user.id, { limit: 50, sortBy: { column: 'created_at', order: 'desc' } });
+
+      if (error) throw error;
+      if (!data?.length) return this.getLocalStorageBackgrounds();
+
+      const items: BackgroundItem[] = data.map((file) => {
+        const { data: pub } = supabase.storage
+          .from(this.BUCKET_NAME)
+          .getPublicUrl(`${user.id}/${file.name}`);
+        return {
+          id: `custom-${file.name}`,
+          name: file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
+          url: pub.publicUrl,
+          type: 'uploaded' as const,
+          isPro: true,
+          thumbnail: pub.publicUrl,
+        };
+      });
+
+      // Merge with localStorage (for offline-uploaded ones)
+      const local = this.getLocalStorageBackgrounds();
+      const localOnly = local.filter(l => !items.find(i => i.url === l.url));
+      return [...items, ...localOnly];
+    } catch (err) {
+      console.warn('[BackgroundManager] Supabase fetch failed, using localStorage:', err);
+      return this.getLocalStorageBackgrounds();
+    }
   }
 
   // Upload background (Pro only)
   static async uploadBackground(file: File, userId?: string): Promise<BackgroundItem> {
-    // Validate file
-    if (!file.type.startsWith('image/')) {
-      throw new Error('File harus berupa gambar');
-    }
-    
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      throw new Error('Ukuran file maksimal 10MB');
+    if (!file.type.startsWith('image/')) throw new Error('File harus berupa gambar');
+    if (file.size > 10 * 1024 * 1024) throw new Error('Ukuran file maksimal 10MB');
+
+    if (userId) {
+      try {
+        const ext = file.name.split('.').pop() ?? 'jpg';
+        const fileName = `${Date.now()}.${ext}`;
+        const filePath = `${userId}/${fileName}`;
+
+        const { error } = await supabase.storage
+          .from(this.BUCKET_NAME)
+          .upload(filePath, file, { upsert: false });
+
+        if (error) throw error;
+
+        const { data: pub } = supabase.storage.from(this.BUCKET_NAME).getPublicUrl(filePath);
+        return {
+          id: `custom-${fileName}`,
+          name: file.name.replace(/\.[^/.]+$/, ''),
+          url: pub.publicUrl,
+          type: 'uploaded',
+          isPro: true,
+          thumbnail: pub.publicUrl,
+        };
+      } catch (err) {
+        console.warn('[BackgroundManager] Supabase upload failed, falling back to localStorage:', err);
+      }
     }
 
-    // For now, use localStorage only (skip Supabase)
-    console.log('[BackgroundManager] Using localStorage for upload (Supabase disabled)');
     return this.uploadToLocalStorage(file);
   }
 

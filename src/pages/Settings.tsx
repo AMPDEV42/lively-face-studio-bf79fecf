@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, Settings as SettingsIcon, User } from 'lucide-react';
 import ModelManager from '@/components/ModelManager';
 import LanguagePreference from '@/components/LanguagePreference';
 import TTSSettings from '@/components/TTSSettings';
@@ -74,12 +74,20 @@ export default function Settings() {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-1">
             <div className="w-7 h-7 rounded-lg bg-secondary border border-neon-purple flex items-center justify-center neon-glow-purple">
               <SettingsIcon className="w-3.5 h-3.5 text-muted-foreground" />
             </div>
             <h1 className="text-base font-semibold text-foreground tracking-tight text-neon-purple">Pengaturan</h1>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/profile')}
+            className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1.5 hover-neon-glow"
+          >
+            <User className="w-3.5 h-3.5" /> Profil
+          </Button>
         </div>
       </div>
 
