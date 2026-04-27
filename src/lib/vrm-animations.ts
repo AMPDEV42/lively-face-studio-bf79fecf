@@ -810,10 +810,9 @@ export function updateIdleMicroGestures(
 ): void {
   if (!vrm.humanoid) return;
 
-  // Smooth lerp toward target intensity
-  if (Math.abs(_gestureIntensity - _targetGestureIntensity) > 0.01) {
-    const lerpSpeed = GESTURE_FADE_SPEED * delta;
-    _gestureIntensity += (_targetGestureIntensity - _gestureIntensity) * lerpSpeed;
+  // Smooth lerp toward target intensity (frame-rate independent)
+  if (Math.abs(_gestureIntensity - _targetGestureIntensity) > 0.001) {
+    _gestureIntensity += (_targetGestureIntensity - _gestureIntensity) * Math.min(GESTURE_FADE_SPEED * delta, 1);
   } else {
     _gestureIntensity = _targetGestureIntensity;
   }

@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { detectMood } from '@/lib/sentiment';
+
 import { useVrmaTriggers } from '@/hooks/useVrmaTriggers';
 import { useAudioAnalyser } from '@/hooks/useAudioAnalyser';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -126,6 +126,32 @@ export default function Index() {
 
       if (cancelled) return;
       setVoiceId(activeVoice?.voice_id ?? undefined);
+
+      // Load affection for initial greeting from Auth Metadata (safe optional chain)
+      const metaAffection = user?.user_metadata?.affection ?? 0;
+      const affection = typeof metaAffection === 'number' ? metaAffection : parseInt(metaAffection, 10);
+      const level = Math.floor(affection / 100);
+      
+      let profileData: any = null;
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        profileData = data;
+      } catch (e) {
+        console.warn('[Profile] Profile fetch error:', e);
+      }
+
+      if (cancelled) return;
+
+      if (affection > 50) {
+        toast.info(`Welcome back, ${profileData?.display_name || user.email?.split('@')[0]}!`, {
+          description: level > 0 ? `Affection Level ${level} reached.` : 'Your companion has been waiting for you.',
+          duration: 4000,
+        });
+      }
     };
     loadActive();
     return () => { cancelled = true; };
@@ -322,13 +348,15 @@ export default function Index() {
     return () => clearInterval(interval);
   }, [autoEnvironment]);
 
-  // Deep Idle (Boredom V2) Implementation
+  // Deep Idle (Boredom V2) Implementation - Randomized
+  const nextBoredomTrigger = useRef(60000 + Math.random() * 60000);
   useEffect(() => {
     const interval = setInterval(() => {
       const idleTime = Date.now() - lastInteractionTime.current;
-      if (idleTime > 60000 && !isSpeaking) {
+      if (idleTime > nextBoredomTrigger.current && !isSpeaking) {
         // Reset timer immediately to avoid spamming
         lastInteractionTime.current = Date.now();
+        nextBoredomTrigger.current = 45000 + Math.random() * 90000; // Vary between 45s and 135s
         
         // Pilih animasi idle dari library (Mixamo VRMA)
         const idleClips = clips.filter(c => c.category === 'idle');
@@ -336,7 +364,8 @@ export default function Index() {
           const randomIdle = idleClips[Math.floor(Math.random() * idleClips.length)];
           const result = findClipByName(randomIdle.name);
           if (result) {
-            viewerRef.current.playVrmaUrl(result.url, { loop: false, fadeIn: 0.8 }).catch(console.warn);
+            console.log(`[Boredom] Playing random idle: ${result.name} after ${Math.round(idleTime/1000)}s`);
+            viewerRef.current.playVrmaUrl(result.url, { loop: false, fadeIn: 1.2 }).catch(console.warn);
           }
         }
       }
@@ -379,6 +408,7 @@ export default function Index() {
               ambientEffect={ambientEffect}
               showSubtitles={showSubtitles}
               clips={clips}
+              userId={user?.id}
               className="w-full h-full"
             />
           </ErrorBoundary>

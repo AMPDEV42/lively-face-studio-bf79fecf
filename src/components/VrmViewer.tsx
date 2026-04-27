@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle, useMemo } from 'react';
 import * as THREE from 'three';
+import { supabase } from '@/integrations/supabase/client';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRMLoaderPlugin, VRM, VRMUtils } from '@pixiv/three-vrm';
@@ -82,10 +83,11 @@ interface VrmViewerProps {
   ambientEffect?: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves';
   showSubtitles?: boolean;
   clips?: any[];
+  userId?: string;
 }
 
 const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer(
-  { modelUrl, isSpeaking = false, isWebSpeechActive = false, audioElement, currentMessage, className, getAudioLevel, getFrequencyData, onLevelUp, ambientEffect = 'none', showSubtitles = true, clips = [] },
+  { modelUrl, isSpeaking = false, isWebSpeechActive = false, audioElement, currentMessage, className, getAudioLevel, getFrequencyData, onLevelUp, ambientEffect = 'none', showSubtitles = true, clips = [], userId },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -121,6 +123,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const mixerUpdateCountRef = useRef(0); // Count mixer updates before showing model
   const environmentManagerRef = useRef<EnvironmentManager | null>(null);
   const lightingManagerRef = useRef<LightingManager | null>(null);
+  // Cached rim intensity - reads localStorage once on mount, updated when lighting changes
+  const rimIntensityRef = useRef(parseFloat(localStorage.getItem('vrm.rimLightIntensity') || '0.3'));
 
   isSpeakingRef.current = isSpeaking || isInteractionSpeaking; // Include interaction speaking
 
@@ -408,6 +412,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     },
     setLighting: (config: LightingConfig) => {
       lightingManagerRef.current?.updateLighting(config);
+      // Keep rim intensity cache in sync so render loop uses the new value
+      if (config.rimLightIntensity !== undefined) {
+        rimIntensityRef.current = config.rimLightIntensity;
+        localStorage.setItem('vrm.rimLightIntensity', config.rimLightIntensity.toString());
+      }
     },
     getCurrentLighting: () => {
       return lightingManagerRef.current?.getCurrentConfig() ?? null;
@@ -476,8 +485,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     }
 
     // --- Cinematic Camera Float ---
-
-    // --- Cinematic Camera Float ---
     if (cameraRef.current && !cameraFreeRef.current && !isPattingRef.current) {
       const floatAmount = 0.005;
       const freq = 0.5;
@@ -485,14 +492,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       cameraRef.current.position.x += Math.cos(elapsedTime * freq * 0.7) * floatAmount * 0.5 * delta;
     }
 
-    // --- Dynamic Light Pulsing ---
+    // --- Dynamic Light Pulsing (uses cached rim intensity — no localStorage read per frame) ---
     if (lightingManagerRef.current && !isMobileRef.current) {
       const pulseIntensity = 0.05;
-      const baseRim = parseFloat(localStorage.getItem('vrm.rimLightIntensity') || '0.3');
       const pulse = Math.sin(elapsedTime * 0.8) * pulseIntensity;
-      
       const config = lightingManagerRef.current.getCurrentConfig();
-      config.rimLightIntensity = baseRim + pulse;
+      config.rimLightIntensity = rimIntensityRef.current + pulse;
       lightingManagerRef.current.updateLighting(config);
     }
 
@@ -547,11 +552,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           : (isWebSpeechActiveRef.current
             ? getWebSpeechLipLevel(delta)
             : (getAudioLevelRef.current?.() ?? 0));
-        
-        // Debug: log lip sync activity every 30 frames (~0.5s)
-        if (frameCountRef.current % 30 === 0 && isInteractionSpeakingRef.current) {
-          console.log('[Mouth Animation] Active - level:', level);
-        }
         
         const freqData = !isInteractionSpeakingRef.current ? getFrequencyDataRef.current?.() : undefined;
         updateLipSync(level, vrm, delta, freqData);
@@ -973,7 +973,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelUrl]);
 
-  // Affection & Headpat states
   const [affection, setAffection] = useState(() => parseInt(localStorage.getItem('vrm.affection') || '0', 10));
   const pointerSpeedY = useRef(0);
   const lastPointerY = useRef(0);
@@ -992,6 +991,36 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const floatingLabelCounter = useRef(0);
   const lastMoodRef = useRef('neutral');
 
+  // Affection Sync logic - Using User Metadata for persistence
+  useEffect(() => {
+    if (!userId) return;
+    
+    // Initial fetch from current session metadata
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      const metaAffection = user?.user_metadata?.affection;
+      if (metaAffection !== undefined && metaAffection !== null) {
+        const val = typeof metaAffection === 'number' ? metaAffection : parseInt(metaAffection, 10);
+        setAffection(val);
+        localStorage.setItem('vrm.affection', val.toString());
+      }
+    });
+  }, [userId]);
+
+  const lastSavedAffection = useRef(affection);
+  const saveToSupabase = useCallback(async (val: number) => {
+    if (!userId) return;
+    try {
+      // Use auth.updateUser for persistence without needing extra DB columns
+      await supabase.auth.updateUser({
+        data: { affection: val }
+      });
+      lastSavedAffection.current = val;
+      console.log('[Affection] Meta sync successful:', val);
+    } catch (e) {
+      console.warn('[Affection] Meta sync failed:', e);
+    }
+  }, [userId]);
+
   const saveAffection = (addAmount: number) => {
     setAffection(prev => {
       const oldLevel = Math.floor(prev / 100);
@@ -1003,6 +1032,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       }
       
       localStorage.setItem('vrm.affection', newVal.toString());
+      
+      // Throttle DB sync: sync every 5 points or every level-up
+      if (Math.abs(newVal - lastSavedAffection.current) >= 5 || newLevel > oldLevel) {
+        saveToSupabase(newVal);
+      }
+      
       return newVal;
     });
   };

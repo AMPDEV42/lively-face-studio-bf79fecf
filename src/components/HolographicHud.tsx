@@ -26,7 +26,7 @@ export const HolographicHud: React.FC<HolographicHudProps> = ({
   return (
     <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6 overflow-hidden select-none">
       {/* Top Left: System Status (Offset significantly to avoid App Title overlap) */}
-      <div className="flex flex-col gap-1 anime-fade-in delay-200 mt-14 md:mt-16">
+      <div className="flex flex-col gap-1 anime-fade-in delay-200 mt-20 md:mt-16">
         <div className="flex items-center gap-2 text-[10px] font-mono text-cyan-400/80 tracking-widest uppercase">
           <Cpu className="w-3 h-3" />
           <span>System.Active_v1.4</span>

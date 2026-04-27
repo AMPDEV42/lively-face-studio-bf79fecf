@@ -455,39 +455,26 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
   if (_transitioning) {
     const t = Math.min(_lerpSpeed * delta, 1);
     
-    const allKeys = new Set([
-      ...Object.keys(_currentWeights),
-      ...Object.keys(_targetWeights),
-    ]);
+    // Select easing type ONCE per whole transition cycle for consistency across all keys
+    const isEaseOut = Math.random() < 0.7;
+    const eased = isEaseOut 
+      ? (1 - Math.pow(1 - t, 2)) // Ease-out quadratic
+      : (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2); // Ease-in-out cubic
     
+    const allKeys = new Set([...Object.keys(_currentWeights), ...Object.keys(_targetWeights)]);
     let maxDiff = 0;
     const next: Record<string, number> = {};
     
     for (const k of allKeys) {
       const cur = _currentWeights[k] ?? 0;
       const tgt = _targetWeights[k] ?? 0;
-      
-      // Variable easing - kadang ease-out, kadang ease-in-out
-      const easingType = Math.random();
-      let eased: number;
-      
-      if (easingType < 0.7) {
-        // Ease-out quadratic (70% chance)
-        eased = 1 - Math.pow(1 - t, 2);
-      } else {
-        // Ease-in-out cubic (30% chance)
-        eased = t < 0.5
-          ? 4 * t * t * t
-          : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      }
-      
       next[k] = _lerp(cur, tgt, eased);
       maxDiff = Math.max(maxDiff, Math.abs(next[k] - tgt));
     }
     
     _currentWeights = next;
     
-    if (maxDiff < 0.01) {
+    if (maxDiff < 0.01 || t >= 1) {
       _currentWeights = { ..._targetWeights };
       _transitioning = false;
       console.log('[Idle Expression] ✓', _activeName);

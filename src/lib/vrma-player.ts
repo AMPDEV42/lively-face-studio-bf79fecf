@@ -225,6 +225,18 @@ export function playVRMA(
   let maxWeight = 0;
   try {
     const all = (mixer as unknown as { _actions: THREE.AnimationAction[] })._actions ?? [];
+    
+    // Memory management: uncache actions that are no longer needed
+    // If we have more than 15 actions, purge those with 0 weight to prevent memory leaks
+    if (all.length > 15) {
+      for (let i = all.length - 1; i >= 0; i--) {
+        const a = all[i];
+        if (!a.isRunning() && a.getEffectiveWeight() < 0.001 && a.getClip().name !== clip.name) {
+          try { mixer.uncacheAction(a.getClip()); } catch (_) { /* ok */ }
+        }
+      }
+    }
+
     for (const a of all) {
       if (!a.enabled) continue;
       const w = a.getEffectiveWeight();
