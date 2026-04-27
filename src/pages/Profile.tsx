@@ -129,7 +129,7 @@ export default function Profile() {
             </p>
           </div>
           {!isPro && (
-            <Button size="sm" variant="outline" onClick={() => navigate('/settings')} className="shrink-0 h-7 text-xs gap-1.5 border-neon-purple-bright text-primary hover-neon-glow">
+            <Button size="sm" variant="outline" onClick={() => navigate('/pricing')} className="shrink-0 h-7 text-xs gap-1.5 border-neon-purple-bright text-primary hover-neon-glow">
               <Sparkles className="w-3 h-3" /> Upgrade
             </Button>
           )}

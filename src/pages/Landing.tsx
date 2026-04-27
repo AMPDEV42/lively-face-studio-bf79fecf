@@ -60,7 +60,7 @@ export default function Landing() {
         <Logo />
         <nav className="hidden md:flex items-center gap-7 text-sm text-white/50">
           {['Beranda','Fitur','Galeri','Harga','Dokumentasi'].map(n => (
-            <a key={n} href="#" className="hover:text-white transition-colors duration-200">{n}</a>
+            <a key={n} href={n === 'Harga' ? '/pricing' : '#'} className="hover:text-white transition-colors duration-200">{n}</a>
           ))}
         </nav>
         <div className="flex items-center gap-2">

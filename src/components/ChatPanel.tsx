@@ -548,6 +548,14 @@ export default function ChatPanel({
     };
   }, []);
 
+  // ── Swipe-down to close (mobile) ──────────────────────────────────────────
+  const swipeStartY = useRef(0);
+  const handleTouchStart = (e: React.TouchEvent) => { swipeStartY.current = e.touches[0].clientY; };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const delta = e.changedTouches[0].clientY - swipeStartY.current;
+    if (delta > 80) onToggle?.();
+  };
+
   // ── Shared UI pieces ──────────────────────────────────────────────────────
 
   const inputBar = (
@@ -844,14 +852,6 @@ export default function ChatPanel({
         </div>
       );
     }
-
-    // Swipe-down to close
-    const swipeStartY = useRef(0);
-    const handleTouchStart = (e: React.TouchEvent) => { swipeStartY.current = e.touches[0].clientY; };
-    const handleTouchEnd = (e: React.TouchEvent) => {
-      const delta = e.changedTouches[0].clientY - swipeStartY.current;
-      if (delta > 80) onToggle?.();
-    };
 
     return (
       <div className="absolute inset-0 z-50 flex flex-col animate-slide-up scanlines"

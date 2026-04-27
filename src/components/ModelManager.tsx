@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Upload, Trash2, Pencil, Check, X, Bot, Cpu, ExternalLink, Sparkles, Loader2 } from 'lucide-react';
 import { UploadProgress } from '@/components/UploadProgress';
+import UploadSuccessNotification from '@/components/UploadSuccessNotification';
 import { toast } from 'sonner';
 
 interface VrmModel {
@@ -36,6 +37,7 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
   const [editForm, setEditForm] = useState({ name: '', gender: '', personality: '' });
   const [deleteTarget, setDeleteTarget] = useState<VrmModel | null>(null);
   const [enhancing, setEnhancing] = useState(false);
+  const [successNotif, setSuccessNotif] = useState<{ name: string; id: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleEnhancePersonality = async () => {
@@ -127,7 +129,9 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
       toast.error('Gagal menyimpan: ' + dbError.message);
       setUploadProgress({ name: file.name, progress: -1 });
     } else {
-      toast.success('Model berhasil diupload');
+      // Show rich in-app notification instead of plain toast
+      const modelName = file.name.replace('.vrm', '');
+      setSuccessNotif({ name: modelName, id: Date.now().toString() });
       onRefresh();
     }
     setUploading(false);
@@ -349,6 +353,19 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rich upload success notification */}
+      {successNotif && (
+        <UploadSuccessNotification
+          key={successNotif.id}
+          modelName={successNotif.name}
+          onClose={() => setSuccessNotif(null)}
+          onActivate={() => {
+            // Activate the newly uploaded model (last in list after refresh)
+            onRefresh();
+          }}
+        />
+      )}
     </>
   );
 }
