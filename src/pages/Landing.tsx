@@ -5,6 +5,7 @@ import {
   Check, Sparkles, Smile, Activity, Mic, Zap, Shield, Globe,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import MetaTags from '@/components/MetaTags';
 
 function Logo() {
   return (
@@ -54,6 +55,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white overflow-x-hidden">
+      <MetaTags />
 
       {/* ── Navbar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-10 py-4 border-b border-white/[0.06] bg-[#07070f]/85 backdrop-blur-2xl">

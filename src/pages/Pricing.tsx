@@ -3,6 +3,7 @@ import { Check, Sparkles, ArrowLeft, Zap, Crown, Building2, Rocket } from 'lucid
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import MetaTags from '@/components/MetaTags';
 
 const PLANS = [
   {
@@ -109,6 +110,7 @@ export default function Pricing() {
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
+      <MetaTags title="Harga" description="Pilih paket Voxie yang sesuai kebutuhanmu. Mulai gratis, upgrade kapan saja. Starter gratis, Pro Rp 79.000/bulan." />
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#07070f]/90 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center gap-3">

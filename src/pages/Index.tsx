@@ -213,8 +213,6 @@ export default function Index() {
       audio.src = '';
       stopWebSpeech();
 
-      console.log("[TTS] Speaking Start. URL:", audioUrl.slice(0, 50) + "...");
-
       // Trigger animations regardless of audio source
       if (messageText) {
         setSpokenMessage(messageText);
@@ -344,8 +342,6 @@ export default function Index() {
               viewer.setLighting(LIGHTING_PRESETS[lighting]);
             }
           });
-          
-          console.log(`[Dynamic Env] Auto-switched to ${lighting} based on hour ${hour}`);
         }
       }
     };
@@ -371,8 +367,7 @@ export default function Index() {
           const randomIdle = idleClips[Math.floor(Math.random() * idleClips.length)];
           const result = findClipByName(randomIdle.name);
           if (result) {
-            console.log(`[Boredom] Playing random idle: ${result.clip.name} after ${Math.round(idleTime/1000)}s`);
-            viewerRef.current.playVrmaUrl(result.url, { loop: false, fadeIn: 1.2 }).catch(console.warn);
+            viewerRef.current.playVrmaUrl(result.url, { loop: false, fadeIn: 1.2 }).catch(() => {});
           }
         }
       }

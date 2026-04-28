@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, BookOpen, Upload, MessageSquare, Volume2, Settings, Palette, Zap, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import MetaTags from '@/components/MetaTags';
 
 const SECTIONS = [
   {
@@ -253,6 +254,7 @@ export default function Docs() {
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white flex flex-col">
+      <MetaTags title="Dokumentasi" description="Panduan lengkap menggunakan Voxie — cara upload model VRM, mengatur suara, chat, background, dan fitur lainnya." />
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#07070f]/90 backdrop-blur-xl shrink-0">
         <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center gap-3">

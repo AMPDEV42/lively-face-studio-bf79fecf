@@ -132,7 +132,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   useEffect(() => {
     preloadHeadpatSfx();
     preloadTapSfx();
-    console.log('[Interaction Audio] Audio files preloaded');
   }, []);
 
   // Pause/resume idle expression saat speaking berubah
@@ -536,7 +535,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         if (fadeComplete) {
           isFadingOutRef.current = false;
           setIdleExpressionPaused(true);
-          console.log('[Idle Expression] Fade out complete - paused for TTS');
         }
       }
 
@@ -713,8 +711,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     // Set clear color transparent so HTML background layer shows through
     renderer.setClearColor(0x000000, 0);
     
-    console.log('[VrmViewer] Renderer configured - tone mapping:', renderer.toneMapping, 'exposure:', renderer.toneMappingExposure);
-    
     container.appendChild(renderer.domElement);
     renderer.domElement.style.position = 'relative';
     renderer.domElement.style.zIndex = '1';
@@ -731,14 +727,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     controls.update();
     orbitControlsRef.current = controls;
 
-    // Add debugging to window for console testing
-    if (typeof window !== 'undefined') {
-      (window as any).scene = scene;
-      (window as any).camera = camera;
-      (window as any).renderer = renderer;
-      (window as any).environmentManager = environmentManagerRef.current;
-    }
-
     // Load VRM
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -754,8 +742,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         vrmSceneHiddenRef.current = vrm.scene;
         vrmRef.current = vrm;
         mixerRef.current = createMixer(vrm);
-        
-        console.log('[VRM] Model loaded, waiting for first VRMA animation before showing...');
 
         // Init spring bones for secondary motion
         initSpringBones(vrm);
@@ -814,7 +800,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       },
       undefined,
       (err) => {
-        console.error('VRM load error:', err);
         setError(`Gagal memuat model VRM: ${(err as Error).message ?? err}`);
         setLoading(false);
       },
@@ -831,8 +816,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
     const onResize = () => {
       if (!container || !renderer || !camera) return;
-      
-      console.log('[VrmViewer] Resize triggered - container size:', container.clientWidth, 'x', container.clientHeight);
       
       const wasMobile = isMobileRef.current;
       const nowMobile = container.clientWidth < 768;
@@ -866,7 +849,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         // Force background refresh to ensure it's still visible
         const currentBg = sceneRef.current.background;
         if (currentBg) {
-          console.log('[VrmViewer] Refreshing background after resize');
           // Trigger a re-render to ensure background is visible
           renderer.render(sceneRef.current, camera);
         }
@@ -878,8 +860,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         setLookAtEnabled(!nowMobile);
       }
       orbitControlsRef.current?.handleResize?.();
-      
-      console.log('[VrmViewer] Resize complete - new aspect ratio:', camera.aspect);
     };
 
     const onVisibility = () => { isVisibleRef.current = document.visibilityState === 'visible'; };
@@ -1015,9 +995,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         data: { affection: val }
       });
       lastSavedAffection.current = val;
-      console.log('[Affection] Meta sync successful:', val);
     } catch (e) {
-      console.warn('[Affection] Meta sync failed:', e);
+      // silent fail
     }
   }, [userId]);
 
@@ -1152,14 +1131,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
               // Start mouth animation immediately
               isInteractionSpeakingRef.current = true;
               setIsInteractionSpeaking(true);
-              console.log('[Interaction] Headpat audio playing, mouth animation started');
               
               // Stop mouth animation when audio ends
               const onEnded = () => {
                 isInteractionSpeakingRef.current = false;
                 setIsInteractionSpeaking(false);
                 interactionAudioRef.current = null;
-                console.log('[Interaction] Headpat audio ended, mouth animation stopped');
               };
               audio.addEventListener('ended', onEnded, { once: true });
               audio.addEventListener('error', onEnded, { once: true });
@@ -1291,14 +1268,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                       // Start mouth animation immediately
                       isInteractionSpeakingRef.current = true;
                       setIsInteractionSpeaking(true);
-                      console.log('[Interaction] Shoulder tap audio playing, mouth animation started');
                       
                       // Stop mouth animation when audio ends
                       const onEnded = () => {
                         isInteractionSpeakingRef.current = false;
                         setIsInteractionSpeaking(false);
                         interactionAudioRef.current = null;
-                        console.log('[Interaction] Shoulder tap audio ended, mouth animation stopped');
                       };
                       audio.addEventListener('ended', onEnded, { once: true });
                       audio.addEventListener('error', onEnded, { once: true });

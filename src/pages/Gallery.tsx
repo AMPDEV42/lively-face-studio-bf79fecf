@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Play, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import MetaTags from '@/components/MetaTags';
 
 const GALLERY_ITEMS = [
   { id: 1, title: 'Karakter Anime Klasik', desc: 'Model VRM bergaya anime dengan ekspresi lengkap', tag: 'Anime', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.45.05.png', video: false },
@@ -22,6 +23,7 @@ const TAG_COLORS: Record<string, string> = {
 export default function Gallery() {
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
+      <MetaTags title="Galeri" description="Lihat koleksi background, karakter VRM, dan scene yang tersedia di Voxie. Cyberpunk, anime, space, dan banyak lagi." />
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#07070f]/90 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center gap-3">
