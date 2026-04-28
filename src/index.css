@@ -322,4 +322,23 @@
   .animate-mood-label {
     animation: mood-label 1.8s cubic-bezier(0.23, 1, 0.32, 1) forwards;
   }
+
+  /* ── Landing page animations ── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInRight {
+    from { opacity: 0; transform: translateX(24px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes waveBar {
+    0%, 100% { transform: scaleY(0.4); }
+    50%       { transform: scaleY(1); }
+  }
+  .animate-wave-bar {
+    animation: waveBar var(--dur, 0.8s) ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+    transform-origin: bottom;
+  }
 }

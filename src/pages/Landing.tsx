@@ -1,13 +1,30 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Play, Upload, MessageSquare, Volume2, Box,
-  Check, Sparkles, Smile, Mic, Zap, Shield, Globe,
+  Check, Sparkles, Smile, Mic, Zap, Shield, Globe, Menu, X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import MetaTags from '@/components/MetaTags';
+
+// ── Scroll-reveal hook ────────────────────────────────────────────────────────
+function useReveal(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { threshold }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, visible };
+}
 
 function Logo() {
   return (
@@ -27,7 +44,7 @@ function ChatBubble({ from, text, audio }: { from: 'ai' | 'user'; text: string; 
       {from === 'ai' && (
         <div className="w-6 h-6 rounded-full overflow-hidden bg-gradient-to-br from-violet-500 to-purple-700 shrink-0 mt-0.5 relative border border-violet-500/30">
           <img
-            src="/avatar 1.png"
+            src="/avatar voxie.png"
             alt="Voxie"
             className="absolute h-full w-auto"
             style={{ top: '0%', left: '50%', transform: 'translateX(-47%)' }}
@@ -71,12 +88,32 @@ export default function Landing() {
       });
   }, []);
 
+  // Mobile nav
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Navbar scroll shadow
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Scroll-reveal refs
+  const fiturReveal   = useReveal();
+  const demoReveal    = useReveal();
+  const trustReveal   = useReveal();
+  const pricingReveal = useReveal();
+  const badgesReveal  = useReveal();
+
   return (
     <div className="min-h-screen bg-[#07070f] text-white overflow-x-hidden">
       <MetaTags />
 
       {/* ── Navbar ── */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-10 py-4 border-b border-white/[0.06] bg-[#07070f]/85 backdrop-blur-2xl">
+      <header className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-10 py-4 border-b border-white/[0.06] transition-all duration-300 ${
+        scrolled ? 'bg-[#07070f]/95 backdrop-blur-2xl shadow-lg shadow-black/30' : 'bg-[#07070f]/85 backdrop-blur-2xl'
+      }`}>
         <Logo />
         <nav className="hidden md:flex items-center gap-7 text-sm text-white/50">
           {[
@@ -87,23 +124,56 @@ export default function Landing() {
             { label: 'Dokumentasi', href: '/docs', isAnchor: false },
           ].map(n => (
             n.isAnchor
-              ? <a key={n.label} href={n.href} onClick={(e) => { e.preventDefault(); document.querySelector(n.href)?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-white transition-colors duration-200 cursor-pointer">{n.label}</a>
+              ? <a key={n.label} href={n.href} onClick={(e) => { e.preventDefault(); document.querySelector(n.href)?.scrollIntoView({ behavior: 'smooth' }); setMobileOpen(false); }} className="hover:text-white transition-colors duration-200 cursor-pointer">{n.label}</a>
               : <Link key={n.label} to={n.href} className="hover:text-white transition-colors duration-200">{n.label}</Link>
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Link to="/auth">
+          <Link to="/auth" className="hidden sm:block">
             <Button variant="ghost" size="sm" className="h-9 px-4 text-xs text-white/60 hover:text-white hover:bg-white/8 rounded-xl">
               Masuk
             </Button>
           </Link>
           <Link to={ctaHref}>
-            <Button size="sm" className="h-9 px-5 text-xs bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl shadow-lg shadow-violet-500/25 font-semibold">
+            <Button size="sm" className="h-9 px-5 text-xs bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl shadow-lg shadow-violet-500/25 font-semibold transition-all duration-200 hover:shadow-violet-500/40 hover:scale-[1.03]">
               Mulai Gratis
             </Button>
           </Link>
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden ml-1 w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+            onClick={() => setMobileOpen(v => !v)}
+          >
+            {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
         </div>
       </header>
+
+      {/* Mobile nav drawer */}
+      <div className={`fixed inset-0 z-40 transition-all duration-300 md:hidden ${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0'}`} onClick={() => setMobileOpen(false)} />
+        <div className={`absolute top-0 right-0 h-full w-64 bg-[#0c0a1e] border-l border-white/[0.08] flex flex-col pt-20 pb-8 px-6 gap-2 transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          {[
+            { label: 'Beranda', href: '/', isAnchor: false },
+            { label: 'Fitur', href: '#fitur', isAnchor: true },
+            { label: 'Galeri', href: '/gallery', isAnchor: false },
+            { label: 'Harga', href: '/pricing', isAnchor: false },
+            { label: 'Dokumentasi', href: '/docs', isAnchor: false },
+          ].map(n => (
+            n.isAnchor
+              ? <a key={n.label} href={n.href} onClick={(e) => { e.preventDefault(); document.querySelector(n.href)?.scrollIntoView({ behavior: 'smooth' }); setMobileOpen(false); }} className="py-3 text-sm text-white/60 hover:text-white border-b border-white/[0.06] transition-colors">{n.label}</a>
+              : <Link key={n.label} to={n.href} onClick={() => setMobileOpen(false)} className="py-3 text-sm text-white/60 hover:text-white border-b border-white/[0.06] transition-colors">{n.label}</Link>
+          ))}
+          <div className="mt-4 flex flex-col gap-2">
+            <Link to="/auth" onClick={() => setMobileOpen(false)}>
+              <Button variant="outline" className="w-full border-white/15 text-white/70 hover:text-white">Masuk</Button>
+            </Link>
+            <Link to={ctaHref} onClick={() => setMobileOpen(false)}>
+              <Button className="w-full bg-violet-600 hover:bg-violet-500 text-white border-0">Mulai Gratis</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {/* ── Hero ── */}
       <section className="relative w-full overflow-hidden" style={{ paddingTop: 'clamp(400px, 56.25vw, 56.25%)' }}>
@@ -118,33 +188,33 @@ export default function Landing() {
         <div className="absolute inset-0 flex items-end pb-10 sm:pb-14 pt-20">
           <div className="w-full max-w-7xl mx-auto px-5 sm:px-6 lg:px-10 flex items-end justify-between gap-6">
             <div className="space-y-4 sm:space-y-6 max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 backdrop-blur-sm text-violet-300 text-[10px] sm:text-xs font-medium">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 backdrop-blur-sm text-violet-300 text-[10px] sm:text-xs font-medium animate-[fadeInUp_0.6s_ease_forwards]">
                 <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
                 AI · 3D · REAL-TIME
               </div>
-              <h1 className="text-3xl sm:text-5xl lg:text-7xl font-black leading-[1.05] sm:leading-[1.0] tracking-tight">
+              <h1 className="text-3xl sm:text-5xl lg:text-7xl font-black leading-[1.05] sm:leading-[1.0] tracking-tight animate-[fadeInUp_0.7s_ease_forwards]">
                 Asisten Virtual<br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-purple-300 to-pink-300">
                   3D Interaktif
                 </span>
               </h1>
-              <p className="text-xs sm:text-sm text-white/60 leading-relaxed max-w-xs sm:max-w-sm">
+              <p className="text-xs sm:text-sm text-white/60 leading-relaxed max-w-xs sm:max-w-sm animate-[fadeInUp_0.8s_ease_forwards]">
                 Upload model VRM 3D pilihanmu dan berinteraksi real-time dengan asisten AI yang merespons dengan suara dan ekspresi wajah.
               </p>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 animate-[fadeInUp_0.9s_ease_forwards]">
                 <Link to={ctaHref}>
-                  <Button size="sm" className="gap-2 h-10 sm:h-12 px-5 sm:px-7 bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl shadow-2xl shadow-violet-500/35 text-xs sm:text-sm font-semibold">
+                  <Button size="sm" className="gap-2 h-10 sm:h-12 px-5 sm:px-7 bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl shadow-2xl shadow-violet-500/35 text-xs sm:text-sm font-semibold transition-all duration-200 hover:scale-[1.03] hover:shadow-violet-500/50">
                     Mulai Sekarang <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </Button>
                 </Link>
-                <Button variant="outline" size="sm" className="gap-2 h-10 sm:h-12 px-4 sm:px-6 border-white/15 bg-white/5 hover:bg-white/10 backdrop-blur text-white text-xs sm:text-sm rounded-xl">
+                <Button variant="outline" size="sm" className="gap-2 h-10 sm:h-12 px-4 sm:px-6 border-white/15 bg-white/5 hover:bg-white/10 backdrop-blur text-white text-xs sm:text-sm rounded-xl transition-all duration-200 hover:border-white/30">
                   <div className="w-5 h-5 rounded-full bg-white/15 flex items-center justify-center">
                     <Play className="w-2 h-2 fill-white" />
                   </div>
                   Lihat Demo
                 </Button>
               </div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 animate-[fadeInUp_1s_ease_forwards]">
                 {/* Avatar stack — foto VRM karakter */}
                 <div className="flex -space-x-2.5">
                   {[
@@ -182,11 +252,11 @@ export default function Landing() {
             </div>
 
             {/* Chat panel — desktop only */}
-            <div className="hidden lg:flex flex-col w-64 shrink-0 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xl shadow-2xl overflow-hidden mb-4">
+            <div className="hidden lg:flex flex-col w-64 shrink-0 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xl shadow-2xl overflow-hidden mb-4 animate-[fadeInRight_0.8s_ease_forwards]">
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/8 bg-white/[0.03]">
                 <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 relative border border-violet-500/30">
                   <img
-                    src="/avatar 1.png"
+                    src="/avatar voxie.png"
                     alt="Voxie"
                     className="absolute h-full w-auto"
                     style={{ top: '0%', left: '50%', transform: 'translateX(-47%)' }}
@@ -201,9 +271,9 @@ export default function Landing() {
                 </div>
               </div>
               <div className="p-3 space-y-2">
-                <ChatBubble from="ai" text="Ada yang bisa Voxie bantu hari ini?" audio="0:03" />
-                <ChatBubble from="user" text="Bisa temeni aku belajar Bahasa Jepang?" />
-                <ChatBubble from="ai" text="Tentu! ✨ Yuk, kita mulai dari dasar dulu ya!" audio="0:04" />
+                <div className="animate-[fadeInUp_0.5s_0.2s_ease_both]"><ChatBubble from="ai" text="Ada yang bisa Voxie bantu hari ini?" audio="0:03" /></div>
+                <div className="animate-[fadeInUp_0.5s_0.5s_ease_both]"><ChatBubble from="user" text="Bisa temeni aku belajar Bahasa Jepang?" /></div>
+                <div className="animate-[fadeInUp_0.5s_0.8s_ease_both]"><ChatBubble from="ai" text="Tentu! ✨ Yuk, kita mulai dari dasar dulu ya!" audio="0:04" /></div>
               </div>
               <div className="px-3 pb-3">
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.05] border border-white/8">
@@ -244,13 +314,18 @@ export default function Landing() {
             <div className="flex flex-col items-center gap-1 px-3.5 py-2">
               <div className="w-6 h-6 flex items-center justify-center gap-[2px]">
                 {[3, 5, 8, 6, 10, 6, 8, 5, 3].map((h, i) => (
-                  <div key={i} className="rounded-full animate-pulse"
+                  <div
+                    key={i}
+                    className="rounded-full animate-wave-bar"
                     style={{
-                      width: '1.5px', height: `${h}px`,
-                      background: '#7dd3fc', opacity: 0.8,
-                      animationDelay: `${i * 90}ms`,
-                      animationDuration: `${800 + i * 55}ms`,
-                    }} />
+                      width: '1.5px',
+                      height: `${h}px`,
+                      background: '#7dd3fc',
+                      opacity: 0.85,
+                      '--dur': `${0.6 + i * 0.07}s`,
+                      '--delay': `${i * 0.06}s`,
+                    } as React.CSSProperties}
+                  />
                 ))}
               </div>
               <span className="text-[9px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.65)' }}>Suara</span>
@@ -280,7 +355,7 @@ export default function Landing() {
       {/* ── Why Voxie ── */}
       <section id="fitur" className="relative py-14 px-6 lg:px-10 overflow-hidden" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0d0a1f 50%, #07070f 100%)' }}>
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-violet-600/6 blur-[120px] pointer-events-none" />
-        <div className="relative max-w-6xl mx-auto">
+        <div ref={fiturReveal.ref} className={`relative max-w-6xl mx-auto transition-all duration-700 ${fiturReveal.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="mb-8 sm:mb-12">
             <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-2 sm:mb-3">Fitur Unggulan</p>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight">Kenapa Voxie? <span className="text-violet-400">✦</span></h2>
@@ -292,9 +367,13 @@ export default function Landing() {
               { icon: <MessageSquare className="w-6 h-6 text-violet-400" />, title: 'Chat Real-Time', desc: 'AI merespons secara real-time seperti percakapan nyata.', tag: null, img: null, chat: true },
               { icon: <Volume2 className="w-6 h-6 text-violet-400" />, title: 'Suara & Ekspresi Hidup', desc: 'Asisten AI berbicara dengan suara dan ekspresi wajah yang natural.', tag: null, img: '/feature-suara.png', chat: false },
               { icon: <Box className="w-6 h-6 text-violet-400" />, title: 'Interaksi Imersif 3D', desc: 'Rasakan pengalaman interaktif dalam dunia 3D yang imersif.', tag: null, img: '/feature-interaksi.png', chat: false },
-            ] as const).map((f) => (
-              <div key={f.title} className="group relative rounded-2xl border border-white/[0.07] overflow-hidden flex flex-col hover:border-violet-500/40 transition-all duration-300"
-                style={{ background: 'linear-gradient(160deg, #131228 0%, #0c0b1a 100%)' }}>
+            ] as const).map((f, idx) => (
+              <div key={f.title}
+                className="group relative rounded-2xl border border-white/[0.07] overflow-hidden flex flex-col hover:border-violet-500/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300"
+                style={{
+                  background: 'linear-gradient(160deg, #131228 0%, #0c0b1a 100%)',
+                  transitionDelay: `${idx * 60}ms`,
+                }}>
                 {/* Hover glow */}
                 <div className="absolute inset-0 bg-violet-600/0 group-hover:bg-violet-600/[0.04] transition-all duration-300 pointer-events-none" />
                 <div className="p-5 pb-0 space-y-3 relative">
@@ -343,7 +422,7 @@ export default function Landing() {
 
       {/* ── Demo + Customize ── */}
       <section className="py-12 px-6 lg:px-10" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0b0918 50%, #07070f 100%)' }}>
-        <div className="max-w-6xl mx-auto">
+        <div ref={demoReveal.ref} className={`max-w-6xl mx-auto transition-all duration-700 ${demoReveal.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="mb-6 sm:mb-10">
             <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-2 sm:mb-3">Demo & Kustomisasi</p>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight">Lihat & Rasakan Sendiri</h2>
@@ -438,7 +517,7 @@ export default function Landing() {
       {/* ── Pricing ── */}
       <section className="relative py-16 px-6 lg:px-10 overflow-hidden" id="harga" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0e0b22 50%, #07070f 100%)' }}>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] bg-violet-700/5 blur-[140px] pointer-events-none" />
-        <div className="relative max-w-5xl mx-auto">
+        <div ref={pricingReveal.ref} className={`relative max-w-5xl mx-auto transition-all duration-700 ${pricingReveal.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="text-center mb-8 sm:mb-14">
             <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-2 sm:mb-3">Harga</p>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight">Pilih Paket yang Sesuai</h2>
@@ -491,7 +570,7 @@ export default function Landing() {
 
       {/* ── Trust badges ── */}
       <section className="py-8 px-6 lg:px-10 border-t border-white/[0.05]" style={{ background: '#050509' }}>
-        <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
+        <div ref={badgesReveal.ref} className={`max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-8 text-center transition-all duration-700 ${badgesReveal.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           {[
             { icon: <Zap className="w-5 h-5 text-violet-400 mx-auto mb-2" />, value: '99.9%', label: 'Uptime Terjamin' },
             { icon: <Shield className="w-5 h-5 text-violet-400 mx-auto mb-2" />, value: 'ISO 27001', label: 'Standar Keamanan' },
