@@ -1,25 +1,22 @@
-import { useState, useRef, useEffect, memo, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Send, Volume2, ChevronDown, X, Bot, User,
-  Square, Plus, History, Trash2, Pencil, Check,
-  Search, Download, RefreshCw, MoreVertical, Upload, Wifi, WifiOff,
-  Mic, MicOff, Radio
+  ChevronDown, X, Bot,
+  Plus, History, Download, RefreshCw, MoreVertical, Upload,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SpeechModeButton } from '@/components/SpeechModeButton';
 import { streamChat, generateTTS, parseAnimTag, isOnline, type ChatMessage } from '@/lib/chat-api';
 import { generateVitsAudio, translateToJapanese } from '@/lib/vits-tts';
 import { useConversations } from '@/hooks/useConversations';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { ChatMessageList } from '@/components/ChatMessageList';
+import { ChatHistoryPanel } from '@/components/ChatHistoryPanel';
+import { ChatInputBar } from '@/components/ChatInputBar';
 
 interface ChatPanelProps {
   onSpeakStart: (audioUrl: string, messageText?: string) => void;
@@ -64,15 +61,9 @@ export default function ChatPanel({
   isLoadingRef.current = isLoading;
   const [isTTSLoading, setIsTTSLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [historySearch, setHistorySearch] = useState('');
-  const [editingConvoId, setEditingConvoId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
   const [lastAssistantText, setLastAssistantText] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectMode, setSelectMode] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const activeConvoIdRef = useRef<string | null>(null);
   const messageCountRef = useRef(0);
@@ -181,11 +172,7 @@ export default function ChatPanel({
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
   useEffect(() => {
     if (isOpen && onUnreadChange) onUnreadChange(false);
-    // Auto-focus input when chat opens on mobile
-    if (isOpen && isMobile) {
-      setTimeout(() => textareaRef.current?.focus(), 300);
-    }
-  }, [isOpen, onUnreadChange, isMobile]);
+  }, [isOpen, onUnreadChange]);
 
   const switchConversation = useCallback(async (id: string) => {
     if (isLoading) return;
@@ -520,10 +507,10 @@ export default function ChatPanel({
 
   // Import conversations from JSON file
   const handleImport = useCallback(() => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
+    const el = document.createElement('input');
+    el.type = 'file';
+    el.accept = '.json';
+    el.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
@@ -536,19 +523,8 @@ export default function ChatPanel({
       };
       reader.readAsText(file);
     };
-    input.click();
+    el.click();
   }, [importConversations]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-  };
-
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  };
 
   // ── Visual viewport offset for mobile keyboard ────────────────────────────
   // When soft keyboard opens on mobile, visualViewport shrinks.
@@ -579,325 +555,54 @@ export default function ChatPanel({
     if (delta > 80) onToggle?.();
   };
 
-  // ── Shared UI pieces ──────────────────────────────────────────────────────
+  // ── Shared UI helpers ────────────────────────────────────────────────────
 
   const inputBar = (
-    <div className="space-y-2">
-      {/* Offline banner */}
-      {!online && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-destructive/40 text-xs text-destructive neon-glow-magenta">
-          <WifiOff className="w-3.5 h-3.5 shrink-0" />
-          <span>Tidak ada koneksi internet</span>
-        </div>
-      )}
-
-      {/* STT starting - mic warming up */}
-      {speechMode && (stt.status === 'requesting' || stt.status === 'starting') && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs text-primary/60 loading-bar">
-          <Mic className="w-3.5 h-3.5 shrink-0 animate-pulse" />
-          <span>Menyiapkan mikrofon… tunggu sebentar</span>
-        </div>
-      )}
-
-      {/* STT ready and listening */}
-      {speechMode && stt.status === 'listening' && stt.isReady && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple-bright text-xs text-primary/80 pulse-neon">
-          <Radio className="w-3.5 h-3.5 shrink-0" />
-          <span>{stt.transcript || 'Siap mendengarkan — mulai bicara'}</span>
-        </div>
-      )}
-
-      {/* STT listening but not ready yet */}
-      {speechMode && stt.status === 'listening' && !stt.isReady && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs text-primary/60">
-          <Mic className="w-3.5 h-3.5 shrink-0 animate-pulse" />
-          <span>Hampir siap… tunggu sebentar</span>
-        </div>
-      )}
-
-      {/* Countdown before auto-send */}
-      {speechMode && sendCountdown !== null && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg cyber-glass border border-neon-purple text-xs">
-          <span className="text-foreground/70 truncate flex-1">{pendingTranscriptRef.current}</span>
-          <span className="text-muted-foreground shrink-0">Kirim dalam {sendCountdown}s</span>
-        </div>
-      )}
-      {speechMode && stt.error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg cyber-glass border border-destructive/40 text-xs text-destructive">
-          <MicOff className="w-3.5 h-3.5 shrink-0" />
-          <span>{stt.error}</span>
-        </div>
-      )}
-
-      <div className="flex items-end gap-2 w-full">
-        {/* Speech mode toggle */}
-        <SpeechModeButton
-          speechMode={speechMode}
-          sttStatus={stt.status}
-          sttSupported={stt.isSupported}
-          onToggle={() => {
-            if (speechMode) { cancelPendingSend(); stt.stop(); setSpeechMode(false); }
-            else { setSpeechMode(true); stt.start(); }
-          }}
-        />
-
-        {/* CC Toggle */}
-        <Button
-          type="button"
-          size="icon"
-          onClick={onToggleSubtitles}
-          className={`h-10 w-10 shrink-0 btn-overlay transition-all ${
-            showSubtitles ? 'text-primary neon-glow-purple brightness-125' : 'text-muted-foreground opacity-40'
-          }`}
-          title={showSubtitles ? 'CC Aktif' : 'CC Mati'}
-        >
-          <div className="flex flex-col items-center gap-0.5">
-            <span className={`text-[10px] font-bold border rounded-[3px] px-0.5 leading-tight transition-colors ${
-              showSubtitles 
-                ? 'border-primary text-primary bg-primary/10 shadow-[0_0_8px_rgba(168,85,247,0.4)]' 
-                : 'border-muted-foreground/40 text-muted-foreground opacity-60'
-            }`}>CC</span>
-            <div className={`w-1 h-1 rounded-full transition-all duration-300 ${
-              showSubtitles ? 'bg-primary shadow-[0_0_5px_#a855f7] scale-100' : 'bg-muted-foreground/20 scale-50'
-            }`} />
-          </div>
-        </Button>
-
-        <div className="flex-1 min-w-0">
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleTextareaChange}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              speechMode ? 'Tekan tombol mic untuk bicara…' :
-              online ? 'Ketik pesan…' : 'Offline — tidak bisa mengirim pesan'
-            }
-            disabled={isLoading || !online}
-            rows={1}
-            className="resize-none min-h-[40px] max-h-[120px] panel-overlay text-sm placeholder:text-muted-foreground/50 focus:border-neon-purple-bright transition-all scrollbar-thin w-full"
-            style={{ height: 'auto' }}
-          />
-        </div>
-        {isLoading ? (
-          <Button type="button" size="icon" onClick={handleStop}
-            className="h-10 w-10 shrink-0 bg-destructive hover:bg-destructive/90 text-white shadow-sm neon-glow-magenta border-0" title="Hentikan">
-            <Square className="w-3.5 h-3.5 fill-current" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            size="icon"
-            onClick={() => handleSend()}
-            disabled={!input.trim() || !online}
-            className={`h-10 w-10 shrink-0 shadow-sm border-0 transition-all ${
-              input.trim() && online
-                ? 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow-purple hover-neon-lift'
-                : 'btn-overlay opacity-60 cursor-not-allowed'
-            }`}
-          >
-            <Send className="w-4 h-4" />
-          </Button>
-        )}
-      </div>
-    </div>
+    <ChatInputBar
+      input={input}
+      isLoading={isLoading}
+      isTTSLoading={isTTSLoading}
+      online={online}
+      speechMode={speechMode}
+      stt={stt}
+      sendCountdown={sendCountdown}
+      pendingTranscript={pendingTranscriptRef.current}
+      showSubtitles={showSubtitles}
+      isSpeaking={isSpeaking}
+      onInputChange={setInput}
+      onSend={() => handleSend()}
+      onStop={handleStop}
+      onToggleSpeechMode={() => {
+        if (speechMode) { cancelPendingSend(); stt.stop(); setSpeechMode(false); }
+        else { setSpeechMode(true); stt.start(); }
+      }}
+      onToggleSubtitles={onToggleSubtitles}
+      onCancelPendingSend={cancelPendingSend}
+    />
   );
 
   const messageList = (
-    <div className="space-y-3 px-1">
-      {messages.length === 0 && (
-        <div className="flex flex-col items-center gap-4 py-8 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-primary/70" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-foreground/70">Mulai percakapan</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Tanya apa saja ke asisten virtual</p>
-          </div>
-          {/* Starter prompts */}
-          <div className="w-full space-y-1.5 mt-1">
-            {[
-              'Halo! Perkenalkan dirimu dong 😊',
-              'Ceritakan sesuatu yang menarik!',
-              'Apa yang bisa kamu lakukan?',
-              'Temani aku ngobrol santai yuk~',
-            ].map((prompt) => (
-              <button
-                key={prompt}
-                onClick={() => handleSend(prompt)}
-                disabled={isLoading}
-                className="w-full text-left text-xs px-3 py-2 rounded-xl border border-border/40 bg-secondary/20 hover:bg-primary/8 hover:border-primary/30 text-foreground/60 hover:text-foreground/90 transition-all"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
-      <LoadingIndicators isLoading={isLoading} isTTSLoading={isTTSLoading} messages={messages} />
-      {/* Regenerate button — shown after last assistant message when not loading */}
-      {!isLoading && !isTTSLoading && messages.length >= 2 && messages[messages.length - 1]?.role === 'assistant' && (
-        <div className="flex justify-start pl-8">
-          <button
-            onClick={handleRegenerate}
-            className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1 px-2 rounded-lg hover:bg-secondary/40"
-          >
-            <RefreshCw className="w-3 h-3" /> Regenerasi
-          </button>
-        </div>
-      )}
-    </div>
+    <ChatMessageList
+      messages={messages}
+      isLoading={isLoading}
+      isTTSLoading={isTTSLoading}
+      onSendPrompt={(text) => handleSend(text)}
+      onRegenerate={handleRegenerate}
+    />
   );
 
-  const filteredConversations = historySearch.trim()
-    ? conversations.filter(c =>
-        c.title.toLowerCase().includes(historySearch.toLowerCase()) ||
-        c.preview?.toLowerCase().includes(historySearch.toLowerCase())
-      )
-    : conversations;
-
   const historyPanel = (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3.5 py-3 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <History className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold text-foreground/80">Riwayat Chat</span>
-          {conversations.length > 0 && (
-            <span className="text-[10px] text-muted-foreground/60 bg-secondary/60 px-1.5 py-0.5 rounded-full">
-              {conversations.length}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          {selectMode && selectedIds.size > 0 && (
-            <button
-              onClick={() => { deleteMultipleConversations(Array.from(selectedIds)); setSelectedIds(new Set()); setSelectMode(false); }}
-              className="text-[10px] text-destructive hover:text-destructive/80 px-2 py-1 rounded hover:bg-destructive/10 transition-colors"
-            >
-              Hapus ({selectedIds.size})
-            </button>
-          )}
-          {conversations.length > 1 && (
-            <button
-              onClick={() => { setSelectMode(s => !s); setSelectedIds(new Set()); }}
-              className={`text-[10px] px-2 py-1 rounded transition-colors ${selectMode ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'}`}
-            >
-              {selectMode ? 'Batal' : 'Pilih'}
-            </button>
-          )}
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={() => { setShowHistory(false); setSelectMode(false); setSelectedIds(new Set()); }}>
-            <X className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Search */}
-      {conversations.length > 3 && (
-        <div className="px-3 py-2 border-b border-border/30">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
-            <Input
-              value={historySearch}
-              onChange={(e) => setHistorySearch(e.target.value)}
-              placeholder="Cari percakapan…"
-              className="h-8 pl-8 text-xs bg-secondary/40 border-border/40 focus:border-primary/40"
-            />
-          </div>
-        </div>
-      )}
-
-      <ScrollArea className="flex-1 scrollbar-thin">
-        <div className="p-2 space-y-0.5">
-          <button
-            onClick={startNewConversation}
-            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs text-primary hover:bg-primary/10 transition-colors text-left"
-          >
-            <Plus className="w-3.5 h-3.5 shrink-0" />
-            <span className="font-semibold">Percakapan baru</span>
-          </button>
-
-          {convosLoading ? (
-            /* Skeleton loaders */
-            <div className="space-y-1 px-1 pt-1">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="px-3 py-2.5 rounded-lg space-y-1.5">
-                  <div className="h-3 bg-secondary/60 rounded animate-pulse" style={{ width: `${60 + i * 10}%` }} />
-                  <div className="h-2.5 bg-secondary/40 rounded animate-pulse w-4/5" />
-                </div>
-              ))}
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <p className="text-xs text-muted-foreground px-3 py-4 text-center">
-              {historySearch ? 'Tidak ada hasil' : 'Belum ada riwayat'}
-            </p>
-          ) : (
-            filteredConversations.map((c) => (
-              <div
-                key={c.id}
-                className={`group relative flex items-start gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                  selectMode
-                    ? selectedIds.has(c.id) ? 'bg-primary/15' : 'hover:bg-secondary/60'
-                    : activeId === c.id ? 'bg-primary/10' : 'hover:bg-secondary/60'
-                }`}
-                onClick={() => {
-                  if (selectMode) {
-                    setSelectedIds(prev => {
-                      const next = new Set(prev);
-                      next.has(c.id) ? next.delete(c.id) : next.add(c.id);
-                      return next;
-                    });
-                  } else {
-                    switchConversation(c.id);
-                  }
-                }}
-              >
-                {/* Checkbox in select mode */}
-                {selectMode && (
-                  <div className={`shrink-0 w-4 h-4 rounded border mt-0.5 flex items-center justify-center transition-colors ${
-                    selectedIds.has(c.id) ? 'bg-primary border-primary' : 'border-border/60'
-                  }`}>
-                    {selectedIds.has(c.id) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-                  </div>
-                )}
-                {editingConvoId === c.id ? (
-                  <div className="flex-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      autoFocus
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') { renameConversation(c.id, editingTitle.trim() || c.title); setEditingConvoId(null); }
-                        if (e.key === 'Escape') setEditingConvoId(null);
-                      }}
-                      className="flex-1 bg-secondary/60 border border-border/60 rounded px-2 py-0.5 text-xs text-foreground outline-none focus:border-primary/50"
-                    />
-                    <button onClick={() => { renameConversation(c.id, editingTitle.trim() || c.title); setEditingConvoId(null); }} className="p-0.5 text-primary">
-                      <Check className="w-3 h-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-medium truncate ${activeId === c.id ? 'text-primary' : 'text-foreground/80'}`}>{c.title}</p>
-                      {c.preview && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{c.preview}</p>}
-                    </div>
-                    <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                      <button className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={() => { setEditingConvoId(c.id); setEditingTitle(c.title); }}>
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                      <button className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={() => deleteConversation(c.id)}>
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </ScrollArea>
-    </div>
+    <ChatHistoryPanel
+      conversations={conversations}
+      activeId={activeId}
+      loading={convosLoading}
+      onClose={() => setShowHistory(false)}
+      onNew={startNewConversation}
+      onSwitch={switchConversation}
+      onDelete={deleteConversation}
+      onDeleteMultiple={deleteMultipleConversations}
+      onRename={renameConversation}
+    />
   );
 
   // ── Mobile ────────────────────────────────────────────────────────────────
@@ -933,8 +638,8 @@ export default function ChatPanel({
     }
 
     return (
-      <div className="absolute inset-0 z-50 flex flex-col animate-slide-up scanlines"
-        style={{ background: 'rgba(6,4,14,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
+      <div className="absolute inset-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[380px] z-50 flex flex-col animate-slide-up scanlines"
+        style={{ background: 'rgba(6,4,14,0.95)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderTop: '1px solid rgba(168,85,247,0.3)', borderLeft: '1px solid rgba(168,85,247,0.2)' }}>
         {showHistory ? historyPanel : (
           <>
             <div className="flex items-center justify-between px-4 border-b border-neon-purple corner-accent"
@@ -1035,84 +740,5 @@ export default function ChatPanel({
         </>
       )}
     </div>
-  );
-}
-
-// ── Message bubble ────────────────────────────────────────────────────────────
-const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage }) {
-  const isUser = msg.role === 'user';
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(msg.content).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
-  return (
-    <div className={`group flex items-end gap-2 animate-msg-in ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center mb-0.5 ${
-        isUser ? 'bg-primary/20 border border-neon-purple-bright neon-glow-purple' : 'bg-secondary border border-neon-purple cyber-glass'
-      }`}>
-        {isUser ? <User className="w-3 h-3 text-primary" /> : <Bot className="w-3 h-3 text-muted-foreground" />}
-      </div>
-      <div className="relative max-w-[82%]">
-        <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-          isUser
-            ? 'bg-primary text-primary-foreground rounded-br-sm neon-glow-purple border border-neon-purple-bright'
-            : 'cyber-glass text-secondary-foreground border border-neon-purple rounded-bl-sm'
-        }`}>
-          {msg.role === 'assistant' ? (
-            <div className="prose prose-sm prose-invert max-w-none [&>p]:mb-1.5 [&>p:last-child]:mb-0 [&>ul]:mt-1 [&>ol]:mt-1">
-              <ReactMarkdown>{msg.content}</ReactMarkdown>
-            </div>
-          ) : (
-            <span>{msg.content}</span>
-          )}
-        </div>
-        {/* Copy button — appears on hover */}
-        <button
-          onClick={handleCopy}
-          className={`absolute -bottom-5 ${isUser ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/60 hover:text-primary flex items-center gap-1`}
-        >
-          {copied ? '✓ Disalin' : 'Salin'}
-        </button>
-      </div>
-    </div>
-  );
-});
-
-function LoadingIndicators({ isLoading, isTTSLoading, messages }: {
-  isLoading: boolean; isTTSLoading: boolean; messages: ChatMessage[];
-}) {
-  return (
-    <>
-      {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-        <div className="flex items-end gap-2 animate-msg-in">
-          <div className="w-6 h-6 rounded-full cyber-glass border border-neon-purple flex items-center justify-center shrink-0 pulse-neon">
-            <Bot className="w-3 h-3 text-muted-foreground" />
-          </div>
-          <div className="cyber-glass border border-neon-purple rounded-2xl rounded-bl-sm px-4 py-3 loading-bar">
-            <div className="flex gap-1.5 items-center">
-              {[0, 150, 300].map((delay) => (
-                <span key={delay} className="w-1.5 h-1.5 bg-primary/80 rounded-full animate-bounce neon-glow-purple" style={{ animationDelay: `${delay}ms` }} />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      {isTTSLoading && (
-        <div className="flex items-end gap-2 animate-msg-in">
-          <div className="w-6 h-6 rounded-full cyber-glass border border-neon-purple flex items-center justify-center shrink-0 pulse-neon">
-            <Bot className="w-3 h-3 text-muted-foreground" />
-          </div>
-          <div className="cyber-glass border border-neon-purple rounded-2xl rounded-bl-sm px-3.5 py-2 flex items-center gap-2">
-            <Volume2 className="w-3.5 h-3.5 text-primary animate-pulse neon-glow-purple" />
-            <span className="text-xs text-muted-foreground">Generating speech…</span>
-          </div>
-        </div>
-      )}
-    </>
   );
 }

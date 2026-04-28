@@ -79,6 +79,9 @@ let _moodOverrideTimer = 0;
 let _moodOverrideDuration = 0;
 let _inMoodOverride = false;
 
+// Easing type chosen once per transition start (not per frame/key)
+let _useEaseOut = true;
+
 let manualMode = false;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -186,7 +189,7 @@ function _pickNext(): {
   const microLabel = chosen.isMicro ? ' [micro]' : '';
   const longLabel = isLongPause && chosen.name === 'neutral' ? ' [long pause]' : '';
   const speedLabel = _resumeTransitionCount > 0 && _resumeTransitionCount <= 3 ? ` [slow transition ${_resumeTransitionCount}/3]` : '';
-  console.log(`[Idle Expression] → ${chosen.name}${microLabel}${longLabel}${speedLabel} (${duration.toFixed(1)}s, intensity: ${chosen.intensity.toFixed(2)}, lerp: ${_lerpSpeed.toFixed(1)})`);
+  if (import.meta.env.DEV) console.log(`[Idle Expression] → ${chosen.name}${microLabel}${longLabel}${speedLabel} (${duration.toFixed(1)}s, intensity: ${chosen.intensity.toFixed(2)}, lerp: ${_lerpSpeed.toFixed(1)})`);
   
   return {
     weights,
@@ -220,19 +223,21 @@ export function initIdleExpression(): void {
   _moodOverrideTimer = 0;
   _moodOverrideDuration = 0;
   
-  console.log('[Idle Expression] Advanced system initialized! First expression in', _holdTarget.toFixed(1), 'seconds');
+  if (import.meta.env.DEV) console.log('[Idle Expression] Advanced system initialized! First expression in', _holdTarget.toFixed(1), 'seconds');
 }
 
 export function debugExpressionKeys(vrm: VRM): void {
   if (!vrm.expressionManager) {
-    console.warn('[Idle Expression] No expressionManager found!');
+    if (import.meta.env.DEV) console.warn('[Idle Expression] No expressionManager found!');
     return;
   }
   
   const expressions = vrm.expressionManager.expressions;
   const keys = Object.keys(expressions);
-  console.log('[Idle Expression] Available expression keys:', keys);
-  console.log('[Idle Expression] Total expressions:', keys.length);
+  if (import.meta.env.DEV) {
+    console.log('[Idle Expression] Available expression keys:', keys);
+    console.log('[Idle Expression] Total expressions:', keys.length);
+  }
   
   const names: string[] = [];
   for (const key of keys) {
@@ -244,7 +249,7 @@ export function debugExpressionKeys(vrm: VRM): void {
       names.push(key);
     }
   }
-  console.log('[Idle Expression] Expression names:', names);
+  if (import.meta.env.DEV) console.log('[Idle Expression] Expression names:', names);
 }
 
 export function setIdleExpressionPaused(paused: boolean): void {
@@ -258,10 +263,8 @@ export function setIdleExpressionPaused(paused: boolean): void {
     _targetWeights = {};
     _transitioning = false;
     _fluctuationPhase = 0;
-    console.log('[Idle Expression] Paused - all weights cleared for lip sync');
+    if (import.meta.env.DEV) console.log('[Idle Expression] Paused - all weights cleared for lip sync');
   } else {
-    // Resume: Mulai dengan neutral dulu, beri waktu untuk settle
-    // Ini membuat transisi lebih natural setelah TTS selesai
     _currentWeights = {}; // Start from neutral (all 0)
     _targetWeights = {};  // Target neutral first
     _holdTarget = 10 + Math.random() * 5; // Increased: Hold neutral 10-15 detik (was 7-11)
@@ -270,7 +273,7 @@ export function setIdleExpressionPaused(paused: boolean): void {
     _transitioning = false; // Tidak transitioning, langsung neutral
     _lerpSpeed = LERP_SPEED_RESUME; // Use slower lerp speed for next transition
     _resumeTransitionCount = 0; // Reset counter - next 2-3 transitions will be slower
-    console.log('[Idle Expression] Resumed - holding neutral for', _holdTarget.toFixed(1), 'seconds before next expression');
+    if (import.meta.env.DEV) console.log('[Idle Expression] Resumed - holding neutral for', _holdTarget.toFixed(1), 'seconds before next expression');
   }
 }
 
@@ -343,7 +346,7 @@ export function forceResetIdleExpressions(vrm: VRM): void {
   _currentWeights = {};
   _targetWeights = {};
   
-  console.log('[Idle Expression] Force reset - all expressions cleared from VRM');
+  if (import.meta.env.DEV) console.log('[Idle Expression] Force reset - all expressions cleared from VRM');
 }
 
 export function applyMoodOverride(
@@ -392,21 +395,27 @@ export function applyMoodOverride(
   
   // Use a slightly faster lerp for overrides so they feel responsive
   _lerpSpeed = 1.2;
+  _useEaseOut = true; // mood overrides always use ease-out for smooth feel
   
-  console.log(`[Idle Expression] Mood override: ${normalizedMood} (${expressionName}) for ${duration}s @ ${intensity.toFixed(2)}`);
+  if (import.meta.env.DEV) console.log(`[Idle Expression] Mood override: ${normalizedMood} (${expressionName}) for ${duration}s @ ${intensity.toFixed(2)}`);
 }
 
 export function setIdleExpressionManual(manual: boolean): void {
   manualMode = manual;
 }
 
-export function updateIdleExpression(delta: number, vrm: VRM): void {
-  if (!_enabled || manualMode || !vrm.expressionManager) return;
+export interface IdleExpressionState {
+  name: string;
+  mood: 'positive' | 'negative' | 'neutral';
+}
+
+export function updateIdleExpression(delta: number, vrm: VRM): IdleExpressionState | null {
+  if (!_enabled || manualMode || !vrm.expressionManager) return null;
   
   // CRITICAL: Jangan apply weights sama sekali saat paused
   // Ini mencegah idle expression mengganggu lip sync
   if (_paused) {
-    return;
+    return null;
   }
   
   // ── Mood override countdown ───────────────────────────────────────────────
@@ -420,6 +429,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
       _holdTarget = next.duration;
       _holdTimer = 0;
       _activeName = next.name;
+      _useEaseOut = Math.random() < 0.7;
       _transitioning = true;
     }
   }
@@ -446,6 +456,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
       _holdTarget = next.duration;
       _holdTimer = 0;
       _activeName = next.name;
+      _useEaseOut = Math.random() < 0.7; // decide easing once per transition
       _transitioning = true;
       _fluctuationPhase = 0;
     }
@@ -455,11 +466,10 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
   if (_transitioning) {
     const t = Math.min(_lerpSpeed * delta, 1);
     
-    // Select easing type ONCE per whole transition cycle for consistency across all keys
-    const isEaseOut = Math.random() < 0.7;
-    const eased = isEaseOut 
-      ? (1 - Math.pow(1 - t, 2)) // Ease-out quadratic
-      : (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2); // Ease-in-out cubic
+    // Easing computed ONCE per frame (outside key loop) so all keys use the same curve
+    const eased = _useEaseOut
+      ? (1 - Math.pow(1 - t, 2))                                          // ease-out quadratic
+      : (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);    // ease-in-out cubic
     
     const allKeys = new Set([...Object.keys(_currentWeights), ...Object.keys(_targetWeights)]);
     let maxDiff = 0;
@@ -477,7 +487,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
     if (maxDiff < 0.01 || t >= 1) {
       _currentWeights = { ..._targetWeights };
       _transitioning = false;
-      console.log('[Idle Expression] ✓', _activeName);
+      if (import.meta.env.DEV) console.log('[Idle Expression] ✓', _activeName);
     }
   }
   
@@ -508,6 +518,6 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
   // Return current state for HUD/Feedback
   return {
     name: _activeName,
-    mood: _currentMood
+    mood: _currentMood,
   };
 }

@@ -67,8 +67,12 @@ export default function TTSSettings({
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.addEventListener('voiceschanged', refresh);
       const t = setTimeout(refresh, 500);
+      // Refresh when tab becomes visible again (voices may have changed)
+      const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
+      document.addEventListener('visibilitychange', onVisibility);
       return () => {
         window.speechSynthesis.removeEventListener('voiceschanged', refresh);
+        document.removeEventListener('visibilitychange', onVisibility);
         clearTimeout(t);
       };
     }

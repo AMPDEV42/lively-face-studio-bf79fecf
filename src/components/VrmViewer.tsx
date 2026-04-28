@@ -470,7 +470,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     // --- Cinematic Camera Zoom (Action Cut) ---
     if (cameraRef.current && isSpeaking && !cameraFreeRef.current) {
       // Zoom in slightly when speaking a long message (indicating deep conversation)
-      const targetZ = currentMessage.length > 50 ? 0.7 : (isMobileRef.current ? 1.4 : 1.2);
+      const msgLength = (currentMessage ?? '').length;
+      const targetZ = msgLength > 50 ? 0.7 : (isMobileRef.current ? 1.4 : 1.2);
       cameraRef.current.position.z = THREE.MathUtils.lerp(cameraRef.current.position.z, targetZ, delta * 0.5);
     } else if (cameraRef.current && !cameraFreeRef.current) {
       // Return to distance
@@ -1441,12 +1442,14 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         {/* Floating Subtitle - Positioned at bottom center with safe margin */}
         {showSubtitles && isSpeaking && currentMessage && (
           <div className="absolute bottom-32 left-0 right-0 px-4 flex justify-center pointer-events-none z-30">
-            <div className="px-6 py-3 rounded-2xl cyber-glass border border-white/10 text-center shadow-2xl relative overflow-hidden group max-w-[85%] md:max-w-2xl">
+            <div className="px-4 py-2.5 rounded-2xl cyber-glass border border-white/10 text-center shadow-2xl relative overflow-hidden group max-w-[90%] md:max-w-2xl">
               <div className="absolute inset-0 bg-gradient-to-t from-primary/10 to-transparent opacity-50" />
-              <p className="text-white text-lg md:text-xl font-medium tracking-tight drop-shadow-lg relative z-10 leading-relaxed">
+              <p className="text-white text-sm md:text-lg font-medium tracking-tight drop-shadow-lg relative z-10 leading-relaxed line-clamp-3">
                 {currentMessage}
               </p>
               <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+              {/* Fade gradient for overflow hint */}
+              <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black/30 to-transparent pointer-events-none rounded-b-2xl" />
             </div>
           </div>
         )}
