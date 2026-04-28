@@ -51,6 +51,13 @@ export function ChatInputBar({
 }: ChatInputBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Reset textarea height when input is cleared from outside (e.g. after send)
+  useEffect(() => {
+    if (input === '' && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [input]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
   };

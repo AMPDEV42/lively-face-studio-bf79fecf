@@ -10,26 +10,107 @@ export function isWebSpeechTTSSupported(): boolean {
 let _currentUtterance: SpeechSynthesisUtterance | null = null;
 
 // ── Procedural lip-sync for Web Speech ───────────────────────────────────────
+// Simulates realistic speech rhythm: syllable bursts, inter-word pauses,
+// consonant closures, and natural amplitude variation.
+
 let _lipSyncActive = false;
 let _lipSyncTimer  = 0;
 let _lipSyncLevel  = 0;
 
-export function getWebSpeechLipLevel(delta: number): number {
-  if (!_lipSyncActive) {
-    _lipSyncLevel *= 0.85;
-    return _lipSyncLevel;
-  }
-  _lipSyncTimer += delta;
-  const syllable  = Math.abs(Math.sin(_lipSyncTimer * Math.PI * 4.2));
-  const word      = Math.abs(Math.sin(_lipSyncTimer * Math.PI * 1.3));
-  const micro     = Math.abs(Math.sin(_lipSyncTimer * Math.PI * 11.0)) * 0.15;
-  const raw = syllable * 0.55 + word * 0.30 + micro;
-  _lipSyncLevel += (raw - _lipSyncLevel) * 0.25;
-  return Math.min(_lipSyncLevel, 1.0);
+// Syllable burst state
+let _syllablePhase   = 0;   // 0 = open, 1 = closing, 2 = closed (consonant)
+let _syllableTimer   = 0;
+let _syllableDur     = 0.10; // current syllable open duration
+let _closureDur      = 0.04; // consonant closure duration
+let _nextSyllableDur = 0.10;
+let _syllablePeak    = 0.75; // amplitude of current syllable
+let _wordPause       = 0;    // remaining pause between words
+let _wordPauseActive = false;
+
+function _rng(min: number, max: number): number {
+  return min + Math.random() * (max - min);
 }
 
-export function startWebSpeechLipSync(): void  { _lipSyncActive = true;  _lipSyncTimer = 0; }
-export function stopWebSpeechLipSync(): void   { _lipSyncActive = false; }
+function _scheduleSyllable(): void {
+  // Syllable open: 80–180ms, peak amplitude varies per syllable
+  _syllableDur  = _rng(0.08, 0.18);
+  _closureDur   = _rng(0.03, 0.07); // brief consonant closure
+  _syllablePeak = _rng(0.55, 1.0);  // stressed vs unstressed syllable
+  _syllableTimer = 0;
+  _syllablePhase = 0;
+
+  // ~20% chance of a word-boundary pause after this syllable (100–300ms)
+  if (Math.random() < 0.20) {
+    _wordPause = _rng(0.10, 0.30);
+    _wordPauseActive = true;
+  } else {
+    _wordPauseActive = false;
+  }
+}
+
+export function getWebSpeechLipLevel(delta: number): number {
+  if (!_lipSyncActive) {
+    // Smooth decay to zero when speech ends
+    _lipSyncLevel *= Math.pow(0.85, delta / 0.016);
+    return Math.max(_lipSyncLevel, 0);
+  }
+
+  _lipSyncTimer += delta;
+  _syllableTimer += delta;
+
+  let target = 0;
+
+  if (_wordPauseActive) {
+    // Inter-word pause: mouth nearly closed
+    _wordPause -= delta;
+    target = _rng(0.0, 0.05); // tiny residual movement
+    if (_wordPause <= 0) {
+      _wordPauseActive = false;
+      _scheduleSyllable();
+    }
+  } else {
+    if (_syllablePhase === 0) {
+      // Opening / open phase — smooth rise then hold
+      const t = Math.min(_syllableTimer / _syllableDur, 1.0);
+      // Ease-in-out curve: fast open, hold at peak
+      const curve = t < 0.4
+        ? (t / 0.4) * (t / 0.4)          // fast open
+        : 1.0 - Math.pow((t - 0.4) / 0.6, 2) * 0.15; // slight droop at end
+      target = curve * _syllablePeak;
+
+      if (_syllableTimer >= _syllableDur) {
+        _syllablePhase = 1;
+        _syllableTimer = 0;
+      }
+    } else {
+      // Closure phase — mouth snaps shut for consonant
+      const t = Math.min(_syllableTimer / _closureDur, 1.0);
+      target = _syllablePeak * (1.0 - t) * 0.25;
+
+      if (_syllableTimer >= _closureDur) {
+        _scheduleSyllable();
+      }
+    }
+  }
+
+  // Add subtle high-frequency micro-tremor (vocal cord vibration feel)
+  const tremor = Math.sin(_lipSyncTimer * Math.PI * 28.0) * 0.03;
+  target = Math.max(0, target + tremor);
+
+  // Asymmetric smoothing: fast open, slow close (natural jaw physics)
+  const smoothing = target > _lipSyncLevel ? 0.35 : 0.12;
+  _lipSyncLevel += (target - _lipSyncLevel) * smoothing;
+
+  return Math.min(Math.max(_lipSyncLevel, 0), 1.0);
+}
+
+export function startWebSpeechLipSync(): void {
+  _lipSyncActive = true;
+  _lipSyncTimer  = 0;
+  _lipSyncLevel  = 0;
+  _scheduleSyllable();
+}
+export function stopWebSpeechLipSync(): void { _lipSyncActive = false; }
 
 export interface WebSpeechTTSOptions {
   lang?: string;

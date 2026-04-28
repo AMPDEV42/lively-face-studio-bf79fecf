@@ -398,7 +398,6 @@ export default function ChatPanel({
     const userMsg: ChatMessage = { role: 'user', content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setIsLoading(true);
 
     const convoId = await ensureConversation();

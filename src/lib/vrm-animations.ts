@@ -615,118 +615,157 @@ export function updateMicroExpressions(elapsed: number, vrm: VRM, delta = 0.016)
 
 let _smoothedMouth = 0;
 let _currentShape = 0;
+
+// Standard VRM viseme sequence — ordered to mimic natural vowel transitions
 const MOUTH_SHAPES_STD = ['aa', 'ih', 'ou', 'ee', 'oh'] as const;
-// ARKit mouth shapes for lip sync — JawOpen is driven separately at reduced weight
-// Blending these creates sophisticated organic mouth movements
-const MOUTH_SHAPES_PS = ['MouthFunnel', 'MouthPucker', 'MouthUpperUpLeft', 'MouthLowerDownLeft', 'MouthSmileLeft'] as const;
+
+// ARKit viseme groups — each entry is [primary, secondary] for cross-blending.
+// Ordered to approximate natural coarticulation (vowel → consonant → vowel).
+const VISEME_PAIRS_PS: Array<[string, string]> = [
+  ['JawOpen',            'MouthFunnel'],       // open vowel  /a/
+  ['MouthFunnel',        'MouthRollLower'],     // rounded     /o/
+  ['MouthPucker',        'MouthFunnel'],        // tight round /u/
+  ['MouthUpperUpLeft',   'MouthUpperUpRight'],  // upper lip   /e/
+  ['MouthLowerDownLeft', 'MouthLowerDownRight'],// lower lip   /i/
+  ['MouthStretchLeft',   'MouthStretchRight'],  // wide        /ae/
+  ['MouthPressLeft',     'MouthPressRight'],    // bilabial    /m/ /b/ /p/
+  ['MouthRollLower',     'MouthShrugLower'],    // labiodental /f/ /v/
+];
+
 let _shapeTimer = 0;
+// Per-viseme hold duration — randomized each switch for organic feel
+let _shapeDuration = 0.14;
 
-// Shape hold duration: longer = more natural, less mechanical
-const SHAPE_DURATION = 0.18;
-
-// Max mouth open — keep subtle, real speech rarely opens jaw fully
-const MAX_MOUTH_PS  = 0.45;
-const MAX_MOUTH_STD = 0.55;
+// Max mouth open — slightly higher for more visible movement
+const MAX_MOUTH_PS  = 0.55;
+const MAX_MOUTH_STD = 0.65;
 // JawOpen is a separate, softer driver (not the primary shape)
-const JAW_SCALE     = 0.28;
+const JAW_SCALE     = 0.32;
 // How fast mouth opens (fast) vs closes (slow) — asymmetric feels natural
-const SMOOTH_OPEN   = 0.18;
-const SMOOTH_CLOSE  = 0.08;
+const SMOOTH_OPEN   = 0.28;
+const SMOOTH_CLOSE  = 0.10;
+
+// Blend weight between primary and secondary viseme (0 = only primary)
+let _visemeBlend = 0.3;
 
 export function updateLipSync(audioLevel: number, vrm: VRM, delta = 0.016, freqData?: Uint8Array): void {
   if (!vrm.expressionManager) return;
 
-  // 1. Voice Energy Analysis (High-frequency detection)
+  // 1. Voice Energy Analysis — mid & high frequency excitement
   let excitement = 0;
+  let midEnergy  = 0;
   if (freqData && freqData.length > 0) {
-    // Analyze upper-mid to high frequencies (approx indices 40-60 in a 128-fft)
-    let highSum = 0;
-    const startIdx = Math.floor(freqData.length * 0.5);
-    const endIdx = freqData.length;
-    for (let i = startIdx; i < endIdx; i++) {
-        highSum += freqData[i];
-    }
-    const highAvg = highSum / (endIdx - startIdx);
-    excitement = Math.pow(highAvg / 128, 2); // Squared to emphasize peaks
+    const midStart  = Math.floor(freqData.length * 0.25);
+    const midEnd    = Math.floor(freqData.length * 0.55);
+    const highStart = Math.floor(freqData.length * 0.55);
+    let midSum = 0, highSum = 0;
+    for (let i = midStart;  i < midEnd;  i++) midSum  += freqData[i];
+    for (let i = highStart; i < freqData.length; i++) highSum += freqData[i];
+    midEnergy  = midSum  / (midEnd - midStart)  / 128;
+    excitement = Math.pow(highSum / (freqData.length - highStart) / 128, 1.5);
   }
 
-  // 2. Base Lip Sync Logic
+  // 2. Smoothed mouth level — asymmetric (fast open, slow close)
   const smoothing = audioLevel > _smoothedMouth ? SMOOTH_OPEN : SMOOTH_CLOSE;
   _smoothedMouth += (audioLevel - _smoothedMouth) * smoothing;
 
-  // Gentle power curve — keeps mouth movement subtle at low audio levels
-  const rawValue = Math.min(_smoothedMouth * 1.1, 1.0);
-  const mode = detectExpressionMode(vrm);
-  const maxMouth = mode === 'perfectsync' ? MAX_MOUTH_PS : MAX_MOUTH_STD;
-  // Power > 1 compresses low values (small sounds = barely open)
-  const mouthValue = Math.pow(rawValue, 1.6) * maxMouth;
+  // Power curve: compresses low values so small sounds barely move the mouth
+  const rawValue  = Math.min(_smoothedMouth * 1.15, 1.0);
+  const mode      = detectExpressionMode(vrm);
+  const maxMouth  = mode === 'perfectsync' ? MAX_MOUTH_PS : MAX_MOUTH_STD;
+  const mouthValue = Math.pow(rawValue, 1.4) * maxMouth;
 
+  // 3. Viseme cycling — duration randomized per switch for organic feel
   _shapeTimer += delta;
-  if (_shapeTimer >= SHAPE_DURATION) {
+  if (_shapeTimer >= _shapeDuration) {
     _shapeTimer = 0;
-    const pool = mode === 'perfectsync' ? MOUTH_SHAPES_PS : MOUTH_SHAPES_STD;
-    _currentShape = (_currentShape + 1) % pool.length;
+    // Randomize next hold: 100–220ms (natural coarticulation range)
+    _shapeDuration = 0.10 + Math.random() * 0.12;
+    // Randomize blend weight each switch
+    _visemeBlend = 0.20 + Math.random() * 0.35;
+
+    if (mode === 'perfectsync') {
+      // Bias toward open vowels when mouth is wide open
+      const openBias = mouthValue > maxMouth * 0.5 ? 0.4 : 0;
+      const r = Math.random();
+      if (r < openBias) {
+        _currentShape = 0; // force open-vowel /a/ on loud frames
+      } else {
+        _currentShape = (_currentShape + 1) % VISEME_PAIRS_PS.length;
+      }
+    } else {
+      _currentShape = (_currentShape + 1) % MOUTH_SHAPES_STD.length;
+    }
   }
 
-  // Cross-blend between current and next shape for smooth transitions
-  const pool = mode === 'perfectsync' ? MOUTH_SHAPES_PS : MOUTH_SHAPES_STD;
-  const blend = _shapeTimer / SHAPE_DURATION;
+  // Smooth blend progress within current viseme (ease-in-out)
+  const blendT = _shapeTimer / _shapeDuration;
+  const smoothBlend = blendT < 0.5
+    ? 2 * blendT * blendT
+    : 1 - Math.pow(-2 * blendT + 2, 2) / 2;
 
   if (mode === 'perfectsync') {
-    // 3. Voice-to-Emotion modulation
     const em = vrm.expressionManager;
 
-    // Clear shape blendshapes
-    for (const s of MOUTH_SHAPES_PS) em.setValue(s, 0);
-
-    // Suppress smile slightly while speaking (natural — hard to smile while talking)
-    em.setValue('MouthSmileLeft',  Math.max(0, _currentPS.MouthSmileLeft  * (1 - mouthValue * 0.5)));
-    em.setValue('MouthSmileRight', Math.max(0, _currentPS.MouthSmileRight * (1 - mouthValue * 0.5)));
-
-    // Eye Widening & Brow Raise based on excitement (Voice-to-Emotion)
-    const eyeWide = Math.max(_currentPS.EyeWideLeft, excitement * 0.6);
-    const browUp = Math.max(_currentPS.BrowOuterUpLeft, excitement * 0.4);
-    em.setValue('EyeWideLeft', eyeWide);
-    em.setValue('EyeWideRight', eyeWide);
-    em.setValue('BrowOuterUpLeft', browUp);
-    em.setValue('BrowOuterUpRight', browUp);
-
-    // Wibu / Anime Enhancement:
-    // If audio is very loud, strongly emphasize 'MouthFunnel' (O shape) or MouthPucker (U shape)
-    // Audio volume correlates loosely with plosives or loud screams (kyaa~!)
-    const isLoud = mouthValue > (maxMouth * 0.6);
-    let primary = MOUTH_SHAPES_PS[_currentShape];
-    let secondary = MOUTH_SHAPES_PS[(_currentShape + 1) % MOUTH_SHAPES_PS.length];
-
-    if (isLoud) {
-      if (_currentShape === 0) primary = 'MouthFunnel';
-      else primary = 'MouthPucker';
+    // Clear all viseme shapes before applying
+    for (const [p, s] of VISEME_PAIRS_PS) {
+      em.setValue(p, 0);
+      em.setValue(s, 0);
     }
 
-    em.setValue(primary,   mouthValue * (1 - blend * 0.35));
-    em.setValue(secondary, mouthValue * blend * 0.35);
+    const [primary, secondary] = VISEME_PAIRS_PS[_currentShape];
+    const nextPair = VISEME_PAIRS_PS[(_currentShape + 1) % VISEME_PAIRS_PS.length];
 
-    // JawOpen: soft, independent driver — much lower than primary shape
-    em.setValue('JawOpen', mouthValue * JAW_SCALE);
+    // Cross-blend current → next viseme pair
+    const wCurrent = 1.0 - smoothBlend * _visemeBlend;
+    const wNext    = smoothBlend * _visemeBlend;
 
-    // Lower lip drop: very subtle, only at higher volumes
-    const lipDrop = mouthValue > 0.2 ? (mouthValue - 0.2) * 0.15 : 0;
+    em.setValue(primary,       mouthValue * wCurrent * 0.85);
+    em.setValue(secondary,     mouthValue * wCurrent * 0.40);
+    em.setValue(nextPair[0],   mouthValue * wNext    * 0.70);
+    em.setValue(nextPair[1],   mouthValue * wNext    * 0.30);
+
+    // JawOpen: independent soft driver — scales with mid-frequency energy
+    const jawBoost = 1.0 + midEnergy * 0.4;
+    em.setValue('JawOpen', mouthValue * JAW_SCALE * jawBoost);
+
+    // Lower lip drop: subtle, only at higher volumes
+    const lipDrop = mouthValue > 0.18 ? (mouthValue - 0.18) * 0.20 : 0;
     em.setValue('MouthLowerDownLeft',  lipDrop);
     em.setValue('MouthLowerDownRight', lipDrop);
+
+    // Upper lip raise: slight on stressed syllables
+    const upperLip = mouthValue > 0.25 ? (mouthValue - 0.25) * 0.15 : 0;
+    em.setValue('MouthUpperUpLeft',  upperLip);
+    em.setValue('MouthUpperUpRight', upperLip);
+
+    // Suppress smile while speaking (natural — hard to smile while talking)
+    em.setValue('MouthSmileLeft',  Math.max(0, _currentPS.MouthSmileLeft  * (1 - mouthValue * 0.6)));
+    em.setValue('MouthSmileRight', Math.max(0, _currentPS.MouthSmileRight * (1 - mouthValue * 0.6)));
+
+    // Eye widening & brow raise on excitement peaks
+    const eyeWide = Math.max(_currentPS.EyeWideLeft, excitement * 0.55);
+    const browUp  = Math.max(_currentPS.BrowOuterUpLeft, excitement * 0.35);
+    em.setValue('EyeWideLeft',      eyeWide);
+    em.setValue('EyeWideRight',     eyeWide);
+    em.setValue('BrowOuterUpLeft',  browUp);
+    em.setValue('BrowOuterUpRight', browUp);
+
   } else {
     const em = vrm.expressionManager;
     for (const s of MOUTH_SHAPES_STD) em.setValue(s, 0);
 
-    // Apply voice-to-emotion to standard surprised/happy based on excitement
-    const surprisedBase = Math.max(_currentStd.surprised, excitement * 0.5);
-    const happyExtra = Math.max(_currentStd.happy, excitement * 0.3);
-    em.setValue('surprised', surprisedBase);
-    em.setValue('happy', happyExtra);
-
     const primary   = MOUTH_SHAPES_STD[_currentShape];
     const secondary = MOUTH_SHAPES_STD[(_currentShape + 1) % MOUTH_SHAPES_STD.length];
-    em.setValue(primary,   mouthValue * (1 - blend * 0.35));
-    em.setValue(secondary, mouthValue * blend * 0.35);
+
+    em.setValue(primary,   mouthValue * (1 - smoothBlend * _visemeBlend));
+    em.setValue(secondary, mouthValue * smoothBlend * _visemeBlend);
+
+    // Apply voice-to-emotion to standard surprised/happy based on excitement
+    const surprisedBase = Math.max(_currentStd.surprised, excitement * 0.5);
+    const happyExtra    = Math.max(_currentStd.happy, excitement * 0.3);
+    em.setValue('surprised', surprisedBase);
+    em.setValue('happy',     happyExtra);
   }
 }
 
@@ -737,10 +776,16 @@ export function resetMouthExpressions(vrm: VRM): void {
     const mouthKeys: (keyof PerfectSyncWeights)[] = [
       'JawOpen', 'MouthFunnel', 'MouthPucker', 'MouthLeft', 'MouthRight',
       'MouthLowerDownLeft', 'MouthLowerDownRight', 'MouthUpperUpLeft', 'MouthUpperUpRight',
-      'MouthClose', 'MouthRollLower', 'MouthRollUpper',
+      'MouthClose', 'MouthRollLower', 'MouthRollUpper', 'MouthShrugLower', 'MouthShrugUpper',
+      'MouthPressLeft', 'MouthPressRight', 'MouthStretchLeft', 'MouthStretchRight',
     ];
     for (const k of mouthKeys) {
       try { vrm.expressionManager.setValue(k, 0); } catch (_) { /* ok */ }
+    }
+    // Also clear all viseme pairs
+    for (const [p, s] of VISEME_PAIRS_PS) {
+      try { vrm.expressionManager.setValue(p, 0); } catch (_) { /* ok */ }
+      try { vrm.expressionManager.setValue(s, 0); } catch (_) { /* ok */ }
     }
   } else {
     ['aa', 'ih', 'ou', 'ee', 'oh'].forEach(s => vrm.expressionManager?.setValue(s, 0));
