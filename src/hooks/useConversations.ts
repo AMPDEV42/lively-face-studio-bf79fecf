@@ -133,6 +133,15 @@ export function useConversations(userId: string | undefined) {
     if (activeId === id) setActiveId(null);
   }, [userId, activeId]);
 
+  const deleteMultipleConversations = useCallback((ids: string[]) => {
+    if (!userId) return;
+    const idSet = new Set(ids);
+    storageRef.current = storageRef.current.filter(c => !idSet.has(c.id));
+    saveToStorage(userId, storageRef.current);
+    setConversations(prev => prev.filter(c => !idSet.has(c.id)));
+    if (activeId && idSet.has(activeId)) setActiveId(null);
+  }, [userId, activeId]);
+
   const renameConversation = useCallback(async (id: string, title: string) => {
     if (!userId) return;
     const idx = storageRef.current.findIndex(c => c.id === id);
@@ -197,6 +206,7 @@ export function useConversations(userId: string | undefined) {
     saveMessage,
     maybeSetTitle,
     deleteConversation,
+    deleteMultipleConversations,
     renameConversation,
     importConversations,
     clearAllConversations,

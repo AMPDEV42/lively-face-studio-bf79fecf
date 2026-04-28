@@ -248,7 +248,14 @@ export default function Index() {
         setIsWebSpeechActive(false);
         audio.src = audioUrl;
         setIsSpeaking(true);
-        audio.play().catch(() => setIsSpeaking(false));
+        audio.play().catch((err) => {
+          console.warn('[TTS] Autoplay blocked:', err);
+          setIsSpeaking(false);
+          // Autoplay policy — user interaction required
+          if (err?.name === 'NotAllowedError') {
+            toast.error('Klik layar dulu agar suara bisa diputar', { duration: 3000 });
+          }
+        });
       }
     },
     [findMatch, findClipByName, userLangPref, audioConnected],
@@ -364,7 +371,7 @@ export default function Index() {
           const randomIdle = idleClips[Math.floor(Math.random() * idleClips.length)];
           const result = findClipByName(randomIdle.name);
           if (result) {
-            console.log(`[Boredom] Playing random idle: ${result.name} after ${Math.round(idleTime/1000)}s`);
+            console.log(`[Boredom] Playing random idle: ${result.clip.name} after ${Math.round(idleTime/1000)}s`);
             viewerRef.current.playVrmaUrl(result.url, { loop: false, fadeIn: 1.2 }).catch(console.warn);
           }
         }
@@ -377,6 +384,7 @@ export default function Index() {
   // Global keyboard shortcuts
   useKeyboardShortcuts({
     onToggleChat: handleToggleChat,
+    onEscape: () => { if (chatOpen) setChatOpen(false); },
   });
 
   return (

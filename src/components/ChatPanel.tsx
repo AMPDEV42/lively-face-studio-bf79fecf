@@ -68,6 +68,8 @@ export default function ChatPanel({
   const [editingConvoId, setEditingConvoId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [lastAssistantText, setLastAssistantText] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -152,7 +154,7 @@ export default function ChatPanel({
   const {
     conversations, activeId, setActiveId, loading: convosLoading,
     loadConversations, loadMessages, createConversation,
-    saveMessage, maybeSetTitle, deleteConversation, renameConversation,
+    saveMessage, maybeSetTitle, deleteConversation, deleteMultipleConversations, renameConversation,
     importConversations, clearAllConversations,
   } = useConversations(user?.id);
 
@@ -219,15 +221,30 @@ export default function ChatPanel({
   }, []);
 
   // Export conversation as JSON
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback((format: 'json' | 'txt' = 'json') => {
     if (messages.length === 0) { toast.error('Tidak ada pesan untuk diekspor'); return; }
     const title = conversations.find(c => c.id === activeId)?.title ?? 'percakapan';
+    const fileName = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+    if (format === 'txt') {
+      const text = messages.map(m =>
+        `[${m.role === 'user' ? 'Kamu' : 'Asisten'}]\n${m.content}\n`
+      ).join('\n');
+      const blob = new Blob([`${title}\nDiekspor: ${new Date().toLocaleString('id-ID')}\n\n${text}`], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${fileName}.txt`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Diekspor sebagai .txt');
+      return;
+    }
+
     const data = { title, exported_at: new Date().toISOString(), messages };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+    a.download = `${fileName}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Percakapan diekspor');
@@ -428,6 +445,12 @@ export default function ChatPanel({
         onDone: async () => {
           setIsLoading(false);
           if (isMobile && !isOpen && onUnreadChange) onUnreadChange(true);
+          // Browser notification when tab is not active
+          if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('Voxie', { body: 'Asisten sudah membalas pesanmu!', icon: '/favicon.ico' });
+          } else if (document.hidden && 'Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
           if (assistantSoFar) {
             const { clean } = parseAnimTag(assistantSoFar);
             const ttsText = clean || assistantSoFar;
@@ -728,9 +751,27 @@ export default function ChatPanel({
             </span>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={() => setShowHistory(false)}>
-          <X className="w-3.5 h-3.5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {selectMode && selectedIds.size > 0 && (
+            <button
+              onClick={() => { deleteMultipleConversations(Array.from(selectedIds)); setSelectedIds(new Set()); setSelectMode(false); }}
+              className="text-[10px] text-destructive hover:text-destructive/80 px-2 py-1 rounded hover:bg-destructive/10 transition-colors"
+            >
+              Hapus ({selectedIds.size})
+            </button>
+          )}
+          {conversations.length > 1 && (
+            <button
+              onClick={() => { setSelectMode(s => !s); setSelectedIds(new Set()); }}
+              className={`text-[10px] px-2 py-1 rounded transition-colors ${selectMode ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'}`}
+            >
+              {selectMode ? 'Batal' : 'Pilih'}
+            </button>
+          )}
+          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={() => { setShowHistory(false); setSelectMode(false); setSelectedIds(new Set()); }}>
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -777,10 +818,30 @@ export default function ChatPanel({
               <div
                 key={c.id}
                 className={`group relative flex items-start gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                  activeId === c.id ? 'bg-primary/10' : 'hover:bg-secondary/60'
+                  selectMode
+                    ? selectedIds.has(c.id) ? 'bg-primary/15' : 'hover:bg-secondary/60'
+                    : activeId === c.id ? 'bg-primary/10' : 'hover:bg-secondary/60'
                 }`}
-                onClick={() => switchConversation(c.id)}
+                onClick={() => {
+                  if (selectMode) {
+                    setSelectedIds(prev => {
+                      const next = new Set(prev);
+                      next.has(c.id) ? next.delete(c.id) : next.add(c.id);
+                      return next;
+                    });
+                  } else {
+                    switchConversation(c.id);
+                  }
+                }}
               >
+                {/* Checkbox in select mode */}
+                {selectMode && (
+                  <div className={`shrink-0 w-4 h-4 rounded border mt-0.5 flex items-center justify-center transition-colors ${
+                    selectedIds.has(c.id) ? 'bg-primary border-primary' : 'border-border/60'
+                  }`}>
+                    {selectedIds.has(c.id) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                  </div>
+                )}
                 {editingConvoId === c.id ? (
                   <div className="flex-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <input
@@ -919,8 +980,11 @@ export default function ChatPanel({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 cyber-glass-strong backdrop-blur-xl border-neon-purple-bright">
-                  <DropdownMenuItem onClick={handleExport} className="text-xs gap-2 hover-neon-glow">
+                  <DropdownMenuItem onClick={() => handleExport('json')} className="text-xs gap-2 hover-neon-glow">
                     <Download className="w-3.5 h-3.5" /> Export JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('txt')} className="text-xs gap-2 hover-neon-glow">
+                    <Download className="w-3.5 h-3.5" /> Export TXT
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleImport} className="text-xs gap-2 hover-neon-glow">
                     <Upload className="w-3.5 h-3.5" /> Import JSON

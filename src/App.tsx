@@ -15,6 +15,9 @@ const Auth = lazy(() => import("./pages/Auth.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
 const AdminAnimations = lazy(() => import("./pages/AdminAnimations.tsx"));
 const Pricing = lazy(() => import("./pages/Pricing.tsx"));
+const Gallery = lazy(() => import("./pages/Gallery.tsx"));
+const Docs = lazy(() => import("./pages/Docs.tsx"));
+const Legal = lazy(() => import("./pages/Legal.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -85,14 +88,10 @@ const App = () => (
               }
             />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route
-              path="/pricing"
-              element={
-                <Suspense fallback={<PageFallback />}>
-                  <Pricing />
-                </Suspense>
-              }
-            />
+            <Route path="/pricing" element={<Suspense fallback={<PageFallback />}><Pricing /></Suspense>} />
+            <Route path="/gallery" element={<Suspense fallback={<PageFallback />}><Gallery /></Suspense>} />
+            <Route path="/docs" element={<Suspense fallback={<PageFallback />}><Docs /></Suspense>} />
+            <Route path="/legal" element={<Suspense fallback={<PageFallback />}><Legal /></Suspense>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

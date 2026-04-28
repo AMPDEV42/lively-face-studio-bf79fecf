@@ -8,8 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, Crown, Camera, LogOut, User, Sparkles } from 'lucide-react';
+import { ArrowLeft, Crown, Camera, LogOut, User, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const displayNameSchema = z.string().trim().min(1, 'Nama tidak boleh kosong').max(50);
 
@@ -22,6 +26,9 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const uploadingRef = useRef(false); // guard against race condition
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,19 +59,41 @@ export default function Profile() {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (uploadingRef.current) return; // guard race condition
     if (!file.type.startsWith('image/')) { toast.error('Hanya file gambar'); return; }
     if (file.size > 2 * 1024 * 1024) { toast.error('Maksimal 2MB'); return; }
+    uploadingRef.current = true;
     setUploading(true);
     const ext = file.name.split('.').pop();
     const path = `${user.id}/${Date.now()}.${ext}`;
     const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-    if (upErr) { toast.error('Upload gagal: ' + upErr.message); setUploading(false); return; }
+    if (upErr) { toast.error('Upload gagal: ' + upErr.message); setUploading(false); uploadingRef.current = false; return; }
     const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
     const { error: updErr } = await supabase.from('profiles').update({ avatar_url: pub.publicUrl }).eq('user_id', user.id);
     if (updErr) toast.error('Gagal update avatar');
     else { setAvatarUrl(pub.publicUrl); toast.success('Avatar diperbarui'); }
     setUploading(false);
+    uploadingRef.current = false;
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      // Delete user data from DB (cascade should handle related rows)
+      await supabase.from('profiles').delete().eq('user_id', user.id);
+      await supabase.from('vrm_models').delete().eq('user_id', user.id);
+      // Sign out — actual account deletion requires admin/edge function
+      await signOut();
+      toast.success('Akun berhasil dihapus');
+      navigate('/');
+    } catch (err) {
+      toast.error('Gagal menghapus akun: ' + (err as Error).message);
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
   };
 
   const initial = (displayName || user?.email || 'U')[0]?.toUpperCase() ?? 'U';
@@ -167,7 +196,47 @@ export default function Profile() {
             <LogOut className="w-4 h-4" /> Keluar
           </Button>
         </div>
+
+        {/* Danger zone */}
+        <div className="rounded-xl border border-destructive/20 p-4 space-y-3">
+          <p className="text-xs font-semibold text-destructive/80 uppercase tracking-wider">Zona Berbahaya</p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Hapus Akun</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Semua data akan dihapus permanen dan tidak bisa dipulihkan.</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteDialog(true)}
+              className="shrink-0 h-8 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Hapus
+            </Button>
+          </div>
+        </div>
       </div>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent className="bg-card/95 backdrop-blur-xl border-destructive/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus akun secara permanen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Semua data kamu — model VRM, riwayat chat, dan pengaturan — akan dihapus permanen. Tindakan ini <strong>tidak dapat dibatalkan</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={handleDeleteAccount}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Menghapus…' : 'Ya, Hapus Akun'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

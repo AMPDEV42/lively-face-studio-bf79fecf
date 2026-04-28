@@ -59,8 +59,16 @@ export default function Landing() {
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-10 py-4 border-b border-white/[0.06] bg-[#07070f]/85 backdrop-blur-2xl">
         <Logo />
         <nav className="hidden md:flex items-center gap-7 text-sm text-white/50">
-          {['Beranda','Fitur','Galeri','Harga','Dokumentasi'].map(n => (
-            <a key={n} href={n === 'Harga' ? '/pricing' : '#'} className="hover:text-white transition-colors duration-200">{n}</a>
+          {[
+            { label: 'Beranda', href: '/', isAnchor: false },
+            { label: 'Fitur', href: '#fitur', isAnchor: true },
+            { label: 'Galeri', href: '/gallery', isAnchor: false },
+            { label: 'Harga', href: '/pricing', isAnchor: false },
+            { label: 'Dokumentasi', href: '/docs', isAnchor: false },
+          ].map(n => (
+            n.isAnchor
+              ? <a key={n.label} href={n.href} onClick={(e) => { e.preventDefault(); document.querySelector(n.href)?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-white transition-colors duration-200 cursor-pointer">{n.label}</a>
+              : <Link key={n.label} to={n.href} className="hover:text-white transition-colors duration-200">{n.label}</Link>
           ))}
         </nav>
         <div className="flex items-center gap-2">
@@ -174,7 +182,7 @@ export default function Landing() {
       </section>
 
       {/* ── Why Voxie ── */}
-      <section className="relative py-14 px-6 lg:px-10 overflow-hidden" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0d0a1f 50%, #07070f 100%)' }}>
+      <section id="fitur" className="relative py-14 px-6 lg:px-10 overflow-hidden" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0d0a1f 50%, #07070f 100%)' }}>
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-violet-600/6 blur-[120px] pointer-events-none" />
         <div className="relative max-w-6xl mx-auto">
           <div className="mb-8 sm:mb-12">
@@ -415,8 +423,12 @@ export default function Landing() {
         <Logo />
         <p className="text-xs text-white/20">© {new Date().getFullYear()} Voxie. All rights reserved.</p>
         <div className="flex gap-5">
-          {['Privasi','Syarat','Kontak'].map(l => (
-            <a key={l} href="#" className="text-xs text-white/25 hover:text-white/60 transition-colors">{l}</a>
+          {[
+            { label: 'Privasi', href: '/legal?tab=privasi' },
+            { label: 'Syarat', href: '/legal?tab=syarat' },
+            { label: 'Kontak', href: '/legal?tab=kontak' },
+          ].map(l => (
+            <a key={l.label} href={l.href} className="text-xs text-white/25 hover:text-white/60 transition-colors">{l.label}</a>
           ))}
         </div>
       </footer>

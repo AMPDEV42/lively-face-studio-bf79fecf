@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 export default function InteractionSettings() {
   const [volume, setVolume] = useState(() => {
     const saved = localStorage.getItem('vrm.interactionVolume');
-    return saved !== null ? parseFloat(saved) : 0.6;
+    const parsed = saved !== null ? parseFloat(saved) : 0.6;
+    return isNaN(parsed) ? 0.6 : Math.min(1, Math.max(0, parsed));
   });
 
   const [showParticles, setShowParticles] = useState(() => {
@@ -17,7 +18,8 @@ export default function InteractionSettings() {
 
   const [sensitivity, setSensitivity] = useState(() => {
     const saved = localStorage.getItem('vrm.interactionSensitivity');
-    return saved !== null ? parseInt(saved) : 20;
+    const parsed = saved !== null ? parseInt(saved) : 20;
+    return isNaN(parsed) ? 20 : Math.min(50, Math.max(5, parsed));
   });
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import TTSSettings from '@/components/TTSSettings';
 import InteractionSettings from '@/components/InteractionSettings';
 import { useTTSProvider } from '@/hooks/useTTSProvider';
 import { useUserRole } from '@/hooks/useUserRole';
+import { toast } from 'sonner';
 
 interface VrmModelRow {
   id: string;
@@ -34,21 +35,39 @@ export default function Settings() {
   const { provider, rateLimited, setProvider } = useTTSProvider(isPro);
   const [models, setModels] = useState<VrmModelRow[]>([]);
   const [voices, setVoices] = useState<VoiceRow[]>([]);
+  const [loadingModels, setLoadingModels] = useState(true);
+  const [loadingVoices, setLoadingVoices] = useState(true);
 
   const fetchModels = useCallback(async () => {
-    const { data } = await supabase
-      .from('vrm_models')
-      .select('*')
-      .order('created_at', { ascending: false });
-    setModels((data ?? []) as VrmModelRow[]);
+    setLoadingModels(true);
+    try {
+      const { data, error } = await supabase
+        .from('vrm_models')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setModels((data ?? []) as VrmModelRow[]);
+    } catch (err) {
+      toast.error('Gagal memuat model: ' + (err as Error).message);
+    } finally {
+      setLoadingModels(false);
+    }
   }, []);
 
   const fetchVoices = useCallback(async () => {
-    const { data } = await supabase
-      .from('voice_settings')
-      .select('*')
-      .order('voice_name');
-    setVoices((data ?? []) as VoiceRow[]);
+    setLoadingVoices(true);
+    try {
+      const { data, error } = await supabase
+        .from('voice_settings')
+        .select('*')
+        .order('voice_name');
+      if (error) throw error;
+      setVoices((data ?? []) as VoiceRow[]);
+    } catch (err) {
+      toast.error('Gagal memuat suara: ' + (err as Error).message);
+    } finally {
+      setLoadingVoices(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -92,17 +111,33 @@ export default function Settings() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-10">
-        <ModelManager models={models} onRefresh={fetchModels} />
+        {loadingModels ? (
+          <div className="space-y-3">
+            <div className="h-4 w-32 rounded bg-secondary/60 animate-pulse" />
+            <div className="h-20 rounded-xl bg-secondary/40 animate-pulse" />
+            <div className="h-20 rounded-xl bg-secondary/40 animate-pulse" />
+          </div>
+        ) : (
+          <ModelManager models={models} onRefresh={fetchModels} />
+        )}
         <div className="border-t border-neon-purple" />
-        <TTSSettings
-          isPro={isPro}
-          provider={provider}
-          rateLimited={rateLimited}
-          onProviderChange={setProvider}
-          activeModelGender={activeModelGender}
-          voices={voices}
-          onVoicesRefresh={fetchVoices}
-        />
+        {loadingVoices ? (
+          <div className="space-y-3">
+            <div className="h-4 w-40 rounded bg-secondary/60 animate-pulse" />
+            <div className="h-16 rounded-xl bg-secondary/40 animate-pulse" />
+            <div className="h-16 rounded-xl bg-secondary/40 animate-pulse" />
+          </div>
+        ) : (
+          <TTSSettings
+            isPro={isPro}
+            provider={provider}
+            rateLimited={rateLimited}
+            onProviderChange={setProvider}
+            activeModelGender={activeModelGender}
+            voices={voices}
+            onVoicesRefresh={fetchVoices}
+          />
+        )}
         <div className="border-t border-neon-purple" />
         <InteractionSettings />
         <div className="border-t border-neon-purple" />
