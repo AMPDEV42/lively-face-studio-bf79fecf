@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Mail, Lock, Bot } from 'lucide-react';
+import { ArrowLeft, Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 const emailSchema = z.string().trim().email({ message: 'Email tidak valid' }).max(255);
@@ -84,12 +84,13 @@ export default function Auth() {
       <div className="relative w-full max-w-sm z-10">
         {/* Logo */}
         <div className="text-center mb-7">
-          <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-neon-purple-bright flex items-center justify-center mx-auto mb-3 neon-glow-purple pulse-neon">
-            <Bot className="w-6 h-6 text-primary" />
+          <div className="flex justify-center mb-3">
+            <img
+              src="/app logo/voxie logo.png"
+              alt="Voxie"
+              className="h-16 w-auto object-contain drop-shadow-[0_0_16px_rgba(139,92,246,0.7)]"
+            />
           </div>
-          <h1 className="text-xl font-semibold text-foreground tracking-tight text-neon-purple">
-            VRM Assistant
-          </h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             Masuk untuk mengakses asisten virtual Anda
           </p>

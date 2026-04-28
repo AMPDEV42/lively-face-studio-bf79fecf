@@ -38,10 +38,7 @@ export default function Gallery() {
             </Button>
           </Link>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center">
-              <span className="text-white font-black text-xs">V</span>
-            </div>
-            <span className="text-sm font-bold">Voxie</span>
+            <img src="/app logo/voxie logo.png" alt="Voxie" className="h-7 w-auto object-contain" />
           </div>
           <span className="text-white/20">/</span>
           <span className="text-sm text-white/60">Galeri</span>

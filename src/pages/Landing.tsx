@@ -1,22 +1,22 @@
 import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Play, Upload, MessageSquare, Volume2, Box,
-  Check, Sparkles, Smile, Activity, Mic, Zap, Shield, Globe,
+  Check, Sparkles, Smile, Mic, Zap, Shield, Globe,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import MetaTags from '@/components/MetaTags';
 
 function Logo() {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-lg shadow-violet-500/40">
-        <span className="text-white font-black text-base">V</span>
-      </div>
-      <div className="leading-none">
-        <span className="text-white font-bold text-xl tracking-tight">Voxie</span>
-        <span className="block text-[9px] text-violet-400/80 font-medium tracking-[0.2em] mt-0.5">ボクシー</span>
-      </div>
+      <img
+        src="/app logo/voxie logo.png"
+        alt="Voxie"
+        className="h-9 w-auto object-contain drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+      />
     </div>
   );
 }
@@ -25,7 +25,14 @@ function ChatBubble({ from, text, audio }: { from: 'ai' | 'user'; text: string; 
   return (
     <div className={`flex gap-2 ${from === 'user' ? 'flex-row-reverse' : ''}`}>
       {from === 'ai' && (
-        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shrink-0 text-white text-[9px] font-bold mt-0.5">V</div>
+        <div className="w-6 h-6 rounded-full overflow-hidden bg-gradient-to-br from-violet-500 to-purple-700 shrink-0 mt-0.5 relative border border-violet-500/30">
+          <img
+            src="/avatar 1.png"
+            alt="Voxie"
+            className="absolute h-full w-auto"
+            style={{ top: '0%', left: '50%', transform: 'translateX(-47%)' }}
+          />
+        </div>
       )}
       <div className={`max-w-[78%] rounded-2xl px-3 py-2 text-[11px] leading-relaxed ${
         from === 'ai'
@@ -52,6 +59,17 @@ function ChatBubble({ from, text, audio }: { from: 'ai' | 'user'; text: string; 
 export default function Landing() {
   const { user } = useAuth();
   const ctaHref = user ? '/app' : '/auth?tab=signup';
+
+  // Realtime user count from profiles table
+  const [userCount, setUserCount] = useState<number | null>(null);
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .then(({ count }) => {
+        if (count !== null) setUserCount(count);
+      });
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white overflow-x-hidden">
@@ -127,23 +145,53 @@ export default function Landing() {
                 </Button>
               </div>
               <div className="flex items-center gap-2.5">
-                <div className="flex -space-x-2">
-                  {['bg-violet-500','bg-purple-600','bg-indigo-500','bg-pink-500'].map((c,i) => (
-                    <div key={i} className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full ${c} border-2 border-[#07070f] flex items-center justify-center text-[8px] sm:text-[9px] font-bold`}>
-                      {['A','B','C','D'][i]}
+                {/* Avatar stack — foto VRM karakter */}
+                <div className="flex -space-x-2.5">
+                  {[
+                    '/avatar 1.png',
+                    '/avatar 2.png',
+                    '/avatar 3.png',
+                    '/avatar 4.png',
+                  ].map((src, i) => (
+                    <div
+                      key={i}
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-[#07070f] overflow-hidden shrink-0 relative"
+                      style={{ zIndex: 4 - i }}
+                    >
+                      <img
+                        src={src}
+                        alt=""
+                        className="absolute h-full w-auto"
+                        style={{ top: '0%', left: '50%', transform: 'translateX(-47%)' }}
+                      />
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] sm:text-xs text-white/45">
-                  <span className="text-white/80 font-semibold">10.000+</span> pengguna aktif ✦
+                <p className="text-[10px] sm:text-xs text-white/50 leading-snug max-w-[160px] sm:max-w-none">
+                  <span className="text-white/85 font-semibold">
+                    {userCount === null
+                      ? '...'
+                      : userCount >= 1000
+                        ? `${(userCount / 1000).toFixed(1).replace('.0', '')}K+`
+                        : `${userCount}+`}
+                  </span>{' '}
+                  pengguna telah berinteraksi<br className="hidden sm:block" /> bersama asisten virtual mereka{' '}
+                  <span className="text-violet-400">✦</span>
                 </p>
               </div>
             </div>
 
             {/* Chat panel — desktop only */}
-            <div className="hidden lg:flex flex-col w-52 shrink-0 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xl shadow-2xl overflow-hidden mb-4">
+            <div className="hidden lg:flex flex-col w-64 shrink-0 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xl shadow-2xl overflow-hidden mb-4">
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/8 bg-white/[0.03]">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-[9px] font-bold shrink-0">V</div>
+                <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 relative border border-violet-500/30">
+                  <img
+                    src="/avatar 1.png"
+                    alt="Voxie"
+                    className="absolute h-full w-auto"
+                    style={{ top: '0%', left: '50%', transform: 'translateX(-47%)' }}
+                  />
+                </div>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold truncate">Voxie</p>
                   <div className="flex items-center gap-1">
@@ -170,16 +218,62 @@ export default function Landing() {
         </div>
 
         {/* Feature pills */}
-        <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5 sm:gap-2">
-          {[
-            { icon: <Smile className="w-3 h-3" />, label: 'Ekspresi' },
-            { icon: <Mic className="w-3 h-3" />, label: 'Suara' },
-            { icon: <Activity className="w-3 h-3" />, label: 'Gerakan' },
-          ].map(p => (
-            <div key={p.label} className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-black/50 border border-white/10 backdrop-blur-sm text-[10px] sm:text-xs text-white/65">
-              <span className="text-violet-400">{p.icon}</span>{p.label}
+        <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
+          <div
+            className="inline-flex items-stretch rounded-xl overflow-hidden border border-white/[0.13]"
+            style={{
+              background: 'rgba(8,6,22,0.42)',
+              backdropFilter: 'blur(18px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+              boxShadow: '0 2px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
+            }}
+          >
+            {/* Ekspresi */}
+            <div className="flex flex-col items-center gap-1 px-3.5 py-2">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(56,189,248,0.15)', boxShadow: '0 0 8px rgba(56,189,248,0.18)' }}>
+                <Smile className="w-3.5 h-3.5" style={{ color: '#7dd3fc' }} />
+              </div>
+              <span className="text-[9px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.65)' }}>Ekspresi</span>
             </div>
-          ))}
+
+            {/* Divider */}
+            <div className="w-px my-2" style={{ background: 'rgba(255,255,255,0.09)' }} />
+
+            {/* Suara — waveform */}
+            <div className="flex flex-col items-center gap-1 px-3.5 py-2">
+              <div className="w-6 h-6 flex items-center justify-center gap-[2px]">
+                {[3, 5, 8, 6, 10, 6, 8, 5, 3].map((h, i) => (
+                  <div key={i} className="rounded-full animate-pulse"
+                    style={{
+                      width: '1.5px', height: `${h}px`,
+                      background: '#7dd3fc', opacity: 0.8,
+                      animationDelay: `${i * 90}ms`,
+                      animationDuration: `${800 + i * 55}ms`,
+                    }} />
+                ))}
+              </div>
+              <span className="text-[9px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.65)' }}>Suara</span>
+            </div>
+
+            {/* Divider */}
+            <div className="w-px my-2" style={{ background: 'rgba(255,255,255,0.09)' }} />
+
+            {/* Gerakan */}
+            <div className="flex flex-col items-center gap-1 px-3.5 py-2">
+              <div className="w-6 h-6 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#7dd3fc" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+                  <circle cx="12" cy="4" r="2" />
+                  <line x1="12" y1="6.5" x2="12" y2="14" />
+                  <line x1="12" y1="9.5" x2="7" y2="12.5" />
+                  <line x1="12" y1="9.5" x2="17" y2="12.5" />
+                  <line x1="12" y1="14" x2="9" y2="20" />
+                  <line x1="12" y1="14" x2="15" y2="20" />
+                </svg>
+              </div>
+              <span className="text-[9px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.65)' }}>Gerakan</span>
+            </div>
+          </div>
         </div>
       </section>
 

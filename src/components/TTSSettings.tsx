@@ -49,6 +49,8 @@ export default function TTSSettings({
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [webVoices, setWebVoices] = useState<WebSpeechVoiceInfo[]>([]);
   const [selectedWebURI, setSelectedWebURI] = useState<string | null>(getWebSpeechVoice());
+  const [webPitch, setWebPitch] = useState(() => getWebSpeechConfig().pitch);
+  const [webRate, setWebRate] = useState(() => getWebSpeechConfig().rate);
   const [vitsSpeaker, setVitsSpeaker] = useState(() => {
     const stored = localStorage.getItem('vrm.vits_speaker');
     if (stored && UMAMUSUME_SPEAKERS.includes(stored)) return stored;
@@ -522,31 +524,43 @@ export default function TTSSettings({
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center">
                         <label className="text-[10px] text-muted-foreground">Nada (Pitch)</label>
-                        <span className="text-[10px] tabular-nums">{getWebSpeechConfig().pitch.toFixed(2)}x</span>
+                        <span className="text-[10px] tabular-nums">{webPitch.toFixed(2)}x</span>
                       </div>
-                      <input 
+                      <input
                         type="range" min="0.5" max="2.0" step="0.05"
-                        defaultValue={getWebSpeechConfig().pitch}
+                        value={webPitch}
+                        onChange={(e) => setWebPitch(parseFloat(e.target.value))}
                         onMouseUp={(e) => {
                           const val = parseFloat(e.currentTarget.value);
-                          setWebSpeechConfig(val, getWebSpeechConfig().rate);
+                          setWebSpeechConfig(val, webRate);
+                          toast.success('Pitch tersimpan');
+                        }}
+                        onTouchEnd={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          setWebSpeechConfig(val, webRate);
                           toast.success('Pitch tersimpan');
                         }}
                         className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"
                       />
                     </div>
-                    
+
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center">
                         <label className="text-[10px] text-muted-foreground">Kecepatan (Rate)</label>
-                        <span className="text-[10px] tabular-nums">{getWebSpeechConfig().rate.toFixed(2)}x</span>
+                        <span className="text-[10px] tabular-nums">{webRate.toFixed(2)}x</span>
                       </div>
-                      <input 
+                      <input
                         type="range" min="0.5" max="2.0" step="0.05"
-                        defaultValue={getWebSpeechConfig().rate}
+                        value={webRate}
+                        onChange={(e) => setWebRate(parseFloat(e.target.value))}
                         onMouseUp={(e) => {
                           const val = parseFloat(e.currentTarget.value);
-                          setWebSpeechConfig(getWebSpeechConfig().pitch, val);
+                          setWebSpeechConfig(webPitch, val);
+                          toast.success('Kecepatan tersimpan');
+                        }}
+                        onTouchEnd={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          setWebSpeechConfig(webPitch, val);
                           toast.success('Kecepatan tersimpan');
                         }}
                         className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"

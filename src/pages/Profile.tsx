@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, Crown, Camera, LogOut, User, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Crown, Camera, LogOut, User, Sparkles, Trash2, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -23,6 +23,7 @@ export default function Profile() {
   const { isPro, roles } = useUserRole();
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [affection, setAffection] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -35,12 +36,13 @@ export default function Profile() {
     if (!user) return;
     supabase
       .from('profiles')
-      .select('display_name, avatar_url')
+      .select('display_name, avatar_url, affection')
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         setDisplayName(data?.display_name ?? '');
         setAvatarUrl(data?.avatar_url ?? null);
+        setAffection(data?.affection ?? 0);
         setLoading(false);
       });
   }, [user]);
@@ -164,6 +166,9 @@ export default function Profile() {
           )}
         </div>
 
+        {/* Affection level */}
+        <AffectionCard affection={affection} />
+
         {/* Form */}
         <div className="space-y-5">
           <div className="space-y-1.5">
@@ -237,6 +242,67 @@ export default function Profile() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ── Affection Level Card ──────────────────────────────────────────────────────
+
+const AFFECTION_TIERS = [
+  { min: 0,    max: 99,   label: 'Asing',       color: 'text-slate-400',   bar: 'bg-slate-500/60',   emoji: '😶' },
+  { min: 100,  max: 299,  label: 'Kenalan',      color: 'text-blue-400',    bar: 'bg-blue-500/70',    emoji: '🙂' },
+  { min: 300,  max: 599,  label: 'Teman',        color: 'text-green-400',   bar: 'bg-green-500/70',   emoji: '😊' },
+  { min: 600,  max: 999,  label: 'Sahabat',      color: 'text-yellow-400',  bar: 'bg-yellow-500/70',  emoji: '😄' },
+  { min: 1000, max: 1999, label: 'Dekat',        color: 'text-orange-400',  bar: 'bg-orange-500/70',  emoji: '🥰' },
+  { min: 2000, max: 4999, label: 'Sangat Dekat', color: 'text-pink-400',    bar: 'bg-pink-500/70',    emoji: '💕' },
+  { min: 5000, max: Infinity, label: 'Soulmate', color: 'text-rose-400',    bar: 'bg-rose-500/80',    emoji: '💖' },
+];
+
+function AffectionCard({ affection }: { affection: number }) {
+  const tier = AFFECTION_TIERS.findLast((t) => affection >= t.min) ?? AFFECTION_TIERS[0];
+  const nextTier = AFFECTION_TIERS[AFFECTION_TIERS.indexOf(tier) + 1];
+  const progress = nextTier
+    ? Math.min(((affection - tier.min) / (nextTier.min - tier.min)) * 100, 100)
+    : 100;
+
+  return (
+    <div className="rounded-xl border border-neon-purple cyber-glass p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-pink-500/10 border border-pink-500/25 flex items-center justify-center shrink-0 text-lg">
+          {tier.emoji}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-foreground">Tingkat Kedekatan</p>
+            <span className={`text-xs font-bold ${tier.color}`}>{tier.label}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {affection.toLocaleString('id-ID')} poin afeksi
+            {nextTier && (
+              <span className="text-muted-foreground/60">
+                {' '}· {(nextTier.min - affection).toLocaleString('id-ID')} lagi ke {nextTier.label}
+              </span>
+            )}
+          </p>
+        </div>
+        <Heart className={`w-4 h-4 shrink-0 ${tier.color} fill-current`} />
+      </div>
+
+      {/* Progress bar */}
+      <div className="space-y-1">
+        <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${tier.bar}`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        {nextTier && (
+          <div className="flex justify-between text-[10px] text-muted-foreground/50">
+            <span>{tier.label}</span>
+            <span>{nextTier.label}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

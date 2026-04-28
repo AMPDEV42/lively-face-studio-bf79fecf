@@ -494,13 +494,11 @@ export default function Index() {
             background: 'linear-gradient(to bottom, rgba(6,4,14,0.55) 0%, rgba(6,4,14,0.15) 70%, transparent 100%)'
           }}>
           <div className="flex items-center gap-2 pointer-events-auto">
-            <div className="w-7 h-7 rounded-lg btn-overlay flex items-center justify-center">
-              <span className="text-xs font-bold text-neon-purple">V</span>
-            </div>
-            <h1 className="text-sm font-semibold tracking-tight hidden sm:block text-neon-purple"
-              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
-              VRM Assistant
-            </h1>
+            <img
+              src="/app logo/voxie logo.png"
+              alt="Voxie"
+              className="h-8 w-auto object-contain drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]"
+            />
           </div>
         </div>
       </div>

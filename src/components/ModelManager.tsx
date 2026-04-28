@@ -124,6 +124,7 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
       file_name: file.name,
       is_active: models.length === 0,
       user_id: user.id,
+      gender: 'female',
     });
     if (dbError) {
       toast.error('Gagal menyimpan: ' + dbError.message);

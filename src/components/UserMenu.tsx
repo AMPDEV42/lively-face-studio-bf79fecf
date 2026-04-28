@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { LogOut, User as UserIcon, Settings as SettingsIcon, Crown, Wand2, ChevronRight, Menu } from 'lucide-react';
+import { LogOut, User as UserIcon, Settings as SettingsIcon, Crown, Wand2, ChevronRight, Menu, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -20,13 +20,13 @@ export default function UserMenu() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isPro, isAdmin } = useUserRole();
-  const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null; affection: number | null } | null>(null);
 
   useEffect(() => {
     if (!user) return;
     supabase
       .from('profiles')
-      .select('display_name, avatar_url')
+      .select('display_name, avatar_url, affection')
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data }) => setProfile(data));
@@ -80,6 +80,24 @@ export default function UserMenu() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground truncate leading-none">{displayName}</p>
               <p className="text-[10px] truncate mt-0.5" style={{ color: 'rgba(192,168,255,0.6)' }}>{user.email}</p>
+              {/* Affection mini bar */}
+              {profile?.affection != null && profile.affection > 0 && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <Heart className="w-2.5 h-2.5 shrink-0 fill-current" style={{ color: '#f472b6' }} />
+                  <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min((profile.affection / 5000) * 100, 100)}%`,
+                        background: 'linear-gradient(90deg, #a855f7, #ec4899)',
+                      }}
+                    />
+                  </div>
+                  <span className="text-[9px] tabular-nums shrink-0" style={{ color: 'rgba(192,168,255,0.5)' }}>
+                    {profile.affection.toLocaleString('id-ID')}
+                  </span>
+                </div>
+              )}
             </div>
             {isPro && (
               <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-bold rounded-full px-1.5 py-0.5"
