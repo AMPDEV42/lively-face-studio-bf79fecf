@@ -65,7 +65,11 @@ let _shiftAccum      = 0;
 const _ndcVec  = new THREE.Vector2();
 const _ray     = new THREE.Raycaster();
 const _headPos = new THREE.Vector3();
-const _lookDir = new THREE.Vector3();
+
+// Stable head position — updated only when head bone is at rest (no rotation applied yet)
+// This prevents feedback loop: rotated head → shifted world pos → new target → more rotation
+const _stableHeadPos = new THREE.Vector3();
+let _stableHeadPosReady = false;
 
 // ── Mouse tracking ────────────────────────────────────────────────────────────
 export function initLookAt(container: HTMLElement): () => void {
@@ -81,6 +85,7 @@ export function initLookAt(container: HTMLElement): () => void {
   _saccadeNext  = 2.0;
   _saccadePhase = 0;
   _saccadeOffset.set(0, 0, 0);
+  _stableHeadPosReady = false;
 
   const onMove = (e: MouseEvent) => {
     const r = container.getBoundingClientRect();
@@ -155,13 +160,45 @@ export function updateLookAt(
   // Idle when: forced, OR mouse left container OR hasn't moved for IDLE_AFTER seconds
   const idle = _forcedNeutral || !_mouseInside || _lastMoveTime === 0 || (now - _lastMoveTime) > IDLE_AFTER;
 
-  // Get head world position
+  // Get head world position in rest-pose.
+  // We temporarily zero head/neck rotations before sampling world position,
+  // so the position is not affected by our own rotation from the previous frame.
   const headBone = vrm.humanoid.getNormalizedBoneNode('head');
+  const neckBoneStable = vrm.humanoid.getNormalizedBoneNode('neck');
   if (!headBone) return;
+
+  // Save → zero → sample → restore
+  const savedHeadY = headBone.rotation.y;
+  const savedHeadX = headBone.rotation.x;
+  const savedNeckY = neckBoneStable ? neckBoneStable.rotation.y : 0;
+  const savedNeckX = neckBoneStable ? neckBoneStable.rotation.x : 0;
+
+  headBone.rotation.y = 0;
+  headBone.rotation.x = 0;
+  if (neckBoneStable) {
+    neckBoneStable.rotation.y = 0;
+    neckBoneStable.rotation.x = 0;
+  }
+  headBone.updateWorldMatrix(true, false);
   headBone.getWorldPosition(_headPos);
 
+  headBone.rotation.y = savedHeadY;
+  headBone.rotation.x = savedHeadX;
+  if (neckBoneStable) {
+    neckBoneStable.rotation.y = savedNeckY;
+    neckBoneStable.rotation.x = savedNeckX;
+  }
+
+  // Cache stable position — only update if character actually moved (> 1cm)
+  if (!_stableHeadPosReady) {
+    _stableHeadPos.copy(_headPos);
+    _stableHeadPosReady = true;
+  } else if (_headPos.distanceToSquared(_stableHeadPos) > 0.0001) {
+    _stableHeadPos.copy(_headPos);
+  }
+
   // Neutral: straight ahead
-  _neutralTarget.set(_headPos.x, _headPos.y, _headPos.z + TARGET_DIST);
+  _neutralTarget.set(_stableHeadPos.x, _stableHeadPos.y, _stableHeadPos.z + TARGET_DIST);
 
   if (!_ready) {
     _eyeTarget.copy(_neutralTarget);
@@ -173,7 +210,7 @@ export function updateLookAt(
   if (!idle) {
     _ndcVec.set(_mouseNdcX, _mouseNdcY);
     _ray.setFromCamera(_ndcVec, camera);
-    const depth = _headPos.distanceTo(camera.position);
+    const depth = _stableHeadPos.distanceTo(camera.position);
     _ray.ray.at(depth, _goalTarget);
   } else {
     _goalTarget.copy(_neutralTarget);
@@ -236,19 +273,24 @@ export function updateLookAt(
   vrm.lookAt.update(delta);
 
   // ── Head/neck: derive from look direction, lag behind eyes ───────────────
+  // IMPORTANT: Do NOT use vrm.lookAt.getLookAtWorldDirection() here — that reads
+  // from the already-rotated head bone, creating a feedback loop that causes vibration.
+  // Instead, compute yaw/pitch directly from the goal target vs stable head position.
   const headSpeed = !idle ? HEAD_SMOOTH_IN : HEAD_SMOOTH_OUT;
   const headT = Math.min(headSpeed * delta, 1);
 
   if (idle) {
-    // Return directly to zero — don't derive from _lookDir which may still be
-    // mid-lerp and cause the head to overshoot or stay tilted
     _headYaw   += (0 - _headYaw)   * headT;
     _headPitch += (0 - _headPitch) * headT;
   } else {
-    vrm.lookAt.getLookAtWorldDirection(_lookDir);
+    // Compute direction from stable head pos to goal target (no bone rotation involved)
+    const dx = _goalTarget.x - _stableHeadPos.x;
+    const dy = _goalTarget.y - _stableHeadPos.y;
+    const dz = _goalTarget.z - _stableHeadPos.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
 
-    const yawTarget   = Math.atan2(_lookDir.x, _lookDir.z);
-    const pitchTarget = -Math.asin(Math.max(-1, Math.min(1, _lookDir.y)));
+    const yawTarget   = Math.atan2(dx, dz);
+    const pitchTarget = -Math.atan2(dy, dist);
 
     const yawClamped   = Math.max(-MAX_HEAD_YAW,   Math.min(MAX_HEAD_YAW,   yawTarget));
     const pitchClamped = Math.max(-MAX_HEAD_PITCH,  Math.min(MAX_HEAD_PITCH, pitchTarget));
@@ -258,10 +300,9 @@ export function updateLookAt(
   }
 
   // Apply to neck (40%) and head (60%)
-  const neckBone = vrm.humanoid.getNormalizedBoneNode('neck');
-  if (neckBone) {
-    neckBone.rotation.y = _headYaw   * 0.4;
-    neckBone.rotation.x = _headPitch * 0.4;
+  if (neckBoneStable) {
+    neckBoneStable.rotation.y = _headYaw   * 0.4;
+    neckBoneStable.rotation.x = _headPitch * 0.4;
   }
 
   const hBone = vrm.humanoid.getNormalizedBoneNode('head');
