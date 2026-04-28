@@ -57,7 +57,8 @@ The user has been quiet for a while. Show genuine care and concern by reaching o
 Current time context: It's ${timeContext} (${hour}:00).
 
 Rules:
-- Write ONE warm, caring message (1-3 sentences max)
+- Write EXACTLY ONE sentence (maximum 2 sentences if truly needed)
+- Keep it SHORT — under 40 words total, this will be spoken aloud by a voice synthesizer
 - Show genuine concern for their wellbeing
 - Examples of caring topics:
   * Sudah makan belum? (Have you eaten?)
@@ -73,6 +74,7 @@ Rules:
 - Do NOT start with "I notice you've been quiet" or similar meta-commentary
 - STRICTLY do NOT use "[ANIM:...]" tags — this is a caring message, no animations
 - Use casual, warm language with occasional emoji or "~" for softness
+- CRITICAL: Keep response SHORT — it will be spoken by a voice synthesizer with strict character limits
 
 ${recentContext ? `Recent conversation:\n${recentContext}\n\nReference this context if relevant to show you care and remember.` : 'This is early in the session — be gentle and welcoming.'}`;
 }

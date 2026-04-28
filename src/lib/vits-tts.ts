@@ -32,6 +32,23 @@ export async function translateToJapanese(text: string): Promise<string> {
   }
 }
 
+/**
+ * VITS API has an undocumented character limit (~150 Japanese chars / ~200 Latin chars).
+ * Truncate to the first sentence to prevent audio cutoff.
+ */
+export function truncateForVits(text: string, maxChars = 150): string {
+  if (text.length <= maxChars) return text;
+  // Try to cut at sentence boundary (。!?！？\n)
+  const sentenceEnd = text.search(/[。！？!?\n]/);
+  if (sentenceEnd > 0 && sentenceEnd <= maxChars) {
+    return text.slice(0, sentenceEnd + 1).trim();
+  }
+  // Fallback: cut at last space/word boundary before limit
+  const cut = text.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
 export async function generateVitsAudio({
   text,
   speaker = "特别周 Special Week (Umamusume Pretty Derby)", 

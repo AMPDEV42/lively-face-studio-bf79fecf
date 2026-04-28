@@ -62,9 +62,7 @@ export default function UserMenu() {
           title="Menu"
         >
           <Menu className="w-5 h-5" />
-          {/* Online dot */}
-          <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-green-400 border-2"
-            style={{ borderColor: 'rgba(6,4,14,1)' }} />
+
         </button>
       </DropdownMenuTrigger>
 

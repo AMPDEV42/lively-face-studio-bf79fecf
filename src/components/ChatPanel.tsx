@@ -9,7 +9,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { streamChat, generateTTS, parseAnimTag, isOnline, type ChatMessage } from '@/lib/chat-api';
-import { generateVitsAudio, translateToJapanese } from '@/lib/vits-tts';
+import { generateVitsAudio, translateToJapanese, truncateForVits } from '@/lib/vits-tts';
 import { useConversations } from '@/hooks/useConversations';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useAuth } from '@/hooks/useAuth';
@@ -249,6 +249,8 @@ export default function ChatPanel({
       const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
       let ttsInput = displayText;
       if (lang === '日本語' && autoTranslate) ttsInput = await translateToJapanese(displayText);
+      // VITS API has a strict character limit — truncate to first sentence if too long
+      ttsInput = truncateForVits(ttsInput);
       try {
         const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
         ttsResult = { url, error: null, source: 'vits' as const };
@@ -366,6 +368,7 @@ export default function ChatPanel({
               if (lang === '日本語' && autoTranslate) {
                 ttsInput = await translateToJapanese(ttsText);
               }
+              ttsInput = truncateForVits(ttsInput);
 
               try {
                 const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
@@ -405,6 +408,7 @@ export default function ChatPanel({
       if (lang === '日本語' && autoTranslate) {
         ttsInput = await translateToJapanese(text);
       }
+      ttsInput = truncateForVits(ttsInput);
 
       try {
         const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
@@ -532,6 +536,7 @@ export default function ChatPanel({
               if (lang === '日本語' && autoTranslate) {
                 ttsInput = await translateToJapanese(ttsText);
               }
+              ttsInput = truncateForVits(ttsInput);
 
               try {
                 const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
