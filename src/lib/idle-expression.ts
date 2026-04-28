@@ -124,7 +124,7 @@ export function initIdleExpression(): void {
   _moodOverrideTimer = 0;
   _moodOverrideDuration = 0;
   
-  console.log('[Idle Expression] Initialized! First expression in', _holdTarget.toFixed(1), 'seconds');
+  if (import.meta.env.DEV) console.log('[Idle Expression] Initialized! First expression in', _holdTarget.toFixed(1), 'seconds');
 }
 
 /**
@@ -138,8 +138,10 @@ export function debugExpressionKeys(vrm: VRM): void {
   
   const expressions = vrm.expressionManager.expressions;
   const keys = Object.keys(expressions);
-  console.log('[Idle Expression] Available expression keys:', keys);
-  console.log('[Idle Expression] Total expressions:', keys.length);
+  if (import.meta.env.DEV) {
+    console.log('[Idle Expression] Available expression keys:', keys);
+    console.log('[Idle Expression] Total expressions:', keys.length);
+  }
   
   // Log actual expression names (not just indices)
   const names: string[] = [];
@@ -152,7 +154,7 @@ export function debugExpressionKeys(vrm: VRM): void {
       names.push(key);
     }
   }
-  console.log('[Idle Expression] Expression names:', names);
+  if (import.meta.env.DEV) console.log('[Idle Expression] Expression names:', names);
 }
 
 /** Pause saat TTS aktif */
@@ -196,7 +198,7 @@ export function applyMoodOverride(
   _moodOverrideDuration = duration;
   _activeName = expressionName;
   
-  console.log('[Idle Expression] Mood override:', expressionName, 'for', duration, 'seconds');
+  if (import.meta.env.DEV) console.log('[Idle Expression] Mood override:', expressionName, 'for', duration, 'seconds');
 }
 
 let manualMode = false;
@@ -212,7 +214,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
   if (!_enabled || manualMode || !vrm.expressionManager) return;
 
   // Debug log setiap 3 detik
-  if (Math.random() < 0.005) { // Kurangi frekuensi logging
+  if (import.meta.env.DEV && Math.random() < 0.005) {
     console.log('[Idle Expression]', {
       active: _activeName,
       holdTimer: _holdTimer.toFixed(1),
@@ -236,7 +238,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
       _holdTimer  = 0;
       _activeName = next.name;
       _transitioning = true;
-      console.log('[Idle Expression] Mood override ended, switching to:', next.name);
+      if (import.meta.env.DEV) console.log('[Idle Expression] Mood override ended, switching to:', next.name);
     }
   }
 
@@ -251,7 +253,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
       _holdTimer  = 0;
       _activeName = next.name;
       _transitioning = true;
-      console.log('[Idle Expression] Switching to:', next.name, 'for', next.duration.toFixed(1), 'seconds');
+      if (import.meta.env.DEV) console.log('[Idle Expression] Switching to:', next.name, 'for', next.duration.toFixed(1), 'seconds');
     }
   }
 
@@ -286,7 +288,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
       _currentWeights = { ..._targetWeights };
       _transitioning = false;
       // Log hanya untuk transisi selesai
-      console.log('[Idle Expression] ✓', _activeName);
+      if (import.meta.env.DEV) console.log('[Idle Expression] ✓', _activeName);
     }
   }
 
@@ -307,7 +309,7 @@ export function updateIdleExpression(delta: number, vrm: VRM): void {
       em.setValue(k, clamped);
       appliedCount++;
       // Debug: log nilai yang di-apply (jarang)
-      if (Math.random() < 0.002) {
+      if (import.meta.env.DEV && Math.random() < 0.002) {
         console.log(`[Idle Expression] Applied ${k} = ${clamped.toFixed(3)}`);
       }
     } catch (e) { 

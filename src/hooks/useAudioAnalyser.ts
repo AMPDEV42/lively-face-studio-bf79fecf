@@ -31,18 +31,16 @@ export function useAudioAnalyser(): AudioAnalyserControls {
     if (!audioContextRef.current) {
       try {
         audioContextRef.current = new AudioContext();
-        console.log('[useAudioAnalyser] AudioContext created, state:', audioContextRef.current.state);
+        if (import.meta.env.DEV) console.log('[useAudioAnalyser] AudioContext created, state:', audioContextRef.current.state);
       } catch (e) {
         console.error('[useAudioAnalyser] Failed to create AudioContext:', e);
         throw e;
       }
     }
-    // Browsers may suspend the AudioContext if it was created before user
-    // gesture — resume on every connect to be safe.
     if (audioContextRef.current.state === 'suspended') {
-      console.log('[useAudioAnalyser] Resuming suspended AudioContext...');
+      if (import.meta.env.DEV) console.log('[useAudioAnalyser] Resuming suspended AudioContext...');
       audioContextRef.current.resume()
-        .then(() => console.log('[useAudioAnalyser] AudioContext resumed successfully'))
+        .then(() => { if (import.meta.env.DEV) console.log('[useAudioAnalyser] AudioContext resumed successfully'); })
         .catch((e) => console.warn('[useAudioAnalyser] Failed to resume AudioContext:', e));
     }
     if (!analyserRef.current) {
@@ -51,48 +49,41 @@ export function useAudioAnalyser(): AudioAnalyserControls {
       analyser.smoothingTimeConstant = 0.8;
       analyserRef.current = analyser;
       dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
-      console.log('[useAudioAnalyser] AnalyserNode created');
+      if (import.meta.env.DEV) console.log('[useAudioAnalyser] AnalyserNode created');
     }
     return { ctx: audioContextRef.current, analyser: analyserRef.current };
   }, []);
 
   const connectAudioElement = useCallback((audio: HTMLAudioElement) => {
-    // Already attached to this exact element — nothing to do.
     if (attachedElementRef.current === audio && sourceRef.current) {
-      // Ensure context is running for subsequent plays.
       if (audioContextRef.current?.state === 'suspended') {
-        console.log('[useAudioAnalyser] Resuming AudioContext for existing connection...');
+        if (import.meta.env.DEV) console.log('[useAudioAnalyser] Resuming AudioContext for existing connection...');
         audioContextRef.current.resume().catch((e) => console.warn('[useAudioAnalyser] Resume failed:', e));
       }
       setIsActive(true);
-      console.log('[useAudioAnalyser] Audio element already connected, reusing connection');
+      if (import.meta.env.DEV) console.log('[useAudioAnalyser] Audio element already connected, reusing connection');
       return;
     }
 
     try {
       const { ctx, analyser } = ensureContext();
 
-      // Disconnect previous source (if any) so it stops feeding the analyser.
       if (sourceRef.current) {
-        console.log('[useAudioAnalyser] Disconnecting previous source');
+        if (import.meta.env.DEV) console.log('[useAudioAnalyser] Disconnecting previous source');
         try { sourceRef.current.disconnect(); } catch (_) { /* ignore */ }
         sourceRef.current = null;
       }
 
-      console.log('[useAudioAnalyser] Creating MediaElementSource for audio element');
+      if (import.meta.env.DEV) console.log('[useAudioAnalyser] Creating MediaElementSource for audio element');
       const source = ctx.createMediaElementSource(audio);
       source.connect(analyser);
       analyser.connect(ctx.destination);
       sourceRef.current = source;
       attachedElementRef.current = audio;
       setIsActive(true);
-      console.log('[useAudioAnalyser] ✓ Audio element connected successfully');
+      if (import.meta.env.DEV) console.log('[useAudioAnalyser] ✓ Audio element connected successfully');
     } catch (err) {
-      // Most common cause: this audio element was already connected to a
-      // MediaElementSource in another AudioContext. Caller should reuse a
-      // single persistent element to avoid this.
       console.error('[useAudioAnalyser] createMediaElementSource failed:', err);
-      // Try to recover by marking as inactive but not throwing
       setIsActive(false);
     }
   }, [ensureContext]);

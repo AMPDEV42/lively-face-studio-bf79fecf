@@ -94,22 +94,20 @@ export class BackgroundManager {
 
   // Get all available backgrounds for user
   static async getBackgrounds(isPro: boolean = false): Promise<BackgroundItem[]> {
-    console.log('[BackgroundManager] Getting backgrounds, isPro:', isPro);
+    if (import.meta.env.DEV) console.log('[BackgroundManager] Getting backgrounds, isPro:', isPro);
     const backgrounds: BackgroundItem[] = [];
     
-    // Add default backgrounds based on user tier (now using real images)
     const defaultBackgrounds = DEFAULT_BACKGROUNDS.filter(bg => !bg.isPro || isPro);
-    console.log('[BackgroundManager] Adding', defaultBackgrounds.length, 'default backgrounds');
+    if (import.meta.env.DEV) console.log('[BackgroundManager] Adding', defaultBackgrounds.length, 'default backgrounds');
     backgrounds.push(...defaultBackgrounds);
     
-    // Add custom uploaded backgrounds (Pro only)
     if (isPro) {
       const customBackgrounds = await this.getCustomBackgrounds();
-      console.log('[BackgroundManager] Adding', customBackgrounds.length, 'custom backgrounds');
+      if (import.meta.env.DEV) console.log('[BackgroundManager] Adding', customBackgrounds.length, 'custom backgrounds');
       backgrounds.push(...customBackgrounds);
     }
     
-    console.log('[BackgroundManager] Total backgrounds:', backgrounds.length);
+    if (import.meta.env.DEV) console.log('[BackgroundManager] Total backgrounds:', backgrounds.length);
     return backgrounds;
   }
 
@@ -121,7 +119,7 @@ export class BackgroundManager {
       return background;
     } catch {
       // Generate fallback image
-      console.log(`Generating fallback for ${background.id}`);
+      if (import.meta.env.DEV) console.log(`Generating fallback for ${background.id}`);
       const fallbackUrl = this.generateFallbackImage(background.id);
       const fallbackThumbnail = this.generateFallbackThumbnail(background.id);
       

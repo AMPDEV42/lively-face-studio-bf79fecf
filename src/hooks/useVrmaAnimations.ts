@@ -142,7 +142,7 @@ export function useVrmaAnimations(
                 idleActionRef.current = action;
                 vrmaPlayingRef.current = true;
                 activeDrivenBonesRef.current = getClipDrivenBones(clip);
-                console.log('[VRMA Idle] First idle animation started - model ready to show');
+                if (import.meta.env.DEV) console.log('[VRMA Idle] First idle animation started - model ready to show');
               }
             } else if (!firstStarted) {
               firstStarted = true;
