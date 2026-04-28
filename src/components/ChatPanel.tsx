@@ -8,7 +8,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { streamChat, generateTTS, parseAnimTag, isOnline, type ChatMessage } from '@/lib/chat-api';
+import { streamChat, generateTTS, parseAnimTag, isOnline, stripForTTS, type ChatMessage } from '@/lib/chat-api';
 import { generateVitsAudio, translateToJapanese, truncateForVits } from '@/lib/vits-tts';
 import { useConversations } from '@/hooks/useConversations';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
@@ -221,7 +221,7 @@ export default function ChatPanel({
 
     // Strip [ANIM:...] tag jika AI tetap menyisipkannya
     const { clean } = parseAnimTag(text);
-    const displayText = clean || text;
+    const displayText = stripForTTS(clean || text);
 
     // Tambah ke messages sebagai assistant message — selalu tampil di chat
     const assistantMsg: ChatMessage = { role: 'assistant', content: displayText };
@@ -339,18 +339,19 @@ export default function ChatPanel({
     const animContext = availableAnimations.length > 0 
       ? `\n\n[ADMIN: Anda dapat melakukan gerakan tubuh dengan menyelipkan tag "[ANIM:NamaAnimasi]" di AKHIR pesanmu. Gunakan HANYA satu tag per pesan. Daftar gerakan Mixamo yang tersedia: ${availableAnimations.join(', ')}]`
       : "";
+    const ttsInstruction = `\n\n[ADMIN: Responsmu akan dibacakan oleh voice synthesizer. JANGAN gunakan kaomoji, emoticon, atau simbol unicode seperti (^◡^) ♡ ★ ♪ ~ ← → ◆ ● atau sejenisnya. Gunakan hanya teks biasa dan tanda baca standar.]`;
 
     try {
       await streamChat({
         messages: contextMessages,
         onDelta: upsertAssistant,
-        systemPrompt: (personality || "") + animContext,
+        systemPrompt: (personality || "") + animContext + ttsInstruction,
         signal: ctrl.signal,
         onDone: async () => {
           setIsLoading(false);
           if (assistantSoFar) {
             const { clean } = parseAnimTag(assistantSoFar);
-            const ttsText = clean || assistantSoFar;
+            const ttsText = stripForTTS(clean || assistantSoFar);
             if (clean !== assistantSoFar) {
               setMessages(prev => prev.map((m, i) =>
                 i === prev.length - 1 && m.role === 'assistant' ? { ...m, content: clean } : m
@@ -395,7 +396,7 @@ export default function ChatPanel({
 
   // Retry TTS for last response
   const handleRetryTTS = useCallback(async (ttsText?: string, originalText?: string) => {
-    const text = ttsText ?? lastAssistantText;
+    const text = stripForTTS(ttsText ?? lastAssistantText ?? '');
     if (!text) return;
     setIsTTSLoading(true);
     let ttsResult;
@@ -495,12 +496,13 @@ export default function ChatPanel({
     const animContext = availableAnimations.length > 0 
       ? `\n\n[ADMIN: Anda dapat melakukan gerakan tubuh dengan menyelipkan tag "[ANIM:NamaAnimasi]" di AKHIR pesanmu. Gunakan HANYA satu tag per pesan. Daftar gerakan Mixamo yang tersedia: ${availableAnimations.join(', ')}]`
       : "";
+    const ttsInstruction = `\n\n[ADMIN: Responsmu akan dibacakan oleh voice synthesizer. JANGAN gunakan kaomoji, emoticon, atau simbol unicode seperti (^◡^) ♡ ★ ♪ ~ ← → ◆ ● atau sejenisnya. Gunakan hanya teks biasa dan tanda baca standar.]`;
 
     try {
       await streamChat({
         messages: [...messages, userMsg],
         onDelta: upsertAssistant,
-        systemPrompt: (personality || "") + animContext,
+        systemPrompt: (personality || "") + animContext + ttsInstruction,
         signal: ctrl.signal,
         onDone: async () => {
           setIsLoading(false);
@@ -513,7 +515,7 @@ export default function ChatPanel({
           }
           if (assistantSoFar) {
             const { clean } = parseAnimTag(assistantSoFar);
-            const ttsText = clean || assistantSoFar;
+            const ttsText = stripForTTS(clean || assistantSoFar);
             if (clean !== assistantSoFar) {
               setMessages((prev) =>
                 prev.map((m, i) =>

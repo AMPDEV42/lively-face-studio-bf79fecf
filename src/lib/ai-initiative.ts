@@ -75,6 +75,7 @@ Rules:
 - STRICTLY do NOT use "[ANIM:...]" tags — this is a caring message, no animations
 - Use casual, warm language with occasional emoji or "~" for softness
 - CRITICAL: Keep response SHORT — it will be spoken by a voice synthesizer with strict character limits
+- Do NOT use kaomoji, emoticons, or unicode symbols like (^◡^) ♡ ★ ♪ ~ ← → ◆ ● — plain text only
 
 ${recentContext ? `Recent conversation:\n${recentContext}\n\nReference this context if relevant to show you care and remember.` : 'This is early in the session — be gentle and welcoming.'}`;
 }

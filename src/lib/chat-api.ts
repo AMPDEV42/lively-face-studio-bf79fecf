@@ -22,6 +22,29 @@ export function parseAnimTag(text: string): { clean: string; animName: string | 
   return { clean, animName: name };
 }
 
+/**
+ * Strip symbols and kaomoji that TTS engines read aloud awkwardly.
+ * Keeps standard punctuation, letters, numbers, and common safe chars.
+ */
+export function stripForTTS(text: string): string {
+  if (!text) return text;
+  return text
+    // Remove kaomoji / emoticon patterns like (^◡^) (´∀｀) (>_<) etc.
+    .replace(/[（(][^）)]{0,20}[）)]/g, '')
+    // Remove standalone emoji and unicode symbols (keep basic ASCII punctuation)
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')   // Mahjong, domino, misc symbols
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')      // Misc symbols, dingbats
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')    // Emoji block
+    .replace(/[\u{FE00}-\u{FEFF}]/gu, '')      // Variation selectors, BOM
+    // Remove decorative unicode: ♡♥★☆◆◇●○▲△▼▽◎※→←↑↓
+    .replace(/[♡♥★☆◆◇●○▲△▼▽◎※→←↑↓♪♫♬♩〜～]/g, '')
+    // Remove tilde used as softener (〜 ~) but keep sentence-ending punctuation
+    .replace(/~/g, '')
+    // Collapse multiple spaces/newlines left by removals
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export async function streamChat({
   messages,
   onDelta,
