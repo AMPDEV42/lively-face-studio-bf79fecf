@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Volume2, MousePointer2 } from 'lucide-react';
+import { Sparkles, Volume2, MousePointer2, MessageSquareDot } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,10 @@ export default function InteractionSettings() {
     return isNaN(parsed) ? 20 : Math.min(50, Math.max(5, parsed));
   });
 
+  const [aiInitiative, setAiInitiative] = useState(() => {
+    return localStorage.getItem('vrm.aiInitiative') !== 'false';
+  });
+
   useEffect(() => {
     localStorage.setItem('vrm.interactionVolume', volume.toString());
   }, [volume]);
@@ -33,6 +37,10 @@ export default function InteractionSettings() {
   useEffect(() => {
     localStorage.setItem('vrm.interactionSensitivity', sensitivity.toString());
   }, [sensitivity]);
+
+  useEffect(() => {
+    localStorage.setItem('vrm.aiInitiative', aiInitiative.toString());
+  }, [aiInitiative]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -79,6 +87,26 @@ export default function InteractionSettings() {
             onCheckedChange={setShowParticles}
             className="data-[state=checked]:bg-neon-purple"
           />
+        </div>
+
+        {/* AI Initiative Toggle */}
+        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-md bg-neon-purple/10">
+              <MessageSquareDot className="w-4 h-4 text-neon-purple" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">AI Inisiatif</Label>
+              <p className="text-[10px] text-muted-foreground">AI menyapa & menunjukkan perhatian saat kamu diam</p>
+              <p className="text-[10px] text-amber-500/80 mt-0.5">⚠ Mengonsumsi token AI setiap kali aktif</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAiInitiative(prev => !prev)}
+            className={`w-9 h-5 rounded-full transition-colors relative ${aiInitiative ? 'bg-primary' : 'bg-secondary'}`}
+          >
+            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${aiInitiative ? 'left-5' : 'left-1'}`} />
+          </button>
         </div>
 
         {/* Sensitivity Adjustment */}

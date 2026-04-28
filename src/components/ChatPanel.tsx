@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { ChatMessageList } from '@/components/ChatMessageList';
 import { ChatHistoryPanel } from '@/components/ChatHistoryPanel';
 import { ChatInputBar } from '@/components/ChatInputBar';
+import { useAiInitiative } from '@/hooks/useAiInitiative';
 
 interface ChatPanelProps {
   onSpeakStart: (audioUrl: string, messageText?: string) => void;
@@ -211,6 +212,70 @@ export default function ChatPanel({
     setIsTTSLoading(false);
   }, []);
 
+  // ── AI Initiative — handle pesan inisiatif dari AI ────────────────────────
+  const handleInitiativeMessage = useCallback(async (text: string) => {
+    // Jangan trigger jika AI sedang generate respons lain
+    if (isLoading) return;
+
+    if (import.meta.env.DEV) console.log('[AI Initiative] Received message:', text);
+
+    // Strip [ANIM:...] tag jika AI tetap menyisipkannya
+    const { clean } = parseAnimTag(text);
+    const displayText = clean || text;
+
+    // Tambah ke messages sebagai assistant message — selalu tampil di chat
+    const assistantMsg: ChatMessage = { role: 'assistant', content: displayText };
+    setMessages(prev => [...prev, assistantMsg]);
+    setLastAssistantText(displayText);
+
+    // Simpan ke conversation jika ada
+    const convoId = activeConvoIdRef.current;
+    if (convoId) {
+      await saveMessage(convoId, 'assistant', displayText);
+      loadConversations();
+    }
+
+    // Notif unread jika chat tertutup
+    if (!isOpen && onUnreadChange) onUnreadChange(true);
+
+    // TTS — skip jika sedang speaking agar tidak overlap
+    if (isSpeaking) return;
+
+    setIsTTSLoading(true);
+    let ttsResult;
+    if (ttsProvider === 'vits') {
+      const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
+      const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
+      const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
+      let ttsInput = displayText;
+      if (lang === '日本語' && autoTranslate) ttsInput = await translateToJapanese(displayText);
+      try {
+        const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
+        ttsResult = { url, error: null, source: 'vits' as const };
+      } catch (err) {
+        ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
+      }
+    } else {
+      ttsResult = await generateTTS(displayText, voiceId, 2, ttsProvider === 'elevenlabs');
+    }
+    setIsTTSLoading(false);
+    if (ttsResult.source === 'webspeech' && ttsProvider === 'elevenlabs') onTTSRateLimit?.();
+    if (ttsResult.url) onSpeakStart(ttsResult.url, displayText);
+  }, [
+    isLoading, isSpeaking, isOpen, voiceId, ttsProvider,
+    onSpeakStart, onUnreadChange, onTTSRateLimit,
+    saveMessage, loadConversations,
+  ]);
+
+  const { resetTimer: resetInitiativeTimer } = useAiInitiative({
+    messages,
+    personality,
+    isLoading,
+    isSpeaking,
+    enabled: isOnline() && localStorage.getItem('vrm.aiInitiative') !== 'false',
+    onInitiativeMessage: handleInitiativeMessage,
+  });
+
   // Export conversation as JSON
   const handleExport = useCallback((format: 'json' | 'txt' = 'json') => {
     if (messages.length === 0) { toast.error('Tidak ada pesan untuk diekspor'); return; }
@@ -365,6 +430,7 @@ export default function ChatPanel({
     if (!text || isLoading) return;
 
     onUserMessage?.(text);
+    resetInitiativeTimer();
 
     // --- Slash Commands Interceptor ---
     if (text.startsWith('/')) {
@@ -499,6 +565,7 @@ export default function ChatPanel({
     input, isLoading, messages, personality, voiceId, isMobile, isOpen,
     onUserMessage, onSpeakStart, onUnreadChange, ttsProvider,
     ensureConversation, saveMessage, maybeSetTitle, loadConversations, handleRetryTTS,
+    resetInitiativeTimer,
   ]);
 
   // Keep ref in sync so STT auto-send can call handleSend
