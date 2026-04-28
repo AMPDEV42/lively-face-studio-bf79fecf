@@ -1385,18 +1385,63 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       )}
       {!modelUrl && !loading && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-center px-4">
-            <span className="text-4xl">🤖</span>
-            <span className="text-sm text-muted-foreground font-mono">Upload a VRM file to display your avatar</span>
+          <div className="flex flex-col items-center gap-4 text-center px-6">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+              style={{ background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)' }}>
+              <span className="text-3xl">🤖</span>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-white/70">Belum ada model VRM</p>
+              <p className="text-xs text-white/35">Upload model di menu Pengaturan</p>
+            </div>
           </div>
         </div>
       )}
       {loading && modelUrl && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            <span className="text-sm text-muted-foreground font-mono">Loading VRM…</span>
+        <div className="absolute inset-0 flex items-center justify-center z-10"
+          style={{ background: 'rgba(6,4,14,0.85)', backdropFilter: 'blur(8px)' }}>
+          <div className="flex flex-col items-center gap-5 text-center px-6">
+
+            {/* Animated VRM logo / orb */}
+            <div className="relative w-20 h-20">
+              {/* Outer ring */}
+              <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-ping" style={{ animationDuration: '2s' }} />
+              {/* Spinning ring */}
+              <div className="absolute inset-1 rounded-full border-2 border-t-primary border-r-primary/40 border-b-transparent border-l-transparent animate-spin" style={{ animationDuration: '1s' }} />
+              {/* Inner glow orb */}
+              <div className="absolute inset-3 rounded-full flex items-center justify-center"
+                style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.3) 0%, rgba(88,28,135,0.15) 100%)', boxShadow: '0 0 20px rgba(168,85,247,0.4)' }}>
+                <span className="text-2xl">🤖</span>
+              </div>
+            </div>
+
+            {/* Text */}
+            <div className="space-y-1.5">
+              <p className="text-sm font-semibold text-white/90 tracking-wide">Memuat Model VRM</p>
+              <p className="text-xs text-white/40">Menyiapkan karakter 3D kamu…</p>
+            </div>
+
+            {/* Animated dots progress */}
+            <div className="flex items-center gap-1.5">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="w-1.5 h-1.5 rounded-full bg-primary/60"
+                  style={{
+                    animation: 'loading-dot 1.4s ease-in-out infinite',
+                    animationDelay: `${i * 0.15}s`,
+                  }}
+                />
+              ))}
+            </div>
           </div>
+
+          <style>{`
+            @keyframes loading-dot {
+              0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+              40% { transform: scale(1); opacity: 1; }
+            }
+          `}</style>
         </div>
       )}
       {error && (
