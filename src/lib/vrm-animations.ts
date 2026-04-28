@@ -139,7 +139,6 @@ export function updateBlink(delta: number, vrm: VRM): void {
       _randomizeBlinkParams(false);
       blinkPhase = 'closing';
       blinkPhaseTimer = 0;
-      console.log('[Blink] Starting blink - burst:', blinksRemaining, 'peak:', _peakValue.toFixed(2));
     }
     return;
   }
@@ -177,7 +176,6 @@ export function updateBlink(delta: number, vrm: VRM): void {
         blinkPhase = 'idle';
         blinkTimer = 0;
         nextBlinkIn = _scheduleNextBlink(_isSpeakingBlink);
-        console.log('[Blink] Complete - next in', nextBlinkIn.toFixed(1), 'seconds');
       }
     }
 
@@ -225,15 +223,6 @@ export function detectExpressionMode(vrm: VRM): 'perfectsync' | 'standard' {
     }
   } catch (_) { /* ok */ }
 
-  console.log('[Expressions] Available expressions:', allExpressions);
-  console.log('[Expressions] Expression details:');
-  for (const key of allExpressions) {
-    const expr = vrm.expressionManager.getExpression(key);
-    // @ts-expect-error — private properties
-    const binds = expr?.binds ?? expr?._binds ?? [];
-    console.log(`  ${key}: ${binds.length} bind(s)`);
-  }
-
   // Perfect Sync: must have ARKit-style names AND they must have morph targets
   const psKeys = ['EyeBlinkLeft', 'EyeBlinkRight', 'JawOpen', 'MouthSmileLeft'];
   let psCount = 0;
@@ -248,7 +237,6 @@ export function detectExpressionMode(vrm: VRM): 'perfectsync' | 'standard' {
 
   const mode = psCount >= 3 ? 'perfectsync' : 'standard';
   _capabilityCache.set(vrm, mode);
-  console.log('[Expressions] Mode detected:', mode, `(${psCount}/${psKeys.length} PS keys with binds)`);
   return mode;
 }
 

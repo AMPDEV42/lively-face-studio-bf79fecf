@@ -64,7 +64,7 @@ export function initSpringBones(vrm: VRM): void {
     const joints = mgr.joints || mgr.springBones || [];
     
     if (joints.length > 0) {
-      console.log(`[Spring] VRM has ${joints.length} spring joints — injecting anime bounciness`);
+      // VRM has built-in spring joints — handled automatically
     }
 
     for (const j of joints) {
@@ -101,9 +101,6 @@ export function initSpringBones(vrm: VRM): void {
   });
 
   _initialized = count > 0;
-  if (count > 0) {
-    console.log(`[Spring] Procedural spring initialized for ${count} bones`);
-  }
 }
 
 /**

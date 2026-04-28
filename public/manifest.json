@@ -1,0 +1,25 @@
+{
+  "name": "Voxie — Asisten Virtual 3D",
+  "short_name": "Voxie",
+  "description": "Asisten virtual 3D interaktif berbasis AI dengan model VRM",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07070f",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/voxie-hero.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "productivity"],
+  "lang": "id"
+}

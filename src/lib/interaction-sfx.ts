@@ -55,7 +55,6 @@ export function preloadHeadpatSfx(): void {
   if (_headpatPreloaded) return;
   _headpatPreloaded = true;
   _preloadBank(headpatFiles, _headpatPool);
-  console.log('[SFX] Headpat bank preloaded:', headpatFiles.length, 'files');
 }
 
 /** Preload shoulder tap audio bank. Call once on component mount. */
@@ -63,7 +62,6 @@ export function preloadTapSfx(): void {
   if (_tapPreloaded) return;
   _tapPreloaded = true;
   _preloadBank(tapFiles, _tapPool);
-  console.log('[SFX] Tap bank preloaded:', tapFiles.length, 'files');
 }
 
 /** Get the preloaded audio pools for analyser setup */
@@ -97,8 +95,7 @@ export function playHeadpatSfx(volume = 0.6): HTMLAudioElement | null {
     _lastHeadpatIdx = idx;
     const audio = new Audio(headpatFiles[idx]);
     audio.volume = Math.max(0, Math.min(1, volume));
-    audio.play().catch(e => console.warn(`[SFX] Headpat play failed:`, e));
-    console.log(`[SFX] Headpat → ${headpatFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+    audio.play().catch(() => {});
     return audio;
   }
 
@@ -110,8 +107,7 @@ export function playHeadpatSfx(volume = 0.6): HTMLAudioElement | null {
   // Reset to start and play
   audio.currentTime = 0;
   audio.volume = Math.max(0, Math.min(1, volume));
-  audio.play().catch(e => console.warn(`[SFX] Headpat play failed:`, e));
-  console.log(`[SFX] Headpat → ${headpatFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+  audio.play().catch(() => {});
   
   return audio;
 }
@@ -129,8 +125,7 @@ export function playShoulderTapSfx(volume = 0.6): HTMLAudioElement | null {
     _lastTapIdx = idx;
     const audio = new Audio(tapFiles[idx]);
     audio.volume = Math.max(0, Math.min(1, volume));
-    audio.play().catch(e => console.warn(`[SFX] ShoulderTap play failed:`, e));
-    console.log(`[SFX] ShoulderTap → ${tapFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+    audio.play().catch(() => {});
     return audio;
   }
 
@@ -142,8 +137,7 @@ export function playShoulderTapSfx(volume = 0.6): HTMLAudioElement | null {
   // Reset to start and play
   audio.currentTime = 0;
   audio.volume = Math.max(0, Math.min(1, volume));
-  audio.play().catch(e => console.warn(`[SFX] ShoulderTap play failed:`, e));
-  console.log(`[SFX] ShoulderTap → ${tapFiles[idx].split('/').pop()} (vol: ${volume.toFixed(2)})`);
+  audio.play().catch(() => {});
   
   return audio;
 }

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, BookOpen, Upload, MessageSquare, Volume2, Settings, Palette, Zap, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MetaTags from '@/components/MetaTags';
@@ -221,8 +221,33 @@ Efek ambient tersedia untuk pengguna **Pro**.`,
 ];
 
 export default function Docs() {
-  const [activeSection, setActiveSection] = useState('mulai');
-  const [activeItem, setActiveItem] = useState('intro');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeSection, setActiveSection] = useState(() => searchParams.get('s') ?? 'mulai');
+  const [activeItem, setActiveItem] = useState(() => searchParams.get('i') ?? 'intro');
+
+  // Sync URL when navigation changes
+  const navigate = (sectionId: string, itemId: string) => {
+    setActiveSection(sectionId);
+    setActiveItem(itemId);
+    setSearchParams({ s: sectionId, i: itemId }, { replace: true });
+  };
+
+  // Validate params on mount
+  useEffect(() => {
+    const s = searchParams.get('s');
+    const i = searchParams.get('i');
+    const section = SECTIONS.find(sec => sec.id === s);
+    if (section) {
+      const item = section.items.find(it => it.id === i);
+      if (item) {
+        setActiveSection(s!);
+        setActiveItem(i!);
+      } else {
+        setActiveItem(section.items[0].id);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const currentSection = SECTIONS.find(s => s.id === activeSection);
   const currentItem = currentSection?.items.find(i => i.id === activeItem);
@@ -285,7 +310,7 @@ export default function Docs() {
             {SECTIONS.map((section) => (
               <div key={section.id}>
                 <button
-                  onClick={() => { setActiveSection(section.id); setActiveItem(section.items[0].id); }}
+                  onClick={() => { navigate(section.id, section.items[0].id); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                     activeSection === section.id
                       ? 'bg-violet-500/15 text-violet-300 border border-violet-500/25'
@@ -300,7 +325,7 @@ export default function Docs() {
                     {section.items.map((item) => (
                       <button
                         key={item.id}
-                        onClick={() => setActiveItem(item.id)}
+                        onClick={() => navigate(section.id, item.id)}
                         className={`w-full text-left text-xs py-1.5 px-2 rounded transition-all ${
                           activeItem === item.id
                             ? 'text-violet-300 font-medium'
@@ -324,7 +349,7 @@ export default function Docs() {
             {SECTIONS.map((s) => (
               <button
                 key={s.id}
-                onClick={() => { setActiveSection(s.id); setActiveItem(s.items[0].id); }}
+                onClick={() => { navigate(s.id, s.items[0].id); }}
                 className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                   activeSection === s.id
                     ? 'bg-violet-500/15 text-violet-300 border-violet-500/25'
@@ -364,13 +389,13 @@ export default function Docs() {
                   return (
                     <>
                       {prev ? (
-                        <button onClick={() => { setActiveSection(prev.sectionId); setActiveItem(prev.id); }}
+                        <button onClick={() => { navigate(prev.sectionId, prev.id); }}
                           className="flex items-center gap-2 text-xs text-white/40 hover:text-white/70 transition-colors">
                           <ArrowLeft className="w-3.5 h-3.5" /> {prev.title}
                         </button>
                       ) : <div />}
                       {next ? (
-                        <button onClick={() => { setActiveSection(next.sectionId); setActiveItem(next.id); }}
+                        <button onClick={() => { navigate(next.sectionId, next.id); }}
                           className="flex items-center gap-2 text-xs text-white/40 hover:text-white/70 transition-colors">
                           {next.title} <ChevronRight className="w-3.5 h-3.5" />
                         </button>

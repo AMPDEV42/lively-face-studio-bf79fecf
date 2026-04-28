@@ -63,7 +63,6 @@ function ensureLookAtProxy(vrm: VRM): void {
     const proxy = new VRMLookAtQuaternionProxy(vrm.lookAt);
     (proxy as unknown as THREE.Object3D).name = 'VRMLookAtQuaternionProxy';
     vrm.scene.add(proxy);
-    console.log('[VRMA] VRMLookAtQuaternionProxy added to scene');
   }
 }
 
@@ -98,11 +97,6 @@ export async function loadVRMA(url: string, vrm: VRM): Promise<THREE.AnimationCl
   }
 
   const anim = vrmAnimations[0];
-  console.log('[VRMA] Animation loaded:', {
-    duration: anim.duration,
-    humanoidBones: [...anim.humanoidTracks.rotation.keys()],
-    expressionCount: anim.expressionTracks?.preset?.size ?? 0,
-  });
 
   let clip: THREE.AnimationClip;
   try {
@@ -111,12 +105,6 @@ export async function loadVRMA(url: string, vrm: VRM): Promise<THREE.AnimationCl
     const msg = (e as Error)?.message ?? String(e);
     throw new Error(`Bone mapping VRMA tidak cocok dengan model: ${msg}`);
   }
-
-  console.log('[VRMA] Clip created:', {
-    duration: clip.duration,
-    trackCount: clip.tracks.length,
-    trackNames: clip.tracks.slice(0, 5).map((t) => t.name),
-  });
 
   if (clip.tracks.length === 0) {
     throw new Error(
@@ -134,9 +122,9 @@ export async function loadVRMA(url: string, vrm: VRM): Promise<THREE.AnimationCl
       if (!found) missingNodes.push(nodeName);
     });
     if (missingNodes.length > 0) {
-      console.warn('[VRMA] Track target nodes NOT found in vrm.scene:', [...new Set(missingNodes)]);
+      // missing nodes — track target not found in vrm.scene
     } else {
-      console.log('[VRMA] All track target nodes found in vrm.scene ✓');
+      // all track target nodes found
     }
   }
 
@@ -177,7 +165,6 @@ export function straightenClip(clip: THREE.AnimationClip): THREE.AnimationClip {
       values[i + 2] = fixed.z;
       values[i + 3] = fixed.w;
     }
-    console.log('[VRMA] straightenClip: hips Y-rotation zeroed on', clip.tracks.length, 'track clip');
     break;
   }
   return clip;
@@ -192,12 +179,6 @@ export function createMixer(vrm: VRM): THREE.AnimationMixer {
     const hips = vrm.humanoid?.getNormalizedBoneNode('hips');
     const spine = vrm.humanoid?.getNormalizedBoneNode('spine');
     const head = vrm.humanoid?.getNormalizedBoneNode('head');
-    console.log('[VRMA] createMixer — normalized bone names:', {
-      hips: hips?.name ?? 'MISSING',
-      spine: spine?.name ?? 'MISSING',
-      head: head?.name ?? 'MISSING',
-      sceneChildren: vrm.scene.children.length,
-    });
   }
   return mixer;
 }
@@ -214,7 +195,6 @@ export function playVRMA(
   opts: PlayVrmaOptions = {}
 ): THREE.AnimationAction | null {
   if (!mixer) {
-    console.warn('playVRMA: mixer is null, skipping');
     return null;
   }
   const { loop = false, fadeIn = 1.5, clamp = false } = opts; // Increased from 0.4 to 1.5 for slower, more natural transitions
@@ -281,7 +261,6 @@ export function playVRMA(
     action.play();
   }
 
-  console.log('[VRMA] Action cross-faded in — duration:', clip.duration.toFixed(2), 's, loop:', loop, 'prev faded:', dominantPrev ? 'yes' : 'none');
   return action;
 }
 
@@ -306,6 +285,6 @@ export function stopVRMA(mixer: THREE.AnimationMixer | null, fadeOut = 1.0): voi
       } catch (_) { /* ok */ }
     });
   } catch (e) {
-    console.warn('stopVRMA: failed (safe to ignore):', e);
+    // stopVRMA: failed (safe to ignore)
   }
 }

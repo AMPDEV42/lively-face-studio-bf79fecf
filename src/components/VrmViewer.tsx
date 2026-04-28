@@ -147,9 +147,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       if (vrmRef.current) {
         applyMoodOverride('neutral', 1, vrmRef.current);
       }
-      
-      console.log('[Idle Expression] Starting fade out for TTS...');
-      console.log('[Body Gestures] Fading out...');
     } else {
       // Resume when TTS ends
       isFadingOutRef.current = false;
@@ -161,8 +158,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       if (vrmRef.current) {
         applyMoodOverride(Math.random() > 0.5 ? 'relaxed' : 'neutral', 2, vrmRef.current);
       }
-      
-      console.log('[Body Gestures] Fading in...');
     }
     setBlinkSpeakingMode(speaking);
   }, [isSpeaking, isInteractionSpeaking]);
@@ -518,7 +513,6 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         const scene = sceneRef.current;
         if (scene) {
           scene.add(vrmSceneHiddenRef.current);
-          console.log('[VRM] VRMA animation fully applied after', mixerUpdateCountRef.current, 'frames - model now visible');
           vrmSceneHiddenRef.current = null; // Clear reference
         }
       }
@@ -1282,7 +1276,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                       const reactionClips = clips.filter(c => c.category === 'reaction');
                       if (reactionClips.length > 0) {
                         const clip = reactionClips[Math.floor(Math.random() * reactionClips.length)];
-                        playVrmaUrl(clip.url, { loop: false, fadeIn: 1.0 }).catch(console.warn);
+                        playVrmaUrl(clip.url, { loop: false, fadeIn: 1.0 }).catch(() => {});
                       }
                   }
                 }

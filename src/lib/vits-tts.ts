@@ -18,23 +18,16 @@ export interface VitsRequest {
  */
 export async function translateToJapanese(text: string): Promise<string> {
   if (!text.trim()) return text;
-  console.log("[Translation] Translating to JP:", text);
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&q=${encodeURIComponent(text)}`;
     const resp = await fetch(url);
-    if (!resp.ok) {
-       console.warn("[Translation] API Error:", resp.status);
-       return text;
-    }
+    if (!resp.ok) return text;
     const data = await resp.json();
     if (data && data[0]) {
-      const translated = data[0].map((item: any) => item[0]).join("");
-      console.log("[Translation] Success:", translated);
-      return translated;
+      return data[0].map((item: any) => item[0]).join("");
     }
     return text;
-  } catch (err) {
-    console.warn("[Translation] Exception:", err);
+  } catch {
     return text;
   }
 }
@@ -112,7 +105,6 @@ export async function generateVitsAudio({
 
     eventSource.onerror = (err) => {
       if (eventSource.readyState === 2) return;
-      console.error("[VITS SSE Connection Error]", eventSource.readyState, err);
       eventSource.close();
       reject(new Error("VITS SSE Connection failed - Space might be busy or sleeping"));
     };

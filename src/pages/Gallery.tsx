@@ -1,17 +1,18 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Play, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Play, ExternalLink, X, ZoomIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MetaTags from '@/components/MetaTags';
 
 const GALLERY_ITEMS = [
-  { id: 1, title: 'Karakter Anime Klasik', desc: 'Model VRM bergaya anime dengan ekspresi lengkap', tag: 'Anime', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.45.05.png', video: false },
-  { id: 2, title: 'Cyberpunk City Scene', desc: 'Background kota futuristik dengan pencahayaan neon', tag: 'Background', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.49.24.png', video: false },
-  { id: 3, title: 'Space Station', desc: 'Latar stasiun luar angkasa yang imersif', tag: 'Background', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.54.56.png', video: false },
-  { id: 4, title: 'Digital Void', desc: 'Ruang digital minimalis dengan efek partikel', tag: 'Background', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.55.55.png', video: false },
-  { id: 5, title: 'Hologram Lab', desc: 'Laboratorium hologram futuristik', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.56.06.png', video: false },
-  { id: 6, title: 'Matrix Code', desc: 'Efek hujan kode matrix yang ikonik', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.57.17.png', video: false },
-  { id: 7, title: 'Cyber Nexus', desc: 'Jaringan cyber dengan koneksi data visual', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.30.png', video: false },
-  { id: 8, title: 'Quantum Realm', desc: 'Dimensi kuantum dengan efek partikel abstrak', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.41.png', video: false },
+  { id: 1, title: 'Cyberpunk City', desc: 'Background kota futuristik dengan pencahayaan neon', tag: 'Background', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.45.05.png' },
+  { id: 2, title: 'Neon Grid', desc: 'Grid neon biru dengan efek glow', tag: 'Background', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.49.24.png' },
+  { id: 3, title: 'Space Station', desc: 'Latar stasiun luar angkasa yang imersif', tag: 'Background', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.54.56.png' },
+  { id: 4, title: 'Digital Void', desc: 'Ruang digital minimalis dengan efek partikel', tag: 'Background', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.55.55.png' },
+  { id: 5, title: 'Hologram Lab', desc: 'Laboratorium hologram futuristik', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.56.06.png' },
+  { id: 6, title: 'Matrix Code', desc: 'Efek hujan kode matrix yang ikonik', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.57.17.png' },
+  { id: 7, title: 'Cyber Nexus', desc: 'Jaringan cyber dengan koneksi data visual', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.30.png' },
+  { id: 8, title: 'Quantum Realm', desc: 'Dimensi kuantum dengan efek partikel abstrak', tag: 'Pro', img: '/backgrounds/thumbs/ChatGPT Image 24 Apr 2026, 18.59.41.png' },
 ];
 
 const TAG_COLORS: Record<string, string> = {
@@ -21,9 +22,13 @@ const TAG_COLORS: Record<string, string> = {
 };
 
 export default function Gallery() {
+  const [lightbox, setLightbox] = useState<{ img: string; title: string } | null>(null);
+  const [showVideo, setShowVideo] = useState(false);
+
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
       <MetaTags title="Galeri" description="Lihat koleksi background, karakter VRM, dan scene yang tersedia di Voxie. Cyberpunk, anime, space, dan banyak lagi." />
+
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#07070f]/90 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center gap-3">
@@ -48,16 +53,20 @@ export default function Gallery() {
         <div className="text-center space-y-3">
           <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase">Galeri</p>
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight">
-            Lihat Apa yang Bisa <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-pink-300">Kamu Buat</span>
+            Lihat Apa yang Bisa{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-pink-300">Kamu Buat</span>
           </h1>
           <p className="text-sm text-white/50 max-w-md mx-auto">
             Koleksi background, karakter, dan scene yang tersedia di Voxie.
           </p>
         </div>
 
-        {/* Demo video */}
-        <div className="rounded-2xl border border-white/[0.07] overflow-hidden relative group"
-          style={{ background: 'linear-gradient(135deg, #131228 0%, #0c0b1a 100%)' }}>
+        {/* Demo video card */}
+        <div
+          className="rounded-2xl border border-white/[0.07] overflow-hidden relative group cursor-pointer"
+          style={{ background: 'linear-gradient(135deg, #131228 0%, #0c0b1a 100%)' }}
+          onClick={() => setShowVideo(true)}
+        >
           <div className="aspect-video relative flex items-center justify-center">
             <video
               src="/voxie-dance.mp4"
@@ -65,11 +74,18 @@ export default function Gallery() {
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0c0b1a]/80 via-transparent to-transparent pointer-events-none" />
+            {/* Play overlay */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center">
+                <Play className="w-7 h-7 text-white fill-white ml-1" />
+              </div>
+            </div>
             <div className="absolute bottom-4 left-4 flex items-center gap-2">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-semibold">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" /> LIVE DEMO
               </div>
             </div>
+            <div className="absolute bottom-4 right-4 text-white/40 text-xs">Klik untuk putar penuh</div>
           </div>
         </div>
 
@@ -78,16 +94,24 @@ export default function Gallery() {
           <h2 className="text-lg font-black mb-5">Background & Scene</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {GALLERY_ITEMS.map((item) => (
-              <div key={item.id}
+              <div
+                key={item.id}
                 className="group rounded-xl border border-white/[0.07] overflow-hidden hover:border-violet-500/40 transition-all duration-300 cursor-pointer"
-                style={{ background: 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)' }}>
+                style={{ background: 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)' }}
+                onClick={() => setLightbox({ img: item.img, title: item.title })}
+              >
                 <div className="aspect-video relative overflow-hidden">
                   <img
                     src={item.img}
                     alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  {/* Zoom icon on hover */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ZoomIn className="w-6 h-6 text-white/80" />
+                  </div>
                   <span className={`absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${TAG_COLORS[item.tag] ?? 'bg-white/10 text-white/60 border-white/10'}`}>
                     {item.tag}
                   </span>
@@ -118,6 +142,55 @@ export default function Gallery() {
           </div>
         </div>
       </div>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            onClick={() => setLightbox(null)}
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+          <div className="max-w-4xl w-full space-y-3" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={lightbox.img}
+              alt={lightbox.title}
+              className="w-full rounded-2xl border border-white/10"
+            />
+            <p className="text-center text-sm text-white/60">{lightbox.title}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Video modal */}
+      {showVideo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowVideo(false)}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            onClick={() => setShowVideo(false)}
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+          <div className="max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+            <video
+              src="/voxie-dance.mp4"
+              autoPlay
+              controls
+              playsInline
+              className="w-full rounded-2xl border border-white/10"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -26,7 +26,6 @@ export async function attachPropToBone(
   propGroup.scale.set(...scale);
   
   boneNode.add(propGroup);
-  console.log(`[VRM Props] Attached ${name} to ${boneName}`);
   
   return propGroup;
 }
@@ -36,7 +35,6 @@ export function removeProp(vrm: VRM, propName: string): void {
     if (obj.name === propName) {
       if (obj.parent) {
         obj.parent.remove(obj);
-        console.log(`[VRM Props] Removed ${propName}`);
       }
     }
   });

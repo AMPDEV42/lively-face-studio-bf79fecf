@@ -479,14 +479,12 @@ export default function ChatPanel({
               let ttsInput = ttsText;
               if (lang === '日本語' && autoTranslate) {
                 ttsInput = await translateToJapanese(ttsText);
-                console.log("[VITS] Translated for TTS:", ttsInput);
               }
 
               try {
                 const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
                 ttsResult = { url, error: null, source: 'vits' as const };
               } catch (err) {
-                console.error('[VITS] Failed:', err);
                 ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
               }
             } else {
@@ -499,7 +497,6 @@ export default function ChatPanel({
             if (ttsResult.url) {
               onSpeakStart(ttsResult.url, assistantSoFar);
             } else {
-              console.warn('[TTS] Failed:', ttsResult.error);
               toast.error('Audio gagal dibuat', {
                 action: { label: 'Coba lagi', onClick: () => handleRetryTTS(ttsText, assistantSoFar) },
               });
@@ -509,7 +506,6 @@ export default function ChatPanel({
       });
     } catch (e) {
       if ((e as Error).name === 'AbortError') { setIsLoading(false); return; }
-      console.error(e);
       toast.error(e instanceof Error ? e.message : 'Chat gagal');
       setIsLoading(false);
     }

@@ -87,9 +87,10 @@ const PLANS = [
 
 const FAQS = [
   { q: 'Apakah ada uji coba gratis?', a: 'Ya, paket Starter sepenuhnya gratis tanpa batas waktu. Kamu bisa upgrade kapan saja.' },
-  { q: 'Bagaimana cara upgrade ke Pro?', a: 'Saat ini upgrade dilakukan manual. Hubungi kami via email atau tombol Hubungi Sales untuk proses aktivasi.' },
-  { q: 'Apakah bisa downgrade?', a: 'Bisa. Downgrade berlaku di akhir periode billing berjalan.' },
+  { q: 'Bagaimana cara upgrade ke Pro?', a: 'Klik tombol "Mulai Pro" dan ikuti instruksi. Hubungi kami via email di sales@voxie.app untuk proses aktivasi cepat.' },
+  { q: 'Apakah bisa downgrade?', a: 'Bisa. Hubungi kami dan downgrade akan berlaku di akhir periode billing berjalan.' },
   { q: 'Apa itu ElevenLabs TTS?', a: 'ElevenLabs adalah layanan text-to-speech AI berkualitas tinggi dengan suara yang sangat natural dan ekspresif, tersedia di paket Pro ke atas.' },
+  { q: 'Apakah data percakapan saya aman?', a: 'Ya. Semua percakapan disimpan terenkripsi di server kami. Kamu bisa menghapus semua data kapan saja dari halaman Profil.' },
 ];
 
 export default function Pricing() {

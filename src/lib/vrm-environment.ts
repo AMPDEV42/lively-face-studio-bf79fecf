@@ -164,8 +164,6 @@ export class EnvironmentManager {
     
     // Also set scene background to first color as fallback
     this.scene.background = new THREE.Color(colors[0]);
-    
-    console.log('[Environment] Gradient background created - unlit material, no lighting effects');
   }
 
   private setImageBackground(imageUrl: string, scale: number = 1.0) {
@@ -210,7 +208,6 @@ export class EnvironmentManager {
       },
       undefined,
       (error) => {
-        console.error('Failed to load background image:', error);
         // Fallback to gradient
         this.setGradientBackground(['#0a0a1f', '#1a0a2e', '#16213e']);
       }
@@ -221,7 +218,6 @@ export class EnvironmentManager {
     // Remove existing environment sphere
     const existing = this.scene.getObjectByName('EnvironmentSphere');
     if (existing) {
-      console.log('[Environment] Removing existing background sphere');
       this.scene.remove(existing);
       if (existing instanceof THREE.Mesh) {
         existing.geometry.dispose();
@@ -237,33 +233,26 @@ export class EnvironmentManager {
     // Clear scene background
     this.scene.background = null;
     this.currentBackground = null;
-    
-    console.log('[Environment] Background cleared');
   }
 
   // Set background from image URL (for custom backgrounds)
   setCustomImageBackground(imageUrl: string, scale: number = 1.0) {
     this.clearBackground();
     
-    console.log('[Environment] Loading custom image background:', imageUrl);
-    
     this.textureLoader.load(
       imageUrl,
       (texture) => {
-        console.log('[Environment] Image loaded successfully, size:', texture.image.width, 'x', texture.image.height);
-        
         // Configure texture properly for background
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
         texture.wrapS = THREE.ClampToEdgeWrapping;
         texture.wrapT = THREE.ClampToEdgeWrapping;
-        texture.generateMipmaps = false; // Disable mipmaps for better performance
+        texture.generateMipmaps = false;
         
         // Method 1: Scene background (maintains aspect ratio, full coverage)
         // This ensures background is always visible regardless of viewport changes
         this.scene.background = texture;
         this.currentBackground = texture;
-        console.log('[Environment] Scene background set - will maintain full landscape aspect');
         
         // Method 2: Create background sphere for 360° immersion
         const geometry = new THREE.SphereGeometry(100, 64, 32);
@@ -307,21 +296,9 @@ export class EnvironmentManager {
         sphere.updateMatrix(); // Update matrix once after rotation
         
         this.scene.add(sphere);
-        
-        console.log('[Environment] Background sphere created - unlit material, no lighting effects');
-        console.log('[Environment] Material properties - fog:', material.fog, 'toneMapped:', material.toneMapped);
-        console.log('[Environment] Sphere rotation Y:', sphere.rotation.y);
-        console.log('[Environment] Texture repeat:', sphereTexture.repeat);
-        console.log('[Environment] Texture offset:', sphereTexture.offset);
       },
-      (progress) => {
-        if (progress.total > 0) {
-          console.log('[Environment] Loading progress:', Math.round(progress.loaded / progress.total * 100) + '%');
-        }
-      },
-      (error) => {
-        console.error('[Environment] Failed to load background image:', error);
-        console.log('[Environment] Using gradient fallback');
+      (progress) => { /* loading progress */ },
+      (_error) => {
         this.setGradientBackground(['#0a0a1f', '#1a0a2e', '#16213e']);
       }
     );
