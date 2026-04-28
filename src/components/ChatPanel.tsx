@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ChevronDown, X, Bot,
-  Plus, History, Download, RefreshCw, MoreVertical, Upload,
+  Plus, History, Download, RefreshCw, MoreVertical, Upload, Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
