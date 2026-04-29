@@ -27,12 +27,12 @@ interface UpgradeModalProps {
 
 const PRO_HIGHLIGHTS = [
   '1.500 pesan / bulan',
+  'Top-up jika kuota habis',
   'OpenAI TTS premium',
   'VITS Anime TTS',
   'Upload background custom',
   'Upload model VRM sendiri',
   'AI Enhance Persona',
-  'Semua animasi & ekspresi',
 ];
 
 export default function UpgradeModal({
@@ -113,7 +113,8 @@ export default function UpgradeModal({
             style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)' }}>
             <div>
               <p className="text-xs text-white/50">Harga Pro</p>
-              <p className="text-lg font-black text-white">Rp 99.000</p>
+              <p className="text-lg font-black text-white">Rp 150.000</p>
+              <p className="text-[10px] text-emerald-400/80 mt-0.5">✓ Sudah termasuk pajak</p>
             </div>
             <div className="text-right">
               <p className="text-[10px] text-white/40">per bulan</p>

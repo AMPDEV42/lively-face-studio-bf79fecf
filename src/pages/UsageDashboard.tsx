@@ -235,7 +235,7 @@ export default function UsageDashboard() {
             <div className="space-y-1">
               <p className="text-sm font-bold text-white/90">Butuh lebih banyak?</p>
               <p className="text-xs text-white/40">
-                Upgrade ke Pro dan dapatkan 10.000 pesan, TTS premium, dan lebih banyak lagi.
+                Upgrade ke Pro dan dapatkan 1.500 pesan, TTS premium, dan lebih banyak lagi.
               </p>
             </div>
             <Link to="/pricing">

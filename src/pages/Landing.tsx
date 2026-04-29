@@ -517,54 +517,219 @@ export default function Landing() {
       {/* ── Pricing ── */}
       <section className="relative py-16 px-6 lg:px-10 overflow-hidden" id="harga" style={{ background: 'linear-gradient(180deg, #07070f 0%, #0e0b22 50%, #07070f 100%)' }}>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] bg-violet-700/5 blur-[140px] pointer-events-none" />
-        <div ref={pricingReveal.ref} className={`relative max-w-5xl mx-auto transition-all duration-700 ${pricingReveal.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          <div className="text-center mb-8 sm:mb-14">
+        <div ref={pricingReveal.ref} className={`relative max-w-4xl mx-auto transition-all duration-700 ${pricingReveal.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+
+          {/* Header */}
+          <div className="text-center mb-10 sm:mb-14">
             <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase mb-2 sm:mb-3">Harga</p>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight">Pilih Paket yang Sesuai</h2>
-            <p className="text-xs sm:text-sm text-white/40 mt-2">Semua paket termasuk fitur berbicara, gerak, dan ekspresif.</p>
+            <p className="text-xs sm:text-sm text-white/40 mt-2">Mulai gratis. Kuota habis? Top-up tanpa ganti paket.</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { name: 'Starter', sub: 'Personal & kreator', price: 'Gratis', period: '', features: ['1 Asisten Virtual','50 percakapan/bulan','Web Speech TTS'], cta: 'Mulai Gratis', highlight: false },
-              { name: 'Pro', sub: 'Bisnis kecil & startup', price: 'Rp 99.000', period: '/bulan', features: ['1 Asisten Virtual','1.500 percakapan/bulan','OpenAI TTS Premium','Analytics Dasar'], cta: 'Mulai Gratis', highlight: true },
-              { name: 'Business', sub: 'Bisnis & tim', price: 'Rp 249.000', period: '/bulan', features: ['3 Asisten Virtual','5.000 percakapan/bulan','OpenAI TTS Premium','Analytics Lengkap','Priority Support'], cta: 'Mulai Gratis', highlight: false },
-              { name: 'Enterprise', sub: 'Perusahaan besar', price: 'Custom', period: '', features: ['Asisten Unlimited','Percakapan Unlimited','Custom Integrasi','Dedicated Support','SLA Tinggi'], cta: 'Hubungi Sales', highlight: false },
-            ].map((plan) => (
-              <div key={plan.name} className={`relative rounded-2xl border p-5 flex flex-col gap-4 transition-all duration-300 ${
-                plan.highlight
-                  ? 'border-violet-500/50 shadow-2xl shadow-violet-500/15'
-                  : 'border-white/[0.07] hover:border-white/15'
-              }`} style={{ background: plan.highlight ? 'linear-gradient(160deg, #1a1040 0%, #120d30 100%)' : 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)' }}>
-                {plan.highlight && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[10px] font-bold shadow-lg shadow-violet-500/30">
-                    ✦ Terpopuler
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-black text-sm text-white">{plan.name}</h3>
-                  <p className="text-[11px] text-white/35 mt-0.5">{plan.sub}</p>
-                </div>
-                <div className="flex items-end gap-1">
-                  <span className="text-2xl font-black text-white">{plan.price}</span>
-                  <span className="text-xs text-white/35 mb-0.5">{plan.period}</span>
-                </div>
-                <ul className="space-y-2 flex-1">
-                  {plan.features.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-white/55">
-                      <Check className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to={ctaHref}>
-                  <Button size="sm" className={`w-full h-9 text-xs rounded-xl font-semibold ${
-                    plan.highlight
-                      ? 'bg-violet-600 hover:bg-violet-500 text-white border-0 shadow-lg shadow-violet-500/25'
-                      : 'bg-white/[0.07] hover:bg-white/12 text-white border border-white/10'
-                  }`}>{plan.cta}</Button>
-                </Link>
+
+          {/* Plan cards — 2 kolom, centered */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-4xl mx-auto mb-10">
+            {/* ── Card Starter ── */}
+            <div
+              className="relative rounded-2xl border border-white/[0.07] hover:border-white/15 p-6 flex flex-col gap-5 transition-all duration-300"
+              style={{ background: 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)' }}
+            >
+              <div>
+                <h3 className="font-black text-base text-white">Starter</h3>
+                <p className="text-[11px] text-white/35 mt-0.5">Personal & kreator pemula</p>
               </div>
-            ))}
+              <div className="flex items-end gap-1">
+                <span className="text-3xl font-black text-white">Gratis</span>
+              </div>
+              <ul className="space-y-2.5 flex-1">
+                {[
+                  '1 Asisten Virtual',
+                  '50 percakapan / bulan',
+                  'Web Speech TTS',
+                  'VITS Anime TTS',
+                  '4 background default',
+                ].map(f => (
+                  <li key={f} className="flex items-start gap-2 text-xs text-white/60">
+                    <Check className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />{f}
+                  </li>
+                ))}
+              </ul>
+              <Link to={ctaHref}>
+                <Button size="sm" className="w-full h-10 text-xs rounded-xl font-semibold bg-white/[0.07] hover:bg-white/12 text-white border border-white/10">
+                  Mulai Gratis
+                </Button>
+              </Link>
+            </div>
+
+            {/* ── Card Pro ── */}
+            <div
+              className="relative rounded-2xl border border-violet-500/50 shadow-2xl shadow-violet-500/15 p-6 flex flex-col gap-5 transition-all duration-300"
+              style={{ background: 'linear-gradient(160deg, #1a1040 0%, #120d30 100%)' }}
+            >
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[10px] font-bold shadow-lg shadow-violet-500/30 whitespace-nowrap">
+                ✦ Terpopuler
+              </div>
+              <div>
+                <h3 className="font-black text-base text-white">Pro</h3>
+                <p className="text-[11px] text-white/35 mt-0.5">Kreator & pengguna aktif</p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-end gap-1">
+                  <span className="text-3xl font-black text-white">Rp 150.000</span>
+                  <span className="text-xs text-white/35 mb-1">/bulan</span>
+                </div>
+                <p className="text-[10px] text-emerald-400/80 font-medium">
+                  ✓ Sudah termasuk pajak — tidak ada biaya tambahan
+                </p>
+              </div>
+              <ul className="space-y-2.5 flex-1">
+                {[
+                  '1 Asisten Virtual',
+                  '1.500 percakapan / bulan',
+                  'OpenAI TTS (suara premium)',
+                  'VITS Anime TTS',
+                  'Upload VRM & background custom',
+                  'AI Enhance Persona',
+                ].map(f => (
+                  <li key={f} className="flex items-start gap-2 text-xs text-white/60">
+                    <Check className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />{f}
+                  </li>
+                ))}
+              </ul>
+              {/* Top-up hint */}
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)' }}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <div>
+                  <p className="text-[11px] font-semibold text-amber-300">Kuota habis? Top-up!</p>
+                  <p className="text-[10px] text-white/35 leading-tight">Mulai Rp 15.000. Sisa tidak hangus.</p>
+                </div>
+              </div>
+              <Link to={ctaHref}>
+                <Button size="sm" className="w-full h-10 text-xs rounded-xl font-semibold bg-violet-600 hover:bg-violet-500 text-white border-0 shadow-lg shadow-violet-500/25">
+                  Mulai Pro
+                </Button>
+              </Link>
+            </div>
+
+            {/* ── Card Top-up ── */}
+            <div
+              className="relative rounded-2xl border border-violet-500/25 p-6 flex flex-col gap-4 transition-all duration-300 hover:border-violet-500/40"
+              style={{ background: 'linear-gradient(160deg, #130f2a 0%, #0c0b1a 100%)' }}
+            >
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[10px] font-bold shadow-lg shadow-violet-500/30 whitespace-nowrap">
+                ⚡ Khusus Pro
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/12 border border-violet-500/20 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4 text-violet-400" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white">Top-up Kuota</h3>
+                  <p className="text-[11px] text-white/35 mt-0.5">Isi ulang kapan saja</p>
+                </div>
+              </div>
+
+              {/* Paket list */}
+              <div className="flex-1 space-y-2">
+                {[
+                  { label: 'Mini',    messages: 100,   price: 'Rp 15.000', perMsg: 'Rp 150/pesan', popular: false },
+                  { label: 'Standar', messages: 300,   price: 'Rp 29.000', perMsg: 'Rp 97/pesan',  popular: true  },
+                  { label: 'Hemat',   messages: 700,   price: 'Rp 49.000', perMsg: 'Rp 70/pesan',  popular: false },
+                  { label: 'Bulanan', messages: 1_500, price: 'Rp 99.000', perMsg: 'Rp 66/pesan',  popular: false },
+                ].map(pkg => (
+                  <div
+                    key={pkg.label}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl border transition-colors ${
+                      pkg.popular
+                        ? 'border-violet-500/40 bg-violet-500/8'
+                        : 'border-white/[0.06] bg-white/[0.02]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className={`text-xs font-semibold ${pkg.popular ? 'text-violet-300' : 'text-white/70'}`}>
+                            +{pkg.messages.toLocaleString('id-ID')} pesan
+                          </p>
+                          {pkg.popular && (
+                            <span className="text-[9px] font-bold text-violet-300 border border-violet-500/40 px-1.5 py-0.5 rounded-full leading-none">
+                              Terbaik
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-white/30">{pkg.perMsg}</p>
+                      </div>
+                    </div>
+                    <span className={`text-xs font-black shrink-0 ml-2 ${pkg.popular ? 'text-violet-300' : 'text-white/60'}`}>
+                      {pkg.price}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-[10px] text-white/25 text-center">Sisa kuota tidak hangus — terbawa bulan depan</p>
+
+              <Link to="/pricing">
+                <Button size="sm" className="w-full h-10 text-xs rounded-xl font-semibold bg-white/[0.07] hover:bg-white/12 text-white border border-white/10">
+                  Lihat Semua Paket
+                </Button>
+              </Link>
+            </div>
           </div>
+
+          {/* Comparison table */}
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/[0.07]" style={{ background: 'rgba(139,92,246,0.06)' }}>
+                  <th className="text-left px-4 py-3 text-white/50 font-medium w-1/2">Fitur</th>
+                  <th className="px-3 py-3 text-center font-bold text-white/60">Starter</th>
+                  <th className="px-3 py-3 text-center font-bold text-violet-300">Pro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: 'Percakapan / bulan', values: ['50', '1.500 + top-up'] },
+                  { label: 'Web Speech TTS', values: ['✓', '✓'] },
+                  { label: 'VITS Anime TTS', values: ['✓', '✓'] },
+                  { label: 'OpenAI TTS Premium', values: ['—', '✓'] },
+                  { label: 'Upload model VRM', values: ['—', '✓'] },
+                  { label: 'Background custom', values: ['—', '✓'] },
+                  { label: 'AI Enhance Persona', values: ['—', '✓'] },
+                  { label: 'Top-up kuota', values: ['—', '✓'] },
+                ].map((row, i) => (
+                  <tr
+                    key={row.label}
+                    className={`border-b border-white/[0.04] ${i % 2 === 0 ? '' : 'bg-white/[0.015]'}`}
+                  >
+                    <td className="px-4 py-2.5 text-white/55">{row.label}</td>
+                    {row.values.map((v, j) => (
+                      <td
+                        key={j}
+                        className={`px-3 py-2.5 text-center ${
+                          v === '✓' ? 'text-violet-400' :
+                          v === '—' ? 'text-white/20' :
+                          'text-white/70'
+                        } ${j === 1 ? 'font-semibold' : ''}`}
+                      >
+                        {v}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Link ke halaman pricing lengkap */}
+          <div className="text-center mt-6">
+            <Link to="/pricing" className="text-xs text-violet-400 hover:text-violet-300 transition-colors underline underline-offset-2">
+              Lihat detail harga & paket top-up →
+            </Link>
+          </div>
+
         </div>
       </section>
 

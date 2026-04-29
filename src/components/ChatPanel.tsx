@@ -522,7 +522,7 @@ export default function ChatPanel({
     if (!canSendMessage()) {
       openUpgradeModal({
         reason: 'Batas pesan bulanan tercapai',
-        featureDescription: 'Upgrade ke Pro untuk mendapatkan 10.000 pesan per bulan dan fitur premium lainnya.',
+        featureDescription: 'Upgrade ke Pro untuk mendapatkan 1.500 pesan per bulan, top-up jika habis, dan fitur premium lainnya.',
       });
       return;
     }

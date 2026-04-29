@@ -1,267 +1,416 @@
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Check, Sparkles, ArrowLeft, Zap, Crown, Building2, Rocket } from 'lucide-react';
+import {
+  Check, Sparkles, ArrowLeft, Crown, Rocket, Zap,
+  MessageSquare, Volume2, Upload, Palette, Brain,
+  BarChart2, ChevronDown, ChevronUp, ArrowRight, Shield,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import MetaTags from '@/components/MetaTags';
+import { TOP_UP_PACKAGES } from '@/lib/plan-config';
 
-const PLANS = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    icon: <Rocket className="w-5 h-5 text-violet-400" />,
-    price: 'Gratis',
-    period: '',
-    desc: 'Untuk personal & kreator pemula',
-    features: [
-      '1 Asisten Virtual',
-      '50 percakapan / bulan',
-      'Web Speech TTS',
-      '4 background default',
-      'Animasi dasar',
-    ],
-    cta: 'Mulai Gratis',
-    highlight: false,
-    badge: null,
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    icon: <Crown className="w-5 h-5 text-violet-300" />,
-    price: 'Rp 99.000',
-    period: '/ bulan',
-    desc: 'Untuk kreator & bisnis kecil',
-    features: [
-      '1 Asisten Virtual',
-      '1.500 percakapan / bulan',
-      'OpenAI TTS (suara premium)',
-      'VITS Anime TTS',
-      '8 background + upload custom',
-      'Semua animasi & ekspresi',
-      'AI Enhance Persona',
-      'Analytics dasar',
-    ],
-    cta: 'Mulai Pro',
-    highlight: true,
-    badge: '✦ Terpopuler',
-  },
-  {
-    id: 'business',
-    name: 'Business',
-    icon: <Building2 className="w-5 h-5 text-violet-400" />,
-    price: 'Rp 249.000',
-    period: '/ bulan',
-    desc: 'Untuk tim & bisnis berkembang',
-    features: [
-      '3 Asisten Virtual',
-      '5.000 percakapan / bulan',
-      'Semua fitur Pro',
-      'Analytics lengkap',
-      'Priority support',
-      'Custom persona lanjutan',
-    ],
-    cta: 'Mulai Business',
-    highlight: false,
-    badge: null,
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    icon: <Zap className="w-5 h-5 text-violet-400" />,
-    price: 'Custom',
-    period: '',
-    desc: 'Untuk perusahaan besar',
-    features: [
-      'Asisten Virtual unlimited',
-      'Percakapan unlimited',
-      'Custom integrasi API',
-      'Dedicated support',
-      'SLA tinggi',
-      'On-premise tersedia',
-    ],
-    cta: 'Hubungi Sales',
-    highlight: false,
-    badge: null,
-  },
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+const PRO_FEATURES = [
+  { icon: <MessageSquare className="w-4 h-4" />, label: '1.500 percakapan / bulan', sub: 'Top-up jika habis, sisa tidak hangus' },
+  { icon: <Volume2 className="w-4 h-4" />, label: 'OpenAI TTS Premium', sub: 'Suara AI natural & ekspresif' },
+  { icon: <Volume2 className="w-4 h-4" />, label: 'VITS Anime TTS', sub: '19 karakter anime Jepang' },
+  { icon: <Upload className="w-4 h-4" />, label: 'Upload model VRM sendiri', sub: 'Hingga 5 model custom' },
+  { icon: <Palette className="w-4 h-4" />, label: 'Background & animasi custom', sub: '8 default + upload sendiri' },
+  { icon: <Brain className="w-4 h-4" />, label: 'AI Enhance Persona', sub: 'Buat karakter lebih hidup' },
+  { icon: <BarChart2 className="w-4 h-4" />, label: 'Analytics dasar', sub: 'Pantau penggunaan bulanan' },
+];
+
+const COMPARISON_ROWS = [
+  { label: 'Percakapan / bulan',  starter: '50',  pro: '1.500 + top-up', highlight: true },
+  { label: 'Web Speech TTS',      starter: '✓',   pro: '✓' },
+  { label: 'VITS Anime TTS',      starter: '✓',   pro: '✓' },
+  { label: 'OpenAI TTS Premium',  starter: '—',   pro: '✓' },
+  { label: 'Upload model VRM',    starter: '—',   pro: '✓' },
+  { label: 'Background custom',   starter: '—',   pro: '✓' },
+  { label: 'AI Enhance Persona',  starter: '—',   pro: '✓' },
+  { label: 'Analytics',           starter: '—',   pro: 'Dasar' },
+  { label: 'Top-up kuota',        starter: '—',   pro: '✓' },
 ];
 
 const FAQS = [
-  { q: 'Apakah ada uji coba gratis?', a: 'Ya, paket Starter sepenuhnya gratis tanpa batas waktu. Kamu bisa upgrade kapan saja.' },
-  { q: 'Bagaimana cara upgrade ke Pro?', a: 'Klik tombol "Mulai Pro" dan ikuti instruksi. Hubungi kami via email di sales@voxie.app untuk proses aktivasi cepat.' },
-  { q: 'Apakah bisa downgrade?', a: 'Bisa. Hubungi kami dan downgrade akan berlaku di akhir periode billing berjalan.' },
-  { q: 'Apa itu OpenAI TTS?', a: 'OpenAI TTS adalah layanan text-to-speech AI berkualitas tinggi dengan suara yang sangat natural dan ekspresif, tersedia di paket Pro ke atas.' },
-  { q: 'Apa itu VITS Anime TTS?', a: 'VITS Anime TTS menggunakan model AI khusus untuk menghasilkan suara karakter anime Jepang yang ekspresif. Tersedia gratis untuk semua pengguna.' },
-  { q: 'Apakah data percakapan saya aman?', a: 'Ya. Semua percakapan disimpan terenkripsi di server kami. Kamu bisa menghapus semua data kapan saja dari halaman Profil.' },
+  {
+    q: 'Apakah ada uji coba gratis?',
+    a: 'Ya. Paket Starter sepenuhnya gratis tanpa batas waktu — 50 percakapan per bulan, tidak perlu kartu kredit. Upgrade kapan saja.',
+  },
+  {
+    q: 'Apakah harga sudah termasuk pajak?',
+    a: 'Ya. Rp 150.000/bulan sudah all-in termasuk PPN 11% sesuai ketentuan perpajakan Indonesia. Tidak ada biaya tersembunyi saat checkout.',
+  },
+  {
+    q: 'Bagaimana cara kerja top-up kuota?',
+    a: 'Jika 1.500 pesan bulananmu habis sebelum akhir bulan, beli paket top-up mulai Rp 15.000. Sisa kuota tidak hangus — terbawa ke bulan berikutnya.',
+  },
+  {
+    q: 'Bagaimana cara upgrade ke Pro?',
+    a: 'Klik tombol "Mulai Pro" dan hubungi kami via email di sales@voxie.app. Aktivasi biasanya selesai dalam hitungan jam.',
+  },
+  {
+    q: 'Apakah bisa batal langganan kapan saja?',
+    a: 'Bisa. Tidak ada kontrak jangka panjang. Batalkan kapan saja dan akses Pro tetap aktif hingga akhir periode billing berjalan.',
+  },
+  {
+    q: 'Apa itu VITS Anime TTS?',
+    a: 'Model AI khusus untuk suara karakter anime Jepang — 19 karakter dari game Uma Musume. Tersedia gratis untuk semua pengguna, termasuk Starter.',
+  },
 ];
+
+// ─── FAQ Item ─────────────────────────────────────────────────────────────────
+
+function FaqItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button
+      onClick={() => setOpen(v => !v)}
+      className="w-full text-left rounded-2xl border border-white/[0.07] px-5 py-4 transition-all hover:border-white/15"
+      style={{ background: open ? 'rgba(139,92,246,0.04)' : 'rgba(255,255,255,0.02)' }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-white/90">{q}</p>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-violet-400 shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-white/30 shrink-0" />}
+      </div>
+      {open && (
+        <p className="text-xs text-white/50 leading-relaxed mt-3 border-t border-white/[0.06] pt-3">
+          {a}
+        </p>
+      )}
+    </button>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Pricing() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPro } = useUserRole();
 
-  const handleCTA = (planId: string) => {
-    if (planId === 'starter') {
-      navigate(user ? '/app' : '/auth?tab=signup');
-    } else if (planId === 'enterprise') {
-      window.location.href = 'mailto:sales@voxie.app?subject=Enterprise Inquiry';
-    } else {
-      // Pro / Business — arahkan ke kontak / payment
-      window.location.href = 'mailto:sales@voxie.app?subject=Upgrade to ' + planId;
-    }
+  const handleUpgrade = () => {
+    window.location.href = 'mailto:sales@voxie.app?subject=Upgrade to Pro';
   };
 
-  const getCurrentPlanId = () => {
-    if (!user) return null;
-    if (isPro) return 'pro';
-    return 'starter';
+  const handleTopUp = (packageId: string) => {
+    window.location.href = `mailto:sales@voxie.app?subject=Top-up ${packageId}`;
   };
-  const currentPlanId = getCurrentPlanId();
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
-      <MetaTags title="Harga" description="Pilih paket Voxie yang sesuai kebutuhanmu. Mulai gratis, upgrade kapan saja. Starter gratis, Pro Rp 99.000/bulan." />
-      {/* Header */}
+      <MetaTags
+        title="Harga"
+        description="Mulai gratis, upgrade kapan saja. Pro Rp 150.000/bulan sudah termasuk pajak. Top-up kuota jika habis — sisa tidak hangus."
+      />
+
+      {/* ── Navbar ── */}
       <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#07070f]/90 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 py-3.5 flex items-center gap-3">
           <Button
-            variant="ghost"
-            size="icon"
+            variant="ghost" size="icon"
             onClick={() => navigate(-1)}
             className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/8 rounded-xl"
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <div className="flex items-center gap-2">
-            <img src="/app logo/voxie logo.png" alt="Voxie" className="h-7 w-auto object-contain" />
-          </div>
+          <img src="/app logo/voxie logo.png" alt="Voxie" className="h-7 w-auto object-contain" />
           <span className="text-white/20 text-sm">/</span>
           <span className="text-sm text-white/60">Harga</span>
+          <div className="ml-auto">
+            {!user && (
+              <Link to="/auth?tab=signup">
+                <Button size="sm" className="h-8 px-4 text-xs bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl">
+                  Mulai Gratis
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-12 sm:py-16 space-y-16">
-        {/* Hero */}
-        <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 text-violet-300 text-xs font-medium">
-            <Sparkles className="w-3.5 h-3.5" /> Pilih Paket
+      <div className="max-w-5xl mx-auto px-4 py-12 sm:py-16 space-y-20">
+
+        {/* ── Hero ── */}
+        <div className="text-center space-y-5 relative">
+          {/* Glow */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-violet-600/8 blur-[100px] pointer-events-none" />
+
+          <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 text-violet-300 text-xs font-medium">
+            <Sparkles className="w-3.5 h-3.5" /> Harga Transparan
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight">
-            Harga yang <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-pink-300">Transparan</span>
+          <h1 className="relative text-4xl sm:text-6xl font-black tracking-tight leading-tight">
+            Sederhana.<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-purple-300 to-pink-300">
+              Tanpa Kejutan.
+            </span>
           </h1>
-          <p className="text-sm text-white/50 max-w-md mx-auto">
-            Mulai gratis, upgrade kapan saja. Tidak ada biaya tersembunyi.
+          <p className="relative text-sm sm:text-base text-white/50 max-w-lg mx-auto leading-relaxed">
+            Mulai gratis selamanya. Upgrade ke Pro saat kamu butuh lebih.
+            Kuota habis? Top-up — sisa tidak hangus.
           </p>
+
           {isPro && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-sm font-semibold">
-              <Crown className="w-4 h-4" /> Kamu sudah Pro!
+            <div className="relative inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-sm font-semibold">
+              <Crown className="w-4 h-4" /> Kamu sudah Pro! Nikmati semua fitur premium.
             </div>
           )}
         </div>
 
-        {/* Plans grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.id}
-              className={`relative rounded-2xl border flex flex-col p-5 gap-5 transition-all duration-300 ${
-                plan.highlight
-                  ? 'border-violet-500/50 shadow-2xl shadow-violet-500/15'
-                  : 'border-white/[0.07] hover:border-white/15'
-              }`}
-              style={{
-                background: plan.highlight
-                  ? 'linear-gradient(160deg, #1a1040 0%, #120d30 100%)'
-                  : 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)',
-              }}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[10px] font-bold shadow-lg shadow-violet-500/30 whitespace-nowrap">
-                  {plan.badge}
-                </div>
-              )}
+        {/* ── Plan Cards ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-3xl mx-auto">
 
-              {/* Plan header */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-violet-500/12 border border-violet-500/20 flex items-center justify-center">
-                    {plan.icon}
+          {/* Starter */}
+          <div
+            className="rounded-2xl border border-white/[0.08] p-7 flex flex-col gap-6 hover:border-white/15 transition-all"
+            style={{ background: 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                <Rocket className="w-5 h-5 text-white/60" />
+              </div>
+              <div>
+                <h2 className="font-black text-lg text-white">Starter</h2>
+                <p className="text-xs text-white/35">Untuk personal & kreator pemula</p>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-end gap-1.5">
+                <span className="text-5xl font-black text-white">Gratis</span>
+              </div>
+              <p className="text-xs text-white/30 mt-1.5">Selamanya — tidak perlu kartu kredit</p>
+            </div>
+
+            <ul className="space-y-3 flex-1">
+              {[
+                '1 Asisten Virtual',
+                '50 percakapan / bulan',
+                'Web Speech TTS (bawaan browser)',
+                'VITS Anime TTS',
+                '4 background default',
+                'Animasi & ekspresi dasar',
+              ].map(f => (
+                <li key={f} className="flex items-center gap-2.5 text-sm text-white/55">
+                  <div className="w-4 h-4 rounded-full bg-white/8 flex items-center justify-center shrink-0">
+                    <Check className="w-2.5 h-2.5 text-white/50" />
+                  </div>
+                  {f}
+                </li>
+              ))}
+            </ul>
+
+            <Button
+              onClick={() => navigate(user ? '/app' : '/auth?tab=signup')}
+              disabled={!!user && !isPro}
+              className="w-full h-12 text-sm rounded-xl font-semibold bg-white/[0.07] hover:bg-white/12 text-white border border-white/10"
+            >
+              {user && !isPro ? '✓ Paket Aktif' : 'Mulai Gratis'}
+            </Button>
+          </div>
+
+          {/* Pro */}
+          <div
+            className="relative rounded-2xl border border-violet-500/50 p-7 flex flex-col gap-6 shadow-2xl shadow-violet-500/20"
+            style={{ background: 'linear-gradient(160deg, #1e1248 0%, #130d35 100%)' }}
+          >
+            {/* Glow inner */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-violet-500/8 to-transparent pointer-events-none" />
+
+            {/* Badge */}
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-bold shadow-lg shadow-violet-500/40 whitespace-nowrap">
+              <Sparkles className="w-3 h-3" /> Terpopuler
+            </div>
+
+            <div className="relative flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
+                <Crown className="w-5 h-5 text-violet-300" />
+              </div>
+              <div>
+                <h2 className="font-black text-lg text-white">Pro</h2>
+                <p className="text-xs text-white/40">Untuk kreator & pengguna aktif</p>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="flex items-end gap-1.5">
+                <span className="text-5xl font-black text-white">Rp 150K</span>
+                <span className="text-sm text-white/40 mb-2">/ bulan</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-2">
+                <Shield className="w-3 h-3 text-emerald-400" />
+                <p className="text-xs text-emerald-400/90 font-medium">
+                  Sudah termasuk PPN 11% — tidak ada biaya tambahan
+                </p>
+              </div>
+            </div>
+
+            <ul className="relative space-y-3 flex-1">
+              {PRO_FEATURES.map(f => (
+                <li key={f.label} className="flex items-start gap-2.5">
+                  <div className="w-5 h-5 rounded-lg bg-violet-500/20 border border-violet-500/25 flex items-center justify-center shrink-0 mt-0.5 text-violet-400">
+                    {f.icon}
                   </div>
                   <div>
-                    <h3 className="font-black text-sm text-white">{plan.name}</h3>
-                    <p className="text-[10px] text-white/35">{plan.desc}</p>
+                    <p className="text-sm text-white/85 font-medium leading-tight">{f.label}</p>
+                    <p className="text-[11px] text-white/35 mt-0.5">{f.sub}</p>
                   </div>
-                </div>
-              </div>
+                </li>
+              ))}
+            </ul>
 
-              {/* Price */}
-              <div className="flex items-end gap-1">
-                <span className="text-2xl font-black text-white">{plan.price}</span>
-                {plan.period && <span className="text-xs text-white/35 mb-0.5">{plan.period}</span>}
-              </div>
-
-              {/* Features */}
-              <ul className="space-y-2 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-xs text-white/60">
-                    <Check className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA */}
+            <div className="relative space-y-3">
               <Button
-                onClick={() => handleCTA(plan.id)}
-                disabled={plan.id === currentPlanId}
-                className={`w-full h-10 text-xs rounded-xl font-semibold ${
-                  plan.highlight
-                    ? 'bg-violet-600 hover:bg-violet-500 text-white border-0 shadow-lg shadow-violet-500/25'
-                    : 'bg-white/[0.07] hover:bg-white/12 text-white border border-white/10'
-                }`}
+                onClick={isPro ? undefined : handleUpgrade}
+                disabled={isPro}
+                className="w-full h-12 text-sm rounded-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white border-0 shadow-lg shadow-violet-500/30 gap-2"
               >
-                {plan.id === currentPlanId ? '✓ Paket Aktif' : plan.cta}
+                {isPro ? (
+                  <><Crown className="w-4 h-4" /> Paket Aktif</>
+                ) : (
+                  <>Mulai Pro Sekarang <ArrowRight className="w-4 h-4" /></>
+                )}
               </Button>
+              {!isPro && (
+                <p className="text-center text-[11px] text-white/25">
+                  Batalkan kapan saja · Tidak ada kontrak
+                </p>
+              )}
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* Comparison table — mobile friendly */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-black text-center">Perbandingan Fitur</h2>
-          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
-            <table className="w-full text-xs">
+        {/* ── Top-up Section ── */}
+        <div className="space-y-8">
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-500/20 bg-violet-500/6 text-violet-300 text-xs font-medium">
+              <Zap className="w-3.5 h-3.5" /> Top-up Kuota
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black">Kuota Habis? Isi Ulang Instan</h2>
+            <p className="text-sm text-white/40 max-w-sm mx-auto">
+              Khusus pengguna Pro. Beli sekali, sisa tidak hangus — terbawa ke bulan berikutnya.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto">
+            {TOP_UP_PACKAGES.map((pkg) => (
+              <div
+                key={pkg.id}
+                className={`relative rounded-2xl border flex flex-col p-5 gap-4 transition-all duration-200 hover:-translate-y-1 ${
+                  pkg.popular
+                    ? 'border-violet-500/50 shadow-xl shadow-violet-500/15'
+                    : 'border-white/[0.08] hover:border-white/15'
+                }`}
+                style={{
+                  background: pkg.popular
+                    ? 'linear-gradient(160deg, #1a1040 0%, #120d30 100%)'
+                    : 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)',
+                }}
+              >
+                {pkg.popular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[9px] font-bold whitespace-nowrap shadow-md">
+                    ✦ Paling Hemat
+                  </div>
+                )}
+
+                <div>
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`}>
+                    {pkg.label}
+                  </p>
+                  <p className="text-2xl font-black text-white mt-1">{pkg.price}</p>
+                  <p className={`text-[10px] mt-0.5 ${pkg.popular ? 'text-violet-400/70' : 'text-white/25'}`}>
+                    {pkg.perMessage}
+                  </p>
+                </div>
+
+                <ul className="space-y-1.5 flex-1 text-xs">
+                  <li className="flex items-center gap-1.5 text-white/65">
+                    <Check className={`w-3 h-3 shrink-0 ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`} />
+                    +{pkg.messages.toLocaleString('id-ID')} pesan
+                  </li>
+                  <li className="flex items-center gap-1.5 text-white/65">
+                    <Check className={`w-3 h-3 shrink-0 ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`} />
+                    +{(pkg.ttsChars / 1000).toFixed(0)}K karakter TTS
+                  </li>
+                  <li className="flex items-center gap-1.5 text-white/35">
+                    <Check className="w-3 h-3 shrink-0 text-white/20" />
+                    Tidak hangus
+                  </li>
+                </ul>
+
+                <Button
+                  onClick={() => handleTopUp(pkg.id)}
+                  disabled={!isPro}
+                  className={`w-full h-9 text-xs rounded-xl font-semibold transition-all ${
+                    pkg.popular
+                      ? 'bg-violet-600 hover:bg-violet-500 text-white border-0 shadow-md shadow-violet-500/25'
+                      : 'bg-white/[0.06] hover:bg-white/10 text-white/70 border border-white/10'
+                  } disabled:opacity-35 disabled:cursor-not-allowed`}
+                >
+                  {isPro ? 'Beli Sekarang' : 'Perlu Pro'}
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          {!isPro && (
+            <p className="text-center text-xs text-white/25">
+              Top-up hanya tersedia untuk pengguna Pro.{' '}
+              <button onClick={handleUpgrade} className="text-violet-400 hover:text-violet-300 underline underline-offset-2">
+                Upgrade sekarang →
+              </button>
+            </p>
+          )}
+        </div>
+
+        {/* ── Comparison Table ── */}
+        <div className="space-y-6">
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-black">Starter vs Pro</h2>
+            <p className="text-sm text-white/35">Lihat semua perbedaannya</p>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07] max-w-2xl mx-auto">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/[0.07]" style={{ background: 'rgba(139,92,246,0.06)' }}>
-                  <th className="text-left px-4 py-3 text-white/50 font-medium w-1/3">Fitur</th>
-                  {PLANS.map((p) => (
-                    <th key={p.id} className={`px-3 py-3 text-center font-bold ${p.highlight ? 'text-violet-300' : 'text-white/70'}`}>
-                      {p.name}
-                    </th>
-                  ))}
+                <tr style={{ background: 'rgba(139,92,246,0.07)' }}>
+                  <th className="text-left px-5 py-4 text-white/40 font-medium text-xs w-1/2 border-b border-white/[0.07]">Fitur</th>
+                  <th className="px-4 py-4 text-center font-bold text-white/50 text-xs border-b border-white/[0.07]">Starter</th>
+                  <th className="px-4 py-4 text-center font-bold text-violet-300 text-xs border-b border-white/[0.07]">
+                    <span className="inline-flex items-center gap-1"><Crown className="w-3 h-3" /> Pro</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { label: 'Asisten Virtual', values: ['1', '1', '3', '∞'] },
-                  { label: 'Percakapan / bulan', values: ['50', '1.500', '5.000', '∞'] },
-                  { label: 'Web Speech TTS', values: ['✓', '✓', '✓', '✓'] },
-                  { label: 'VITS Anime TTS', values: ['✓', '✓', '✓', '✓'] },
-                  { label: 'OpenAI TTS Premium', values: ['—', '✓', '✓', '✓'] },
-                  { label: 'Background custom', values: ['—', '✓', '✓', '✓'] },
-                  { label: 'AI Enhance Persona', values: ['—', '✓', '✓', '✓'] },
-                  { label: 'Analytics', values: ['—', 'Dasar', 'Lengkap', 'Lengkap'] },
-                  { label: 'Priority Support', values: ['—', '—', '✓', '✓'] },
-                  { label: 'Custom API', values: ['—', '—', '—', '✓'] },
-                ].map((row, i) => (
-                  <tr key={row.label} className={`border-b border-white/[0.04] ${i % 2 === 0 ? '' : 'bg-white/[0.015]'}`}>
-                    <td className="px-4 py-2.5 text-white/60">{row.label}</td>
-                    {row.values.map((v, j) => (
-                      <td key={j} className={`px-3 py-2.5 text-center ${
-                        v === '✓' ? 'text-violet-400' : v === '—' ? 'text-white/20' : 'text-white/70'
-                      } ${PLANS[j].highlight ? 'font-semibold' : ''}`}>
-                        {v}
-                      </td>
-                    ))}
+                {COMPARISON_ROWS.map((row, i) => (
+                  <tr
+                    key={row.label}
+                    className={`border-b border-white/[0.04] transition-colors ${
+                      row.highlight ? 'bg-violet-500/5' : i % 2 !== 0 ? 'bg-white/[0.012]' : ''
+                    }`}
+                  >
+                    <td className={`px-5 py-3 text-xs ${row.highlight ? 'text-white/80 font-semibold' : 'text-white/50'}`}>
+                      {row.label}
+                    </td>
+                    <td className={`px-4 py-3 text-center text-xs ${
+                      row.starter === '✓' ? 'text-white/50' :
+                      row.starter === '—' ? 'text-white/15' :
+                      'text-white/60'
+                    }`}>
+                      {row.starter}
+                    </td>
+                    <td className={`px-4 py-3 text-center text-xs font-semibold ${
+                      row.pro === '✓' ? 'text-violet-400' :
+                      row.pro === '—' ? 'text-white/15' :
+                      'text-violet-300'
+                    }`}>
+                      {row.pro}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -269,28 +418,60 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* FAQ */}
-        <div className="max-w-2xl mx-auto space-y-4">
-          <h2 className="text-xl font-black text-center">Pertanyaan Umum</h2>
-          <div className="space-y-3">
-            {FAQS.map((faq) => (
-              <div key={faq.q} className="rounded-xl border border-white/[0.07] p-4" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                <p className="text-sm font-semibold text-white/90 mb-1.5">{faq.q}</p>
-                <p className="text-xs text-white/50 leading-relaxed">{faq.a}</p>
-              </div>
-            ))}
+        {/* ── FAQ ── */}
+        <div className="max-w-2xl mx-auto space-y-5">
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-black">Pertanyaan Umum</h2>
+            <p className="text-sm text-white/35">Semua yang perlu kamu tahu</p>
+          </div>
+          <div className="space-y-2">
+            {FAQS.map(faq => <FaqItem key={faq.q} {...faq} />)}
           </div>
         </div>
 
-        {/* Bottom CTA */}
-        <div className="text-center space-y-4 py-4">
-          <p className="text-white/40 text-sm">Masih ragu? Mulai gratis dulu, tidak perlu kartu kredit.</p>
-          <Link to={user ? '/app' : '/auth?tab=signup'}>
-            <Button className="h-11 px-8 bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl shadow-lg shadow-violet-500/25 font-semibold gap-2">
-              <Sparkles className="w-4 h-4" /> Mulai Gratis Sekarang
-            </Button>
-          </Link>
+        {/* ── Bottom CTA ── */}
+        <div
+          className="relative rounded-3xl overflow-hidden p-8 sm:p-12 text-center space-y-6"
+          style={{ background: 'linear-gradient(135deg, #1e1248 0%, #130d35 50%, #1a0f40 100%)' }}
+        >
+          {/* Decorative glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[200px] bg-violet-600/15 blur-[80px] pointer-events-none" />
+          <div className="absolute inset-0 border border-violet-500/20 rounded-3xl pointer-events-none" />
+
+          <div className="relative space-y-3">
+            <p className="text-xs text-violet-400 font-semibold tracking-widest uppercase">Mulai Sekarang</p>
+            <h2 className="text-2xl sm:text-4xl font-black leading-tight">
+              Siap punya asisten virtual<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-pink-300">
+                yang benar-benar hidup?
+              </span>
+            </h2>
+            <p className="text-sm text-white/45 max-w-sm mx-auto">
+              Gratis selamanya. Upgrade ke Pro kapan saja. Tidak perlu kartu kredit untuk mulai.
+            </p>
+          </div>
+
+          <div className="relative flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link to={user ? '/app' : '/auth?tab=signup'}>
+              <Button className="h-12 px-8 bg-white text-[#07070f] hover:bg-white/90 border-0 rounded-xl font-bold text-sm gap-2 shadow-xl">
+                <Sparkles className="w-4 h-4" /> Mulai Gratis Sekarang
+              </Button>
+            </Link>
+            {!isPro && (
+              <Button
+                onClick={handleUpgrade}
+                className="h-12 px-8 bg-violet-600/30 hover:bg-violet-600/50 text-violet-200 border border-violet-500/40 rounded-xl font-semibold text-sm gap-2"
+              >
+                <Crown className="w-4 h-4" /> Langsung ke Pro
+              </Button>
+            )}
+          </div>
+
+          <p className="relative text-[11px] text-white/20">
+            Sudah {'>'}10.000 pengguna aktif · Batalkan kapan saja · Data aman & terenkripsi
+          </p>
         </div>
+
       </div>
     </div>
   );

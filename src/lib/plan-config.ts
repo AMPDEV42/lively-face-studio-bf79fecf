@@ -1,12 +1,13 @@
 /**
  * SaaS Plan Configuration
- * Defines limits and features for each plan tier.
+ * Voxie menggunakan model 2-tier sederhana: Starter (gratis) + Pro (berbayar).
+ * User Pro yang kehabisan kuota bisa top-up paket pesan tambahan.
  */
 
-export type PlanId = 'free' | 'pro' | 'business' | 'enterprise';
+export type PlanId = 'free' | 'pro';
 
 export interface PlanLimits {
-  /** Max messages per month (null = unlimited) */
+  /** Max messages per month dari langganan (null = unlimited) */
   messagesPerMonth: number | null;
   /** Max tokens per month (null = unlimited) */
   tokensPerMonth: number | null;
@@ -46,6 +47,62 @@ export interface PlanConfig {
   limits: PlanLimits;
 }
 
+/**
+ * Paket top-up pesan tambahan untuk user Pro yang kehabisan kuota.
+ * Harga dirancang agar margin tetap positif per pesan.
+ */
+export interface TopUpPackage {
+  id: string;
+  label: string;
+  messages: number;
+  ttsChars: number;
+  price: string;
+  priceIDR: number;
+  /** Harga per pesan dalam IDR (untuk transparansi) */
+  perMessage: string;
+  popular?: boolean;
+}
+
+export const TOP_UP_PACKAGES: TopUpPackage[] = [
+  {
+    id: 'topup_100',
+    label: 'Mini',
+    messages: 100,
+    ttsChars: 3_000,
+    price: 'Rp 15.000',
+    priceIDR: 15_000,
+    perMessage: 'Rp 150/pesan',
+  },
+  {
+    id: 'topup_300',
+    label: 'Standar',
+    messages: 300,
+    ttsChars: 10_000,
+    price: 'Rp 29.000',
+    priceIDR: 29_000,
+    perMessage: 'Rp 97/pesan',
+    popular: true,
+  },
+  {
+    id: 'topup_700',
+    label: 'Hemat',
+    messages: 700,
+    ttsChars: 25_000,
+    price: 'Rp 49.000',
+    priceIDR: 49_000,
+    perMessage: 'Rp 70/pesan',
+  },
+  {
+    id: 'topup_1500',
+    label: 'Bulanan',
+    messages: 1_500,
+    ttsChars: 50_000,
+    price: 'Rp 99.000',
+    priceIDR: 99_000,
+    perMessage: 'Rp 66/pesan',
+  },
+];
+
 export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
   free: {
     id: 'free',
@@ -55,14 +112,14 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
     limits: {
       messagesPerMonth: 50,
       tokensPerMonth: 25_000,
-      ttsCharsPerMonth: 0,          // Free: tidak ada premium TTS
+      ttsCharsPerMonth: 0,       // Tidak ada premium TTS di free
       maxAssistants: 1,
       maxVrmUploads: 0,
       maxVrmaUploads: 0,
       maxBackgroundUploads: 0,
       maxConversations: 10,
       premiumTTS: false,
-      vitsTTS: true,                // VITS anime gratis untuk semua
+      vitsTTS: true,             // VITS anime gratis untuk semua
       customBackgrounds: false,
       aiEnhancePersona: false,
       analytics: false,
@@ -73,18 +130,18 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 'Rp 99.000',            // Naik dari 79K → 99K untuk margin sehat
+    price: 'Rp 150.000',
     period: '/ bulan',
     limits: {
-      messagesPerMonth: 1_500,     // Break-even aman bahkan di worst case full TTS
+      messagesPerMonth: 1_500,   // Break-even aman bahkan worst case full TTS
       tokensPerMonth: 750_000,
-      ttsCharsPerMonth: 50_000,    // ~500 pesan TTS/bulan (100 chars avg)
+      ttsCharsPerMonth: 50_000,  // ~500 pesan TTS/bulan (100 chars avg)
       maxAssistants: 1,
       maxVrmUploads: 5,
       maxVrmaUploads: 20,
       maxBackgroundUploads: 10,
       maxConversations: 100,
-      premiumTTS: true,            // OpenAI TTS
+      premiumTTS: true,
       vitsTTS: true,
       customBackgrounds: true,
       aiEnhancePersona: true,
@@ -93,58 +150,12 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
       customApi: false,
     },
   },
-  business: {
-    id: 'business',
-    name: 'Business',
-    price: 'Rp 249.000',           // Turun dari 299K → 249K agar lebih kompetitif
-    period: '/ bulan',
-    limits: {
-      messagesPerMonth: 5_000,
-      tokensPerMonth: 2_500_000,
-      ttsCharsPerMonth: 200_000,   // ~2.000 pesan TTS/bulan
-      maxAssistants: 3,
-      maxVrmUploads: 20,
-      maxVrmaUploads: 100,
-      maxBackgroundUploads: 50,
-      maxConversations: 500,
-      premiumTTS: true,
-      vitsTTS: true,
-      customBackgrounds: true,
-      aiEnhancePersona: true,
-      analytics: 'full',
-      prioritySupport: true,
-      customApi: false,
-    },
-  },
-  enterprise: {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: 'Custom',
-    period: '',
-    limits: {
-      messagesPerMonth: null,
-      tokensPerMonth: null,
-      ttsCharsPerMonth: null,      // Unlimited
-      maxAssistants: null,
-      maxVrmUploads: 999,
-      maxVrmaUploads: 999,
-      maxBackgroundUploads: 999,
-      maxConversations: 9999,
-      premiumTTS: true,
-      vitsTTS: true,
-      customBackgrounds: true,
-      aiEnhancePersona: true,
-      analytics: 'full',
-      prioritySupport: true,
-      customApi: true,
-    },
-  },
 };
 
-/** Get plan config by role string */
+/** Get plan config by role */
 export function getPlanConfig(isPro: boolean, isAdmin: boolean): PlanConfig {
-  if (isAdmin) return PLAN_CONFIGS.enterprise;
-  if (isPro) return PLAN_CONFIGS.pro;
+  // Admin tetap dapat akses penuh seperti Pro
+  if (isAdmin || isPro) return PLAN_CONFIGS.pro;
   return PLAN_CONFIGS.free;
 }
 
