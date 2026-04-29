@@ -10,6 +10,8 @@ export interface PlanLimits {
   messagesPerMonth: number | null;
   /** Max tokens per month (null = unlimited) */
   tokensPerMonth: number | null;
+  /** Max TTS characters per month (null = unlimited) */
+  ttsCharsPerMonth: number | null;
   /** Max virtual assistants */
   maxAssistants: number | null;
   /** Max custom VRM uploads */
@@ -20,8 +22,8 @@ export interface PlanLimits {
   maxBackgroundUploads: number;
   /** Max conversation history stored */
   maxConversations: number;
-  /** Can use ElevenLabs TTS */
-  elevenLabsTTS: boolean;
+  /** Can use OpenAI TTS premium */
+  premiumTTS: boolean;
   /** Can use VITS Anime TTS */
   vitsTTS: boolean;
   /** Can upload custom backgrounds */
@@ -51,15 +53,16 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
     price: 'Gratis',
     period: '',
     limits: {
-      messagesPerMonth: 100,
-      tokensPerMonth: 50_000,
+      messagesPerMonth: 50,
+      tokensPerMonth: 25_000,
+      ttsCharsPerMonth: 0,          // Free: tidak ada premium TTS
       maxAssistants: 1,
       maxVrmUploads: 0,
       maxVrmaUploads: 0,
       maxBackgroundUploads: 0,
       maxConversations: 10,
-      elevenLabsTTS: false,
-      vitsTTS: true,
+      premiumTTS: false,
+      vitsTTS: true,                // VITS anime gratis untuk semua
       customBackgrounds: false,
       aiEnhancePersona: false,
       analytics: false,
@@ -70,17 +73,18 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 'Rp 79.000',
+    price: 'Rp 99.000',            // Naik dari 79K → 99K untuk margin sehat
     period: '/ bulan',
     limits: {
-      messagesPerMonth: 10_000,
-      tokensPerMonth: 5_000_000,
+      messagesPerMonth: 1_500,     // Break-even aman bahkan di worst case full TTS
+      tokensPerMonth: 750_000,
+      ttsCharsPerMonth: 50_000,    // ~500 pesan TTS/bulan (100 chars avg)
       maxAssistants: 1,
       maxVrmUploads: 5,
       maxVrmaUploads: 20,
       maxBackgroundUploads: 10,
       maxConversations: 100,
-      elevenLabsTTS: true,
+      premiumTTS: true,            // OpenAI TTS
       vitsTTS: true,
       customBackgrounds: true,
       aiEnhancePersona: true,
@@ -92,17 +96,18 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
   business: {
     id: 'business',
     name: 'Business',
-    price: 'Rp 299.000',
+    price: 'Rp 249.000',           // Turun dari 299K → 249K agar lebih kompetitif
     period: '/ bulan',
     limits: {
-      messagesPerMonth: 50_000,
-      tokensPerMonth: 25_000_000,
+      messagesPerMonth: 5_000,
+      tokensPerMonth: 2_500_000,
+      ttsCharsPerMonth: 200_000,   // ~2.000 pesan TTS/bulan
       maxAssistants: 3,
       maxVrmUploads: 20,
       maxVrmaUploads: 100,
       maxBackgroundUploads: 50,
       maxConversations: 500,
-      elevenLabsTTS: true,
+      premiumTTS: true,
       vitsTTS: true,
       customBackgrounds: true,
       aiEnhancePersona: true,
@@ -119,12 +124,13 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
     limits: {
       messagesPerMonth: null,
       tokensPerMonth: null,
+      ttsCharsPerMonth: null,      // Unlimited
       maxAssistants: null,
       maxVrmUploads: 999,
       maxVrmaUploads: 999,
       maxBackgroundUploads: 999,
       maxConversations: 9999,
-      elevenLabsTTS: true,
+      premiumTTS: true,
       vitsTTS: true,
       customBackgrounds: true,
       aiEnhancePersona: true,

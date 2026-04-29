@@ -99,8 +99,8 @@ export default function TTSSettings({
   const handleToggleCard = (p: TTSProvider) => {
     if (p === 'elevenlabs' && !isPro) {
       openUpgradeModal({
-        featureName: 'ElevenLabs TTS',
-        featureDescription: 'Suara AI berkualitas tinggi dari ElevenLabs — lebih natural dan ekspresif. Tersedia di paket Pro.',
+        featureName: 'OpenAI TTS Premium',
+        featureDescription: 'Suara AI berkualitas tinggi dari OpenAI — lebih natural dan ekspresif. Tersedia di paket Pro.',
       });
       return;
     }

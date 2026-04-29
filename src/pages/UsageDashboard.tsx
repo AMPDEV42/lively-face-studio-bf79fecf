@@ -370,7 +370,7 @@ function QuotaCard({ icon, label, used, limit, isPro }: QuotaCardProps) {
 // ─── Feature rows config ──────────────────────────────────────────────────────
 
 const FEATURE_ROWS = [
-  { key: 'elevenLabsTTS', label: 'ElevenLabs TTS', icon: <Zap className="w-3.5 h-3.5" /> },
+  { key: 'premiumTTS', label: 'OpenAI TTS Premium', icon: <Zap className="w-3.5 h-3.5" /> },
   { key: 'vitsTTS', label: 'VITS Anime TTS', icon: <Zap className="w-3.5 h-3.5" /> },
   { key: 'customBackgrounds', label: 'Background Custom', icon: <Image className="w-3.5 h-3.5" /> },
   { key: 'aiEnhancePersona', label: 'AI Enhance Persona', icon: <Sparkles className="w-3.5 h-3.5" /> },

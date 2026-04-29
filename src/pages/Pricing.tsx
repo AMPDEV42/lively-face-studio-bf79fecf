@@ -15,7 +15,7 @@ const PLANS = [
     desc: 'Untuk personal & kreator pemula',
     features: [
       '1 Asisten Virtual',
-      '100 percakapan / bulan',
+      '50 percakapan / bulan',
       'Web Speech TTS',
       '4 background default',
       'Animasi dasar',
@@ -28,13 +28,13 @@ const PLANS = [
     id: 'pro',
     name: 'Pro',
     icon: <Crown className="w-5 h-5 text-violet-300" />,
-    price: 'Rp 79.000',
+    price: 'Rp 99.000',
     period: '/ bulan',
     desc: 'Untuk kreator & bisnis kecil',
     features: [
       '1 Asisten Virtual',
-      '10.000 percakapan / bulan',
-      'ElevenLabs TTS (suara premium)',
+      '1.500 percakapan / bulan',
+      'OpenAI TTS (suara premium)',
       'VITS Anime TTS',
       '8 background + upload custom',
       'Semua animasi & ekspresi',
@@ -49,12 +49,12 @@ const PLANS = [
     id: 'business',
     name: 'Business',
     icon: <Building2 className="w-5 h-5 text-violet-400" />,
-    price: 'Rp 299.000',
+    price: 'Rp 249.000',
     period: '/ bulan',
     desc: 'Untuk tim & bisnis berkembang',
     features: [
       '3 Asisten Virtual',
-      '50.000 percakapan / bulan',
+      '5.000 percakapan / bulan',
       'Semua fitur Pro',
       'Analytics lengkap',
       'Priority support',
@@ -89,7 +89,8 @@ const FAQS = [
   { q: 'Apakah ada uji coba gratis?', a: 'Ya, paket Starter sepenuhnya gratis tanpa batas waktu. Kamu bisa upgrade kapan saja.' },
   { q: 'Bagaimana cara upgrade ke Pro?', a: 'Klik tombol "Mulai Pro" dan ikuti instruksi. Hubungi kami via email di sales@voxie.app untuk proses aktivasi cepat.' },
   { q: 'Apakah bisa downgrade?', a: 'Bisa. Hubungi kami dan downgrade akan berlaku di akhir periode billing berjalan.' },
-  { q: 'Apa itu ElevenLabs TTS?', a: 'ElevenLabs adalah layanan text-to-speech AI berkualitas tinggi dengan suara yang sangat natural dan ekspresif, tersedia di paket Pro ke atas.' },
+  { q: 'Apa itu OpenAI TTS?', a: 'OpenAI TTS adalah layanan text-to-speech AI berkualitas tinggi dengan suara yang sangat natural dan ekspresif, tersedia di paket Pro ke atas.' },
+  { q: 'Apa itu VITS Anime TTS?', a: 'VITS Anime TTS menggunakan model AI khusus untuk menghasilkan suara karakter anime Jepang yang ekspresif. Tersedia gratis untuk semua pengguna.' },
   { q: 'Apakah data percakapan saya aman?', a: 'Ya. Semua percakapan disimpan terenkripsi di server kami. Kamu bisa menghapus semua data kapan saja dari halaman Profil.' },
 ];
 
@@ -118,7 +119,7 @@ export default function Pricing() {
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
-      <MetaTags title="Harga" description="Pilih paket Voxie yang sesuai kebutuhanmu. Mulai gratis, upgrade kapan saja. Starter gratis, Pro Rp 79.000/bulan." />
+      <MetaTags title="Harga" description="Pilih paket Voxie yang sesuai kebutuhanmu. Mulai gratis, upgrade kapan saja. Starter gratis, Pro Rp 99.000/bulan." />
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#07070f]/90 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center gap-3">
@@ -242,10 +243,10 @@ export default function Pricing() {
               <tbody>
                 {[
                   { label: 'Asisten Virtual', values: ['1', '1', '3', '∞'] },
-                  { label: 'Percakapan / bulan', values: ['100', '10.000', '50.000', '∞'] },
+                  { label: 'Percakapan / bulan', values: ['50', '1.500', '5.000', '∞'] },
                   { label: 'Web Speech TTS', values: ['✓', '✓', '✓', '✓'] },
-                  { label: 'ElevenLabs TTS', values: ['—', '✓', '✓', '✓'] },
-                  { label: 'VITS Anime TTS', values: ['—', '✓', '✓', '✓'] },
+                  { label: 'VITS Anime TTS', values: ['✓', '✓', '✓', '✓'] },
+                  { label: 'OpenAI TTS Premium', values: ['—', '✓', '✓', '✓'] },
                   { label: 'Background custom', values: ['—', '✓', '✓', '✓'] },
                   { label: 'AI Enhance Persona', values: ['—', '✓', '✓', '✓'] },
                   { label: 'Analytics', values: ['—', 'Dasar', 'Lengkap', 'Lengkap'] },

@@ -1,10 +1,16 @@
 /**
  * Utility for Hugging Face VITS (Gradio 4 API)
  * Specifically for Plachta/VITS-Umamusume-voice-synthesizer
+ *
+ * Priority order for Space URL:
+ * 1. localStorage override (user's own private mirror)
+ * 2. VITE_HF_VITS_SPACE_URL env var (owner's private Space — set in .env)
+ * 3. Public Space fallback (rate-limited, may sleep)
  */
 
-const HF_SPACE_URL = "https://plachta-vits-umamusume-voice-synthesizer.hf.space";
-const HF_TOKEN = import.meta.env.VITE_HUGGINGFACE_TOKEN;
+const HF_PUBLIC_SPACE_URL = "https://plachta-vits-umamusume-voice-synthesizer.hf.space";
+const HF_PRIVATE_SPACE_URL = import.meta.env.VITE_HF_VITS_SPACE_URL as string | undefined;
+const HF_TOKEN = import.meta.env.VITE_HUGGINGFACE_TOKEN as string | undefined;
 
 export interface VitsRequest {
   text: string;
@@ -56,9 +62,9 @@ export async function generateVitsAudio({
   speed = 1.0,
   signal,
 }: VitsRequest & { signal?: AbortSignal }): Promise<string> {
-  // Use public mirror by default, but allow override via localStorage
-  const customUrl = localStorage.getItem('vrm.vits_custom_url');
-  const baseUrl = customUrl || HF_SPACE_URL;
+  // URL priority: user localStorage override → owner private Space → public fallback
+  const userCustomUrl = localStorage.getItem('vrm.vits_custom_url');
+  const baseUrl = userCustomUrl || HF_PRIVATE_SPACE_URL || HF_PUBLIC_SPACE_URL;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

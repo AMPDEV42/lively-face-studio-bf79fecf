@@ -525,9 +525,9 @@ export default function Landing() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { name: 'Starter', sub: 'Personal & kreator', price: 'Gratis', period: '', features: ['1 Asisten Virtual','100 percakapan/bulan','Web Speech TTS'], cta: 'Mulai Gratis', highlight: false },
-              { name: 'Pro', sub: 'Bisnis kecil & startup', price: 'Rp 79.000', period: '/bulan', features: ['1 Asisten Virtual','10.000 percakapan/bulan','ElevenLabs TTS','Analytics Dasar'], cta: 'Mulai Gratis', highlight: true },
-              { name: 'Business', sub: 'Bisnis & tim', price: 'Rp 299.000', period: '/bulan', features: ['3 Asisten Virtual','50.000 percakapan/bulan','ElevenLabs TTS','Analytics Lengkap','Priority Support'], cta: 'Mulai Gratis', highlight: false },
+              { name: 'Starter', sub: 'Personal & kreator', price: 'Gratis', period: '', features: ['1 Asisten Virtual','50 percakapan/bulan','Web Speech TTS'], cta: 'Mulai Gratis', highlight: false },
+              { name: 'Pro', sub: 'Bisnis kecil & startup', price: 'Rp 99.000', period: '/bulan', features: ['1 Asisten Virtual','1.500 percakapan/bulan','OpenAI TTS Premium','Analytics Dasar'], cta: 'Mulai Gratis', highlight: true },
+              { name: 'Business', sub: 'Bisnis & tim', price: 'Rp 249.000', period: '/bulan', features: ['3 Asisten Virtual','5.000 percakapan/bulan','OpenAI TTS Premium','Analytics Lengkap','Priority Support'], cta: 'Mulai Gratis', highlight: false },
               { name: 'Enterprise', sub: 'Perusahaan besar', price: 'Custom', period: '', features: ['Asisten Unlimited','Percakapan Unlimited','Custom Integrasi','Dedicated Support','SLA Tinggi'], cta: 'Hubungi Sales', highlight: false },
             ].map((plan) => (
               <div key={plan.name} className={`relative rounded-2xl border p-5 flex flex-col gap-4 transition-all duration-300 ${

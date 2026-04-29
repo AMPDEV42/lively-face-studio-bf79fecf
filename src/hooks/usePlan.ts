@@ -25,6 +25,7 @@ import {
 export interface UsageStats {
   messagesThisMonth: number;
   tokensThisMonth: number;
+  ttsCharsThisMonth: number;
   vrmUploads: number;
   vrmaUploads: number;
   backgroundUploads: number;
@@ -34,6 +35,7 @@ interface StoredUsage {
   month: string; // "YYYY-MM"
   messages: number;
   tokens: number;
+  ttsChars: number;
   vrmUploads: number;
   vrmaUploads: number;
   backgroundUploads: number;
@@ -55,10 +57,13 @@ function loadUsage(userId: string): StoredUsage {
     if (raw) {
       const parsed: StoredUsage = JSON.parse(raw);
       // Reset if new month
-      if (parsed.month === month) return parsed;
+      if (parsed.month === month) return {
+        ...parsed,
+        ttsChars: parsed.ttsChars ?? 0, // migrate old data without ttsChars
+      };
     }
   } catch { /* ok */ }
-  return { month, messages: 0, tokens: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0 };
+  return { month, messages: 0, tokens: 0, ttsChars: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0 };
 }
 
 function saveUsage(userId: string, usage: StoredUsage) {
@@ -79,7 +84,7 @@ export function usePlan() {
   const planId: PlanId = isAdmin ? 'enterprise' : isPro ? 'pro' : 'free';
 
   const [usage, setUsage] = useState<StoredUsage>(() => {
-    if (!user) return { month: getCurrentMonth(), messages: 0, tokens: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0 };
+    if (!user) return { month: getCurrentMonth(), messages: 0, tokens: 0, ttsChars: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0 };
     return loadUsage(user.id);
   });
 
@@ -88,7 +93,7 @@ export function usePlan() {
     if (user) {
       setUsage(loadUsage(user.id));
     } else {
-      setUsage({ month: getCurrentMonth(), messages: 0, tokens: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0 });
+      setUsage({ month: getCurrentMonth(), messages: 0, tokens: 0, ttsChars: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0 });
     }
   }, [user]);
 
@@ -124,6 +129,24 @@ export function usePlan() {
     if (messagesPerMonth !== null && current.messages >= messagesPerMonth) return false;
     if (tokensPerMonth !== null && current.tokens >= tokensPerMonth) return false;
     return true;
+  }, [planConfig.limits, usage, user]);
+
+  /** Record TTS character usage. Returns false if monthly limit exceeded. */
+  const recordTtsChars = useCallback((charCount: number): boolean => {
+    const { ttsCharsPerMonth } = planConfig.limits;
+    const current = user ? loadUsage(user.id) : usage;
+    if (ttsCharsPerMonth !== null && current.ttsChars + charCount > ttsCharsPerMonth) return false;
+    persist({ ...current, ttsChars: current.ttsChars + charCount });
+    return true;
+  }, [planConfig.limits, usage, user, persist]);
+
+  /** Check if user can use premium TTS (without recording) */
+  const canUsePremiumTTS = useCallback((charCount: number = 0): boolean => {
+    const { ttsCharsPerMonth, premiumTTS } = planConfig.limits;
+    if (!premiumTTS) return false;
+    if (ttsCharsPerMonth === null) return true;
+    const current = user ? loadUsage(user.id) : usage;
+    return current.ttsChars + charCount <= ttsCharsPerMonth;
   }, [planConfig.limits, usage, user]);
 
   /** Record a VRM upload. Returns false if limit exceeded. */
@@ -163,10 +186,12 @@ export function usePlan() {
   // Computed usage percentages
   const messagePercent = getUsagePercent(usage.messages, planConfig.limits.messagesPerMonth);
   const tokenPercent = getUsagePercent(usage.tokens, planConfig.limits.tokensPerMonth);
+  const ttsPercent = getUsagePercent(usage.ttsChars, planConfig.limits.ttsCharsPerMonth);
 
   const stats: UsageStats = {
     messagesThisMonth: usage.messages,
     tokensThisMonth: usage.tokens,
+    ttsCharsThisMonth: usage.ttsChars,
     vrmUploads: usage.vrmUploads,
     vrmaUploads: usage.vrmaUploads,
     backgroundUploads: usage.backgroundUploads,
@@ -182,8 +207,11 @@ export function usePlan() {
     usage,
     messagePercent,
     tokenPercent,
+    ttsPercent,
     recordMessage,
     canSendMessage,
+    recordTtsChars,
+    canUsePremiumTTS,
     recordVrmUpload,
     recordVrmaUpload,
     recordBackgroundUpload,

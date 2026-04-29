@@ -2,8 +2,8 @@
  * PlanGate — Wraps any UI element that requires a Pro plan.
  *
  * Usage:
- *   <PlanGate feature="elevenLabsTTS" featureName="ElevenLabs TTS">
- *     <ElevenLabsSettings />
+ *   <PlanGate feature="premiumTTS" featureName="OpenAI TTS Premium">
+ *     <PremiumTTSSettings />
  *   </PlanGate>
  *
  * When the user is on free plan:
