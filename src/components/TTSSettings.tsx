@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Volume2, Mic, AlertTriangle, CheckCircle, Play, Loader2, ChevronDown } from 'lucide-react';
+import { Volume2, Mic, AlertTriangle, CheckCircle, Play, Loader2, ChevronDown, Crown, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateTTS } from '@/lib/chat-api';
 import {
@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { generateVitsAudio, UMAMUSUME_SPEAKERS } from '@/lib/vits-tts';
 import type { TTSProvider } from '@/hooks/useTTSProvider';
+import { useUpgradeModal } from '@/components/UpgradeModal';
 
 interface VoiceRow {
   id: string;
@@ -45,6 +46,7 @@ export default function TTSSettings({
   voices,
   onVoicesRefresh,
 }: TTSSettingsProps) {
+  const { openUpgradeModal, UpgradeModalElement } = useUpgradeModal();
   const [expanded, setExpanded] = useState<TTSProvider | null>(provider);
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [webVoices, setWebVoices] = useState<WebSpeechVoiceInfo[]>([]);
@@ -95,7 +97,13 @@ export default function TTSSettings({
   );
 
   const handleToggleCard = (p: TTSProvider) => {
-    if (p === 'elevenlabs' && !isPro) return;
+    if (p === 'elevenlabs' && !isPro) {
+      openUpgradeModal({
+        featureName: 'ElevenLabs TTS',
+        featureDescription: 'Suara AI berkualitas tinggi dari ElevenLabs — lebih natural dan ekspresif. Tersedia di paket Pro.',
+      });
+      return;
+    }
     onProviderChange(p);
     setExpanded((cur) => (cur === p ? null : p));
   };
@@ -195,31 +203,30 @@ export default function TTSSettings({
             provider === 'elevenlabs' && !rateLimited
               ? 'border-primary/50 bg-primary/5'
               : 'border-border/50 bg-secondary/30'
-          } ${!isPro ? 'opacity-50' : ''}`}
+          } ${!isPro ? 'opacity-60' : ''}`}
         >
           <button
             type="button"
-            disabled={!isPro}
             onClick={() => handleToggleCard('elevenlabs')}
-            className={`w-full flex items-start gap-3 p-3.5 text-left ${!isPro ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            className="w-full flex items-start gap-3 p-3.5 text-left cursor-pointer"
           >
             <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
               provider === 'elevenlabs' && !rateLimited ? 'bg-primary/15' : 'bg-secondary'
             }`}>
-              <Volume2 className="w-4 h-4 text-primary" />
+              {!isPro ? <Lock className="w-4 h-4 text-violet-400" /> : <Volume2 className="w-4 h-4 text-primary" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-foreground">ElevenLabs</span>
                 {!isPro && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">PRO</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-bold border border-violet-500/30">PRO</span>
                 )}
                 {rateLimited && provider === 'elevenlabs' && (
                   <span className="flex items-center gap-1 text-[10px] text-amber-500">
                     <AlertTriangle className="w-3 h-3" /> Rate limit
                   </span>
                 )}
-                {provider === 'elevenlabs' && !rateLimited && (
+                {provider === 'elevenlabs' && !rateLimited && isPro && (
                   <CheckCircle className="w-3.5 h-3.5 text-primary" />
                 )}
                 {isPro && (
@@ -229,9 +236,14 @@ export default function TTSSettings({
                     }`}
                   />
                 )}
+                {!isPro && (
+                  <Crown className="ml-auto w-3.5 h-3.5 text-violet-400" />
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Suara AI berkualitas tinggi — lebih natural dan ekspresif
+                {isPro
+                  ? 'Suara AI berkualitas tinggi — lebih natural dan ekspresif'
+                  : 'Upgrade ke Pro untuk akses suara premium ElevenLabs'}
               </p>
             </div>
           </button>
@@ -584,6 +596,7 @@ export default function TTSSettings({
           <span>ElevenLabs mencapai batas penggunaan. Otomatis beralih ke Web Speech. Pilih ElevenLabs lagi untuk mencoba ulang.</span>
         </div>
       )}
+      {UpgradeModalElement}
     </div>
   );
 }

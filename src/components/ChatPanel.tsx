@@ -20,6 +20,9 @@ import { ChatHistoryPanel } from '@/components/ChatHistoryPanel';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import { useAiInitiative } from '@/hooks/useAiInitiative';
 import { handleSlashCommand } from '@/lib/slash-commands';
+import { usePlan } from '@/hooks/usePlan';
+import MessageLimitBanner from '@/components/MessageLimitBanner';
+import { useUpgradeModal } from '@/components/UpgradeModal';
 
 // ── VITS helper — extracted to avoid 4x duplication ──────────────────────────
 async function runVitsTTS(text: string, signal?: AbortSignal): Promise<{ url: string | null; source: 'vits' | 'none'; error: string | null }> {
@@ -80,6 +83,8 @@ export default function ChatPanel({
   onToggleMute,
 }: ChatPanelProps) {
   const { user } = useAuth();
+  const { canSendMessage, recordMessage } = usePlan();
+  const { openUpgradeModal, UpgradeModalElement } = useUpgradeModal();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -512,6 +517,18 @@ export default function ChatPanel({
   const handleSend = useCallback(async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
     if (!text || isLoading) return;
+
+    // ── Plan limit check ──────────────────────────────────────────────────────
+    if (!canSendMessage()) {
+      openUpgradeModal({
+        reason: 'Batas pesan bulanan tercapai',
+        featureDescription: 'Upgrade ke Pro untuk mendapatkan 10.000 pesan per bulan dan fitur premium lainnya.',
+      });
+      return;
+    }
+    // Record usage (estimate ~100 tokens per message)
+    recordMessage(100);
+    // ─────────────────────────────────────────────────────────────────────────
 
     onUserMessage?.(text);
     resetInitiativeTimer();
@@ -976,11 +993,13 @@ export default function ChatPanel({
           </div>
 
           <div className="px-3 py-3 border-t border-neon-purple cyber-glass">
+            <MessageLimitBanner />
             {inputBar}
             <p className="text-[10px] text-muted-foreground/40 text-center mt-1.5">Enter kirim · Shift+Enter baris baru</p>
           </div>
         </>
       )}
+      {UpgradeModalElement}
     </div>
   );
 }

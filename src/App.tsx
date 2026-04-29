@@ -18,6 +18,7 @@ const Pricing = lazy(() => import("./pages/Pricing.tsx"));
 const Gallery = lazy(() => import("./pages/Gallery.tsx"));
 const Docs = lazy(() => import("./pages/Docs.tsx"));
 const Legal = lazy(() => import("./pages/Legal.tsx"));
+const UsageDashboard = lazy(() => import("./pages/UsageDashboard.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -92,6 +93,16 @@ const App = () => (
             <Route path="/gallery" element={<Suspense fallback={<PageFallback />}><Gallery /></Suspense>} />
             <Route path="/docs" element={<Suspense fallback={<PageFallback />}><Docs /></Suspense>} />
             <Route path="/legal" element={<Suspense fallback={<PageFallback />}><Legal /></Suspense>} />
+            <Route
+              path="/usage"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <ProtectedRoute>
+                    <UsageDashboard />
+                  </ProtectedRoute>
+                </Suspense>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

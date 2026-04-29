@@ -109,6 +109,13 @@ export default function Pricing() {
     }
   };
 
+  const getCurrentPlanId = () => {
+    if (!user) return null;
+    if (isPro) return 'pro';
+    return 'starter';
+  };
+  const currentPlanId = getCurrentPlanId();
+
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
       <MetaTags title="Harga" description="Pilih paket Voxie yang sesuai kebutuhanmu. Mulai gratis, upgrade kapan saja. Starter gratis, Pro Rp 79.000/bulan." />
@@ -204,14 +211,14 @@ export default function Pricing() {
               {/* CTA */}
               <Button
                 onClick={() => handleCTA(plan.id)}
-                disabled={plan.id === 'pro' && isPro}
+                disabled={plan.id === currentPlanId}
                 className={`w-full h-10 text-xs rounded-xl font-semibold ${
                   plan.highlight
                     ? 'bg-violet-600 hover:bg-violet-500 text-white border-0 shadow-lg shadow-violet-500/25'
                     : 'bg-white/[0.07] hover:bg-white/12 text-white border border-white/10'
                 }`}
               >
-                {plan.id === 'pro' && isPro ? '✓ Paket Aktif' : plan.cta}
+                {plan.id === currentPlanId ? '✓ Paket Aktif' : plan.cta}
               </Button>
             </div>
           ))}

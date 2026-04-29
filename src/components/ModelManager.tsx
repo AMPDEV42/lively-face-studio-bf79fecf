@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { usePlan } from '@/hooks/usePlan';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,9 +10,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Upload, Trash2, Pencil, Check, X, Bot, Cpu, ExternalLink, Sparkles, Loader2 } from 'lucide-react';
+import { Upload, Trash2, Pencil, Check, X, Bot, Cpu, ExternalLink, Sparkles, Loader2, Lock, Crown } from 'lucide-react';
 import { UploadProgress } from '@/components/UploadProgress';
 import UploadSuccessNotification from '@/components/UploadSuccessNotification';
+import { useUpgradeModal } from '@/components/UpgradeModal';
 import { toast } from 'sonner';
 
 interface VrmModel {
@@ -31,6 +33,8 @@ interface ModelManagerProps {
 
 export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
   const { user } = useAuth();
+  const { isPro, planConfig, stats, recordVrmUpload } = usePlan();
+  const { openUpgradeModal, UpgradeModalElement } = useUpgradeModal();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -43,6 +47,14 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
   const handleEnhancePersonality = async () => {
     if (!editForm.gender || !['male', 'female'].includes(editForm.gender)) {
       toast.error('Pilih Gender (Male/Female) dulu sebelum enhance.');
+      return;
+    }
+    // ── Plan gate: AI Enhance Persona is Pro-only ─────────────────────────
+    if (!isPro) {
+      openUpgradeModal({
+        featureName: 'AI Enhance Persona',
+        featureDescription: 'Generate kepribadian karakter secara otomatis menggunakan AI. Tersedia di paket Pro.',
+      });
       return;
     }
     setEnhancing(true);
@@ -79,6 +91,24 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
     if (!file || !user) return;
     if (!file.name.toLowerCase().endsWith('.vrm')) { toast.error('Hanya file .vrm yang didukung'); return; }
     if (file.size > 100 * 1024 * 1024) { toast.error('File terlalu besar (max 100MB)'); return; }
+
+    // ── Plan gate: free users cannot upload VRM ───────────────────────────
+    if (!isPro) {
+      openUpgradeModal({
+        featureName: 'Upload Model VRM',
+        featureDescription: 'Upload model VRM kustom kamu sendiri. Tersedia di paket Pro ke atas.',
+      });
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+
+    // ── Quota check ───────────────────────────────────────────────────────
+    const allowed = recordVrmUpload();
+    if (!allowed) {
+      toast.error(`Kuota upload VRM tercapai (${planConfig.limits.maxVrmUploads} model). Hapus model lama atau upgrade paket.`);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
 
     setUploading(true);
     setUploadProgress({ name: file.name, progress: 0 });
@@ -178,17 +208,57 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-foreground">Model VRM</h2>
-              <p className="text-[11px] text-muted-foreground">{models.length} model tersimpan</p>
+              <p className="text-[11px] text-muted-foreground">
+                {models.length} model tersimpan
+                {isPro && planConfig.limits.maxVrmUploads > 0 && (
+                  <span className="ml-1.5 text-violet-400/70">
+                    · {stats.vrmUploads}/{planConfig.limits.maxVrmUploads} upload bulan ini
+                  </span>
+                )}
+              </p>
             </div>
           </div>
           <div>
             <input ref={inputRef} type="file" accept=".vrm" onChange={handleUpload} className="hidden" />
-            <Button size="sm" onClick={() => inputRef.current?.click()} disabled={uploading} className="gap-1.5 h-8 text-xs">
-              <Upload className="w-3.5 h-3.5" />
-              {uploading ? 'Uploading…' : 'Upload VRM'}
-            </Button>
+            {isPro ? (
+              <Button size="sm" onClick={() => inputRef.current?.click()} disabled={uploading} className="gap-1.5 h-8 text-xs">
+                <Upload className="w-3.5 h-3.5" />
+                {uploading ? 'Uploading…' : 'Upload VRM'}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openUpgradeModal({ featureName: 'Upload Model VRM', featureDescription: 'Upload model VRM kustom kamu sendiri. Tersedia di paket Pro ke atas.' })}
+                className="gap-1.5 h-8 text-xs border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                Upload VRM
+                <Crown className="w-3 h-3" />
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Free user notice */}
+        {!isPro && (
+          <div
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs"
+            style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}
+          >
+            <Crown className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+            <span className="text-white/60">
+              Upload model VRM kustom tersedia di paket{' '}
+              <button
+                onClick={() => openUpgradeModal({ featureName: 'Upload Model VRM' })}
+                className="text-violet-400 font-semibold hover:underline"
+              >
+                Pro
+              </button>
+              . Kamu bisa menggunakan model default yang tersedia.
+            </span>
+          </div>
+        )}
 
         {/* Upload progress */}
         {uploadProgress && (
@@ -259,12 +329,14 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
                           variant="ghost"
                           onClick={handleEnhancePersonality}
                           disabled={enhancing}
-                          className="h-7 text-[11px] gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                          className={`h-7 text-[11px] gap-1 ${isPro ? 'text-primary hover:text-primary hover:bg-primary/10' : 'text-violet-400/60 hover:text-violet-400 hover:bg-violet-500/10'}`}
                         >
                           {enhancing ? (
                             <><Loader2 className="w-3 h-3 animate-spin" /> Enhancing…</>
-                          ) : (
+                          ) : isPro ? (
                             <><Sparkles className="w-3 h-3" /> Enhance dengan AI</>
+                          ) : (
+                            <><Lock className="w-3 h-3" /> Enhance dengan AI <Crown className="w-2.5 h-2.5" /></>
                           )}
                         </Button>
                       </div>
@@ -367,6 +439,7 @@ export default function ModelManager({ models, onRefresh }: ModelManagerProps) {
           }}
         />
       )}
+      {UpgradeModalElement}
     </>
   );
 }

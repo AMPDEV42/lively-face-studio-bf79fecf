@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { LogOut, User as UserIcon, Settings as SettingsIcon, Crown, Wand2, ChevronRight, Menu, Heart } from 'lucide-react';
+import { LogOut, User as UserIcon, Settings as SettingsIcon, Crown, Wand2, ChevronRight, Menu, Heart, BarChart2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -13,13 +13,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { usePlan } from '@/hooks/usePlan';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import TokenUsageBar from './TokenUsageBar';
 
 export default function UserMenu() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isPro, isAdmin } = useUserRole();
+  const { messagePercent, planConfig } = usePlan();
   const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null; affection: number | null } | null>(null);
 
   useEffect(() => {
@@ -108,12 +111,51 @@ export default function UserMenu() {
 
         <DropdownMenuSeparator className="my-1" style={{ background: 'rgba(168,85,247,0.2)' }} />
 
+        {/* Usage mini bar */}
+        <div className="px-2 py-2 mb-1">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] text-white/30 font-medium uppercase tracking-wider">Penggunaan</span>
+            <button
+              onClick={() => navigate('/usage')}
+              className="text-[10px] text-violet-400/70 hover:text-violet-400 transition-colors"
+            >
+              Detail →
+            </button>
+          </div>
+          <TokenUsageBar variant="compact" />
+          {!isPro && messagePercent >= 80 && (
+            <button
+              onClick={() => navigate('/pricing')}
+              className="mt-2 w-full flex items-center justify-center gap-1.5 text-[10px] font-semibold py-1.5 rounded-lg transition-all hover:opacity-90"
+              style={{
+                background: 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(147,51,234,0.3))',
+                border: '1px solid rgba(139,92,246,0.4)',
+                color: '#c084fc',
+              }}
+            >
+              <Sparkles className="w-2.5 h-2.5" />
+              Upgrade Pro
+            </button>
+          )}
+        </div>
+
+        <DropdownMenuSeparator className="my-1" style={{ background: 'rgba(168,85,247,0.2)' }} />
+
         <DropdownMenuItem
           onClick={() => navigate('/profile')}
           className="flex items-center gap-2 px-2 py-2.5 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
         >
           <UserIcon className="w-4 h-4" style={{ color: '#a78bfa' }} />
           <span className="flex-1">Profil</span>
+          <ChevronRight className="w-3 h-3 opacity-40" />
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          onClick={() => navigate('/usage')}
+          className="flex items-center gap-2 px-2 py-2.5 rounded-md text-sm cursor-pointer text-foreground/90 focus:text-foreground focus:bg-primary/10"
+        >
+          <BarChart2 className="w-4 h-4" style={{ color: '#a78bfa' }} />
+          <span className="flex-1">Penggunaan & Paket</span>
           <ChevronRight className="w-3 h-3 opacity-40" />
         </DropdownMenuItem>
 

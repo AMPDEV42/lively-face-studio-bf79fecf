@@ -4,12 +4,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Layers, Upload, Trash2, Crown, Check, Cloud, Sparkles, Droplets, Snowflake, Leaf } from 'lucide-react';
+import { Layers, Upload, Trash2, Crown, Check, Cloud, Sparkles, Droplets, Snowflake, Leaf, Lock } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { BackgroundManager, type BackgroundItem } from '@/lib/background-manager';
 import { ENVIRONMENT_PRESETS } from '@/lib/vrm-environment';
 import { useAuth } from '@/hooks/useAuth';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePlan } from '@/hooks/usePlan';
+import { useUpgradeModal } from '@/components/UpgradeModal';
 
 interface BackgroundSelectorProps {
   onBackgroundChange: (imageUrl: string) => void;
@@ -60,7 +61,8 @@ export default function BackgroundSelector({
   className = '',
 }: BackgroundSelectorProps) {
   const { user } = useAuth();
-  const { isPro } = useUserRole();
+  const { isPro, recordBackgroundUpload, planConfig, stats } = usePlan();
+  const { openUpgradeModal, UpgradeModalElement } = useUpgradeModal();
   const currentAmbient = ambientEffect;
   const [isOpen, setIsOpen] = useState(false);
   const [tab, setTab] = useState<'preset' | 'image' | 'ambient'>('preset');
@@ -108,7 +110,10 @@ export default function BackgroundSelector({
 
   const handleAmbientSelect = (effect: 'none' | 'sakura' | 'rain' | 'snow' | 'leaves') => {
     if (effect !== 'none' && !isPro) {
-      toast.error('Efek ambient hanya tersedia untuk user Pro');
+      openUpgradeModal({
+        featureName: 'Efek Ambient',
+        featureDescription: 'Efek partikel Sakura, Hujan, Salju, dan Daun tersedia di paket Pro.',
+      });
       return;
     }
     onAmbientChange(effect);
@@ -119,7 +124,18 @@ export default function BackgroundSelector({
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!isPro) { toast.error('Upload background hanya untuk user Pro'); return; }
+    if (!isPro) {
+      openUpgradeModal({
+        featureName: 'Upload Background',
+        featureDescription: 'Upload gambar kustom sebagai background. Tersedia di paket Pro ke atas.',
+      });
+      return;
+    }
+    const allowed = recordBackgroundUpload();
+    if (!allowed) {
+      toast.error(`Kuota upload background tercapai (${planConfig.limits.maxBackgroundUploads}). Hapus background lama atau upgrade paket.`);
+      return;
+    }
     setUploading(true);
     try {
       const newBg = await BackgroundManager.uploadBackground(file, user?.id);
@@ -246,14 +262,26 @@ export default function BackgroundSelector({
                     <Upload className="w-3.5 h-3.5 mr-1.5" />
                     {uploading ? 'Uploading…' : 'Upload Gambar'}
                   </Button>
-                  <span className="text-xs" style={{ color: 'rgba(192,168,255,0.5)' }}>JPG, PNG, WebP · maks 10MB</span>
+                  <span className="text-xs" style={{ color: 'rgba(192,168,255,0.5)' }}>
+                    JPG, PNG, WebP · maks 10MB
+                    {planConfig.limits.maxBackgroundUploads > 0 && (
+                      <span className="ml-1.5 text-violet-400/70">
+                        · {stats.backgroundUploads}/{planConfig.limits.maxBackgroundUploads} upload
+                      </span>
+                    )}
+                  </span>
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
                 </div>
               ) : (
-                <div className="flex items-center gap-2 p-3 rounded-lg" style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)' }}>
-                  <Crown className="w-4 h-4 text-yellow-400 shrink-0" />
-                  <span className="text-xs text-yellow-400">Upload gambar custom hanya untuk user Pro</span>
-                </div>
+                <button
+                  onClick={() => openUpgradeModal({ featureName: 'Upload Background', featureDescription: 'Upload gambar kustom sebagai background. Tersedia di paket Pro ke atas.' })}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg text-left transition-all hover:opacity-80"
+                  style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}
+                >
+                  <Lock className="w-4 h-4 text-violet-400 shrink-0" />
+                  <span className="text-xs text-violet-300/80">Upload background kustom — <span className="font-semibold text-violet-400">Upgrade ke Pro</span></span>
+                  <Crown className="w-3.5 h-3.5 text-violet-400 ml-auto shrink-0" />
+                </button>
               )}
 
               {/* Image grid */}
@@ -313,10 +341,15 @@ export default function BackgroundSelector({
           {tab === 'ambient' && (
             <div className="space-y-4">
               {!isPro && (
-                <div className="flex items-center gap-2 p-3 rounded-lg" style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)' }}>
-                  <Crown className="w-4 h-4 text-yellow-400 shrink-0" />
-                  <span className="text-xs text-yellow-400">Efek ambient (Sakura, Hujan, Salju) adalah fitur Pro</span>
-                </div>
+                <button
+                  onClick={() => openUpgradeModal({ featureName: 'Efek Ambient', featureDescription: 'Efek partikel Sakura, Hujan, Salju, dan Daun tersedia di paket Pro.' })}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg text-left transition-all hover:opacity-80"
+                  style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}
+                >
+                  <Lock className="w-4 h-4 text-violet-400 shrink-0" />
+                  <span className="text-xs text-violet-300/80">Efek ambient (Sakura, Hujan, Salju) — <span className="font-semibold text-violet-400">Fitur Pro</span></span>
+                  <Crown className="w-3.5 h-3.5 text-violet-400 ml-auto shrink-0" />
+                </button>
               )}
               
               <div className="grid grid-cols-2 gap-3 p-0.5 pb-2">
@@ -359,7 +392,7 @@ export default function BackgroundSelector({
           </div>
         </DialogContent>
       </Dialog>
+      {UpgradeModalElement}
     </div>
   );
 }
-

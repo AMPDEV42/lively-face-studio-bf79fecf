@@ -8,7 +8,8 @@ import LanguagePreference from '@/components/LanguagePreference';
 import TTSSettings from '@/components/TTSSettings';
 import InteractionSettings from '@/components/InteractionSettings';
 import { useTTSProvider } from '@/hooks/useTTSProvider';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePlan } from '@/hooks/usePlan';
+import PlanStatusBanner from '@/components/PlanStatusBanner';
 import { toast } from 'sonner';
 
 interface VrmModelRow {
@@ -31,7 +32,7 @@ interface VoiceRow {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { isPro } = useUserRole();
+  const { isPro } = usePlan();
   const { provider, rateLimited, setProvider } = useTTSProvider(isPro);
   const [models, setModels] = useState<VrmModelRow[]>([]);
   const [voices, setVoices] = useState<VoiceRow[]>([]);
@@ -111,6 +112,8 @@ export default function Settings() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-10">
+        {/* Plan status banner */}
+        <PlanStatusBanner />
         {loadingModels ? (
           <div className="space-y-3">
             <div className="h-4 w-32 rounded bg-secondary/60 animate-pulse" />
