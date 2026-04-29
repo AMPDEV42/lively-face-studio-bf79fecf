@@ -40,13 +40,39 @@ import {
 import { useVrmaAnimations } from '@/hooks/useVrmaAnimations';
 import { playHeadpatSfx, playShoulderTapSfx, preloadHeadpatSfx, preloadTapSfx, getHeadpatPool, getTapPool } from '@/lib/interaction-sfx';
 import { HolographicHud } from './HolographicHud';
+import { toast } from 'sonner';
 
 export type { CameraPreset };
+
+// ── Camera & render constants ─────────────────────────────────────────────────
+const CAMERA = {
+  jitterIdle:     0.004,
+  jitterSpeaking: 0.008,
+  zoomSpeaking:   0.7,
+  zoomIdleDesktop: 1.2,
+  zoomIdleMobile:  1.4,
+  floatAmount:    0.005,
+  floatFreq:      0.5,
+  lerpSpeed:      0.5,
+} as const;
+
+const RENDER = {
+  pulseLightIntensity: 0.05,
+  pulseFreq:           0.8,
+} as const;
+
+const INTERACTION = {
+  headpatCooldown:    2500,
+  shoulderTapCooldown: 3000,
+  affectionThrottle:  1000,
+} as const;
 
 export interface VrmViewerHandle {
   playVrmaUrl: (url: string, opts?: PlayVrmaOptions) => Promise<void>;
   stopVrma: (fadeOut?: number) => void;
   isVrmLoaded: () => boolean;
+  /** Returns true if a non-idle VRMA animation is currently playing */
+  isVrmaPlaying: () => boolean;
   setCameraPreset: (preset: CameraPreset) => void;
   setCameraFree: (enabled: boolean) => void;
   isCameraFree: () => boolean;
@@ -114,10 +140,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const cameraFreeRef = useRef(false);
   const cameraAnimationRef = useRef<number>(0);
   const adaptivePresetsRef = useRef<Record<CameraPreset, CameraPresetData> | null>(null);
+  // Track the Z distance of the active preset so zoom/float stay relative to it
+  const presetBaseZRef = useRef<number>(CAMERA.zoomIdleDesktop);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [prevBgImageUrl, setPrevBgImageUrl] = useState<string | null>(null);
   const isFadingOutRef = useRef(false); // Track if we're fading out idle expression
   const vrmSceneHiddenRef = useRef<THREE.Group | null>(null); // Store VRM scene before adding to main scene
   const mixerUpdateCountRef = useRef(0); // Count mixer updates before showing model
@@ -283,6 +312,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
     const presets = adaptivePresetsRef.current ?? CAMERA_PRESETS_STATIC;
     const presetData = presets[preset];
+    // Save the preset's Z so the render loop uses it as base instead of hardcoded values
+    presetBaseZRef.current = presetData.position[2];
     const startPos = camera.position.clone();
     const startTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0.95, 0);
     const endPos = new THREE.Vector3(...presetData.position);
@@ -322,6 +353,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   // ── Imperative handle ─────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     isVrmLoaded: () => !!vrmRef.current,
+    isVrmaPlaying: () => !!vrmaActionRef.current || isTalkingPlayingRef.current,
     setCameraPreset: (preset) => {
       cameraFreeRef.current = false;
       animateCameraToPreset(preset);
@@ -372,7 +404,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       environmentManagerRef.current?.setEnvironment(preset);
     },
     setImageBackground: (imageUrl: string) => {
-      setBgImageUrl(imageUrl);
+      setBgImageUrl(prev => { setPrevBgImageUrl(prev); return imageUrl; });
       
       // Auto-update lighting based on background name
       if (lightingManagerRef.current) {
@@ -462,35 +494,36 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       const noise = (Math.sin(elapsedTime * 0.4) + Math.sin(elapsedTime * 0.72) + Math.cos(elapsedTime * 0.28)) / 3;
       const noiseY = (Math.cos(elapsedTime * 0.5) + Math.sin(elapsedTime * 0.91) + Math.sin(elapsedTime * 0.47)) / 3;
       
-      const jitterIntensity = isSpeaking ? 0.008 : 0.004;
+      const jitterIntensity = isSpeaking ? CAMERA.jitterSpeaking : CAMERA.jitterIdle;
       cameraRef.current.position.y += noiseY * jitterIntensity * delta;
       cameraRef.current.position.x += noise * jitterIntensity * 0.5 * delta;
     }
 
     // --- Cinematic Camera Zoom (Action Cut) ---
-    if (cameraRef.current && isSpeaking && !cameraFreeRef.current) {
-      // Zoom in slightly when speaking a long message (indicating deep conversation)
-      const msgLength = (currentMessage ?? '').length;
-      const targetZ = msgLength > 50 ? 0.7 : (isMobileRef.current ? 1.4 : 1.2);
-      cameraRef.current.position.z = THREE.MathUtils.lerp(cameraRef.current.position.z, targetZ, delta * 0.5);
-    } else if (cameraRef.current && !cameraFreeRef.current) {
-      // Return to distance
-      const baseZ = isMobileRef.current ? 1.4 : 1.2;
-      cameraRef.current.position.z = THREE.MathUtils.lerp(cameraRef.current.position.z, baseZ, delta * 0.5);
+    // Only applies a subtle zoom relative to the active preset's base Z.
+    // Does NOT override the preset position — just nudges ±10% from it.
+    if (cameraRef.current && !cameraFreeRef.current) {
+      const baseZ = presetBaseZRef.current;
+      const targetZ = (isSpeaking && (currentMessage ?? '').length > 50)
+        ? baseZ * 0.88   // zoom in ~12% when speaking long message
+        : baseZ;         // return to exact preset Z otherwise
+      cameraRef.current.position.z = THREE.MathUtils.lerp(
+        cameraRef.current.position.z, targetZ, delta * CAMERA.lerpSpeed
+      );
     }
 
     // --- Cinematic Camera Float ---
     if (cameraRef.current && !cameraFreeRef.current && !isPattingRef.current) {
-      const floatAmount = 0.005;
-      const freq = 0.5;
+      const floatAmount = CAMERA.floatAmount;
+      const freq = CAMERA.floatFreq;
       cameraRef.current.position.y += Math.sin(elapsedTime * freq) * floatAmount * delta;
       cameraRef.current.position.x += Math.cos(elapsedTime * freq * 0.7) * floatAmount * 0.5 * delta;
     }
 
     // --- Dynamic Light Pulsing (uses cached rim intensity — no localStorage read per frame) ---
     if (lightingManagerRef.current && !isMobileRef.current) {
-      const pulseIntensity = 0.05;
-      const pulse = Math.sin(elapsedTime * 0.8) * pulseIntensity;
+      const pulseIntensity = RENDER.pulseLightIntensity;
+      const pulse = Math.sin(elapsedTime * RENDER.pulseFreq) * pulseIntensity;
       const config = lightingManagerRef.current.getCurrentConfig();
       config.rimLightIntensity = rimIntensityRef.current + pulse;
       lightingManagerRef.current.updateLighting(config);
@@ -776,6 +809,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             cameraRef.current.position.set(...ms.position);
             cameraRef.current.fov = ms.fov;
             cameraRef.current.updateProjectionMatrix();
+            // Initialize base Z from the default preset
+            presetBaseZRef.current = ms.position[2];
             if (orbitControlsRef.current) {
               orbitControlsRef.current.target.set(...ms.target);
               orbitControlsRef.current.update();
@@ -943,6 +978,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   }, [modelUrl]);
 
   const [affection, setAffection] = useState(() => parseInt(localStorage.getItem('vrm.affection') || '0', 10));
+  const [affectionGainTick, setAffectionGainTick] = useState(0);
   const pointerSpeedY = useRef(0);
   const lastPointerY = useRef(0);
   const isPattingRef = useRef(false);
@@ -1006,6 +1042,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       
       return newVal;
     });
+    // Trigger floating +1 animation on HUD bar
+    setAffectionGainTick(t => t + 1);
   };
 
   const syncAffectionFromChat = useCallback(() => {
@@ -1084,20 +1122,23 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           const now = Date.now();
 
           // Increment Affection on sustained interaction (Throttled)
-          if (now - lastAffectionGainTime.current > 1000) {
+          if (now - lastAffectionGainTime.current > INTERACTION.affectionThrottle) {
             lastAffectionGainTime.current = now;
             saveAffection(1); // Gain 1 affection point per second of patting
           }
           
           // Audio & major effects: only once per session
-          const HEADPAT_COOLDOWN = 2500; // 2.5 seconds cooldown between sessions
-          
+          const HEADPAT_COOLDOWN = INTERACTION.headpatCooldown;
           if (!hasPlayedSoundThisSession.current && 
               (now - lastHeadpatTriggerTime.current) > HEADPAT_COOLDOWN && 
               vrmRef.current) {
             
             hasPlayedSoundThisSession.current = true; // Mark sound as played for this session
             lastHeadpatTriggerTime.current = now; // Update last trigger time
+            
+            // Subtle camera shake on headpat
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 150);
             
             // Affection-based expression
             const affectionLevel = Math.floor(affection / 100);
@@ -1230,8 +1271,14 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
                   const now = Date.now();
                   const SHOULDER_TAP_COOLDOWN = 3000; // 3 seconds cooldown between shoulder taps (prevents spam)
                   
-                  if ((now - lastShoulderTapTime.current) > SHOULDER_TAP_COOLDOWN && vrmRef.current) {
-                    lastShoulderTapTime.current = now; // Update last trigger time
+                  if ((now - lastShoulderTapTime.current) <= SHOULDER_TAP_COOLDOWN) {
+                    // Still on cooldown — show feedback
+                    const remaining = Math.ceil((SHOULDER_TAP_COOLDOWN - (now - lastShoulderTapTime.current)) / 1000);
+                    toast(`Tunggu ${remaining}s…`, { duration: 800, position: 'top-center', style: { fontSize: '11px', padding: '4px 10px', minWidth: 'unset' } });
+                    return;
+                  }
+                  
+                  if ((now - lastShoulderTapTime.current) > SHOULDER_TAP_COOLDOWN && vrmRef.current) {                    lastShoulderTapTime.current = now; // Update last trigger time
                     
                     const affectionLevel = Math.floor(affection / 100);
                     let mood: string = 'surprised';
@@ -1284,11 +1331,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             fps={isMobileRef.current ? 30 : 60}
             isAnimating={!!vrmaActionRef.current || isTalkingPlayingRef.current}
             getAudioLevel={getAudioLevelRef.current ?? undefined}
+            affectionGainTick={affectionGainTick}
           />
 
           {/* Ambient Aura Rendering */}
       {ambientEffect !== 'none' && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10" aria-hidden="true">
           {ambientEffect === 'sakura' && ambientParticles.sakura.map(p => (
             <div key={p.id} className="sakura-petal" style={{
               left: `${p.left}%`,
@@ -1322,7 +1370,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         </div>
       )}
 
-      {/* HTML image background — fade transition, never affected by Three.js tone mapping */}
+      {/* HTML image background — crossfade transition */}
+      {prevBgImageUrl && prevBgImageUrl !== bgImageUrl && (
+        <img
+          key={`prev-${prevBgImageUrl}`}
+          src={prevBgImageUrl}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+          style={{ zIndex: 0, animation: 'bgFadeOut 0.4s ease-in forwards' }}
+          onAnimationEnd={() => setPrevBgImageUrl(null)}
+        />
+      )}
       {bgImageUrl && (
         <img
           key={bgImageUrl}

@@ -53,8 +53,9 @@ export async function generateVitsAudio({
   text,
   speaker = "特别周 Special Week (Umamusume Pretty Derby)", 
   language = "日本語",
-  speed = 1.0
-}: VitsRequest): Promise<string> {
+  speed = 1.0,
+  signal,
+}: VitsRequest & { signal?: AbortSignal }): Promise<string> {
   // Use public mirror by default, but allow override via localStorage
   const customUrl = localStorage.getItem('vrm.vits_custom_url');
   const baseUrl = customUrl || HF_SPACE_URL;
@@ -91,10 +92,23 @@ export async function generateVitsAudio({
   const { event_id } = await callRes.json();
 
   return new Promise((resolve, reject) => {
+    // Abort immediately if signal already aborted
+    if (signal?.aborted) { reject(new DOMException('Aborted', 'AbortError')); return; }
+
     const eventSource = new EventSource(`${baseUrl.replace(/\/$/, '')}/gradio_api/call/tts_fn/${event_id}`);
+
+    // Wire AbortSignal → close EventSource
+    const onAbort = () => {
+      eventSource.close();
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    const cleanup = () => signal?.removeEventListener('abort', onAbort);
     
     eventSource.addEventListener("complete", (event: any) => {
       eventSource.close();
+      cleanup();
       try {
         const parsed = JSON.parse(event.data);
         if (Array.isArray(parsed) && parsed.length >= 2) {
@@ -112,6 +126,7 @@ export async function generateVitsAudio({
 
     eventSource.addEventListener("error", (event: any) => {
       eventSource.close();
+      cleanup();
       let errorMsg = "Gradio process error (Check character name or language)";
       try {
         const parsed = JSON.parse(event.data);
@@ -123,12 +138,14 @@ export async function generateVitsAudio({
     eventSource.onerror = (err) => {
       if (eventSource.readyState === 2) return;
       eventSource.close();
+      cleanup();
       reject(new Error("VITS SSE Connection failed - Space might be busy or sleeping"));
     };
 
     setTimeout(() => {
       if (eventSource.readyState !== 2) {
         eventSource.close();
+        cleanup();
         reject(new Error("VITS Audio generation timeout (60s)"));
       }
     }, 60000);

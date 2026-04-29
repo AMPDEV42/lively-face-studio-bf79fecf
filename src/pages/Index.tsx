@@ -12,7 +12,6 @@ import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
 import { MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { LIGHTING_PRESETS } from '@/lib/vrm-lighting';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
@@ -63,11 +62,6 @@ export default function Index() {
   const [showSubtitles, setShowSubtitles] = useState(() => 
     localStorage.getItem('vrm.showSubtitles') !== 'false'
   );
-  const [autoEnvironment, setAutoEnvironment] = useState(() => 
-    localStorage.getItem('vrm.autoEnvironment') !== 'false'
-  );
-  // Track if user has manually picked a background — suppresses auto day/night cycle
-  const userPickedBgRef = useRef(false);
 
   const viewerRef = useRef<VrmViewerHandle>(null);
 
@@ -166,6 +160,22 @@ export default function Index() {
     localStorage.setItem('vrm.ambient', effect);
   }, []);
 
+  // Toggle ambient particles on/off (P shortcut)
+  const handleToggleParticles = useCallback(() => {
+    setAmbientEffect(prev => {
+      if (prev === 'none') {
+        // Restore last non-none effect, or default to sakura
+        const last = (localStorage.getItem('vrm.ambient_last') as any) || 'sakura';
+        localStorage.setItem('vrm.ambient', last);
+        return last;
+      } else {
+        localStorage.setItem('vrm.ambient_last', prev);
+        localStorage.setItem('vrm.ambient', 'none');
+        return 'none';
+      }
+    });
+  }, []);
+
   const handleToggleSubtitles = useCallback(() => {
     setShowSubtitles(prev => {
       const next = !prev;
@@ -174,37 +184,9 @@ export default function Index() {
     });
   }, []);
 
-  const handleToggleAutoEnvironment = useCallback(() => {
-    setAutoEnvironment(prev => {
-      const next = !prev;
-      localStorage.setItem('vrm.autoEnvironment', String(next));
-      return next;
-    });
-  }, []);
-
   const handleEnvironmentChange = useCallback((preset: string) => {
-    userPickedBgRef.current = true; // user manually picked — suppress auto cycle
     viewerRef.current?.setEnvironment(preset);
-    if (autoEnvironment) {
-       const envToLight: Record<string, string> = {
-        'cyberpunk-void': 'cyberpunk',
-        'neon-city': 'neon',
-        'studio-dark': 'dramatic',
-        'studio-light': 'studio',
-        'sunset-gradient': 'soft',
-        'green-screen': 'studio'
-      };
-      const lightPreset = envToLight[preset] || 'studio';
-      const config = LIGHTING_PRESETS[lightPreset];
-      if (config) {
-        viewerRef.current?.setLighting(config);
-        toast.success(`Scene: ${preset.split('-')[0].toUpperCase()} mode activated`, {
-          description: `Lighting automatically set to ${lightPreset} mode.`,
-          duration: 2000,
-        });
-      }
-    }
-  }, [autoEnvironment]);
+  }, []);
 
   const handleSpeakStart = useCallback(
     (audioUrl: string, messageText?: string) => {
@@ -311,53 +293,6 @@ export default function Index() {
     }
   }, [clips, findClipByName]);
 
-  // Dynamic Environment Cycle (Day/Night)
-  // Only runs via interval — never on mount — so it doesn't override user's manual choice.
-  useEffect(() => {
-    if (!autoEnvironment) return;
-
-    const updateEnvironmentByTime = () => {
-      // If user manually picked a background/environment, don't override it
-      if (userPickedBgRef.current) return;
-      if (!viewerRef.current?.isVrmLoaded()) return;
-
-      const hour = new Date().getHours();
-      let lighting: string;
-      let env: string;
-
-      if (hour >= 5 && hour < 10) {
-        lighting = 'morning';
-        env = 'morning-sky';
-      } else if (hour >= 10 && hour < 17) {
-        lighting = 'daylight';
-        env = 'daylight-sky';
-      } else if (hour >= 17 && hour < 19) {
-        lighting = 'sunset';
-        env = 'sunset-sky';
-      } else {
-        lighting = 'night-outdoor';
-        env = 'night-sky';
-      }
-
-      const viewer = viewerRef.current;
-      if (!viewer) return;
-
-      const currentEnv = viewer.getCurrentEnvironment();
-      if (currentEnv !== env) {
-        viewer.setEnvironment(env);
-        import('@/lib/vrm-lighting').then(({ LIGHTING_PRESETS }) => {
-          if (LIGHTING_PRESETS[lighting]) {
-            viewer.setLighting(LIGHTING_PRESETS[lighting]);
-          }
-        });
-      }
-    };
-
-    // Only run on interval — NOT immediately on mount
-    const interval = setInterval(updateEnvironmentByTime, 60000);
-    return () => clearInterval(interval);
-  }, [autoEnvironment]);
-
   // Deep Idle (Boredom V2) Implementation - Randomized
   const nextBoredomTrigger = useRef(60000 + Math.random() * 60000);
   useEffect(() => {
@@ -366,11 +301,12 @@ export default function Index() {
       if (idleTime > nextBoredomTrigger.current && !isSpeaking) {
         // Reset timer immediately to avoid spamming
         lastInteractionTime.current = Date.now();
-        nextBoredomTrigger.current = 45000 + Math.random() * 90000; // Vary between 45s and 135s
-        
-        // Pilih animasi idle dari library (Mixamo VRMA)
+        nextBoredomTrigger.current = 45000 + Math.random() * 90000;
+
         const idleClips = clips.filter(c => c.category === 'idle');
         if (idleClips.length > 0 && viewerRef.current?.isVrmLoaded()) {
+          // Skip if a non-idle animation is already playing — avoid overlap
+          if (viewerRef.current.isVrmaPlaying()) return;
           const randomIdle = idleClips[Math.floor(Math.random() * idleClips.length)];
           const result = findClipByName(randomIdle.name);
           if (result) {
@@ -378,8 +314,7 @@ export default function Index() {
           }
         }
       }
-    }, 5000); // Check every 5 seconds
-    
+    }, 5000);
     return () => clearInterval(interval);
   }, [clips, isSpeaking, findClipByName]);
 
@@ -388,6 +323,7 @@ export default function Index() {
     onToggleChat: handleToggleChat,
     onEscape: () => { if (chatOpen) setChatOpen(false); },
     onCameraPreset: (preset) => handleCameraPresetChange(preset as CameraPreset),
+    onToggleParticles: handleToggleParticles,
   });
 
   return (
@@ -472,7 +408,6 @@ export default function Index() {
                   <div>
                     <BackgroundSelector
                       onBackgroundChange={(imageUrl) => {
-                        userPickedBgRef.current = true;
                         viewerRef.current?.setImageBackground(imageUrl);
                       }}
                       onEnvironmentChange={handleEnvironmentChange}

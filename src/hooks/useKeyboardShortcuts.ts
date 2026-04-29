@@ -5,6 +5,7 @@ interface Shortcuts {
   onNewConversation?: () => void;
   onEscape?: () => void;
   onCameraPreset?: (preset: string) => void;
+  onToggleParticles?: () => void;
 }
 
 /**
@@ -13,8 +14,9 @@ interface Shortcuts {
  * - Ctrl/Cmd + N  → new conversation
  * - Escape         → close overlays
  * - 1/2/3/4        → camera presets (close-up / medium / full-body / wide)
+ * - P              → toggle ambient particles
  */
-export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape, onCameraPreset }: Shortcuts) {
+export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape, onCameraPreset, onToggleParticles }: Shortcuts) {
   useEffect(() => {
     const CAMERA_KEYS: Record<string, string> = {
       '1': 'close-up',
@@ -46,9 +48,14 @@ export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape
       // Camera preset shortcuts — only when not in input and no modifier
       if (!mod && !isInput && CAMERA_KEYS[e.key]) {
         onCameraPreset?.(CAMERA_KEYS[e.key]);
+        return;
+      }
+      // P — toggle ambient particles
+      if (!mod && !isInput && (e.key === 'p' || e.key === 'P')) {
+        onToggleParticles?.();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onToggleChat, onNewConversation, onEscape, onCameraPreset]);
+  }, [onToggleChat, onNewConversation, onEscape, onCameraPreset, onToggleParticles]);
 }

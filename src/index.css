@@ -220,6 +220,12 @@
     to   { opacity: 1; }
   }
 
+  /* Background image fade-out (for crossfade) */
+  @keyframes bgFadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
   /* Confirm flash — one-shot ping */
   @keyframes ping-once {
     0%   { transform: scale(0.8); opacity: 1; }

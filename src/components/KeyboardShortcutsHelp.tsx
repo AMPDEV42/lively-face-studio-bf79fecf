@@ -6,6 +6,11 @@ const SHORTCUTS = [
   { keys: ['Enter'], desc: 'Kirim pesan' },
   { keys: ['Shift', 'Enter'], desc: 'Baris baru' },
   { keys: ['Esc'], desc: 'Tutup panel / batalkan' },
+  { keys: ['1'], desc: 'Kamera: Close-up' },
+  { keys: ['2'], desc: 'Kamera: Medium shot' },
+  { keys: ['3'], desc: 'Kamera: Full body' },
+  { keys: ['4'], desc: 'Kamera: Wide' },
+  { keys: ['P'], desc: 'Toggle efek partikel' },
   { keys: ['?'], desc: 'Tampilkan shortcut ini' },
 ];
 

@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Bot, User, RefreshCw, Volume2 } from 'lucide-react';
 import type { ChatMessage } from '@/lib/chat-api';
@@ -7,9 +7,11 @@ import type { ChatMessage } from '@/lib/chat-api';
 export const MessageBubble = memo(function MessageBubble({
   msg,
   onReplay,
+  searchQuery,
 }: {
   msg: ChatMessage;
   onReplay?: (text: string) => void;
+  searchQuery?: string;
 }) {
   const isUser = msg.role === 'user';
   const [copied, setCopied] = useState(false);
@@ -19,6 +21,21 @@ export const MessageBubble = memo(function MessageBubble({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
+  };
+
+  // Highlight search matches in plain text
+  const highlightText = (text: string, query: string) => {
+    if (!query.trim()) return <span>{text}</span>;
+    const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase()
+            ? <mark key={i} className="bg-primary/30 text-primary rounded-sm px-0.5">{part}</mark>
+            : <span key={i}>{part}</span>
+        )}
+      </>
+    );
   };
 
   return (
@@ -39,7 +56,7 @@ export const MessageBubble = memo(function MessageBubble({
               <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>
           ) : (
-            <span>{msg.content}</span>
+            <span>{searchQuery ? highlightText(msg.content, searchQuery) : msg.content}</span>
           )}
         </div>
         {/* Action buttons — appear on hover */}
@@ -71,6 +88,13 @@ export function LoadingIndicators({ isLoading, isTTSLoading, messages }: {
   isTTSLoading: boolean;
   messages: ChatMessage[];
 }) {
+  const [ttsElapsed, setTtsElapsed] = useState(0);
+  useEffect(() => {
+    if (!isTTSLoading) { setTtsElapsed(0); return; }
+    const t = setInterval(() => setTtsElapsed(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [isTTSLoading]);
+
   return (
     <>
       {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
@@ -79,10 +103,13 @@ export function LoadingIndicators({ isLoading, isTTSLoading, messages }: {
             <Bot className="w-3 h-3 text-muted-foreground" />
           </div>
           <div className="cyber-glass border border-neon-purple rounded-2xl rounded-bl-sm px-4 py-3 loading-bar">
-            <div className="flex gap-1.5 items-center">
-              {[0, 150, 300].map((delay) => (
-                <span key={delay} className="w-1.5 h-1.5 bg-primary/80 rounded-full animate-bounce neon-glow-purple" style={{ animationDelay: `${delay}ms` }} />
-              ))}
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-1.5 items-center">
+                {[0, 150, 300].map((delay) => (
+                  <span key={delay} className="w-1.5 h-1.5 bg-primary/80 rounded-full animate-bounce neon-glow-purple" style={{ animationDelay: `${delay}ms` }} />
+                ))}
+              </div>
+              <span className="text-[10px] text-muted-foreground/50">Asisten sedang mengetik…</span>
             </div>
           </div>
         </div>
@@ -92,9 +119,17 @@ export function LoadingIndicators({ isLoading, isTTSLoading, messages }: {
           <div className="w-6 h-6 rounded-full cyber-glass border border-neon-purple flex items-center justify-center shrink-0 pulse-neon">
             <Bot className="w-3 h-3 text-muted-foreground" />
           </div>
-          <div className="cyber-glass border border-neon-purple rounded-2xl rounded-bl-sm px-3.5 py-2 flex items-center gap-2">
-            <Volume2 className="w-3.5 h-3.5 text-primary animate-pulse neon-glow-purple" />
-            <span className="text-xs text-muted-foreground">Generating speech…</span>
+          <div className="cyber-glass border border-neon-purple rounded-2xl rounded-bl-sm px-3.5 py-2 flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-3.5 h-3.5 text-primary animate-pulse neon-glow-purple" />
+              <span className="text-xs text-muted-foreground">Generating speech…</span>
+              {ttsElapsed > 0 && (
+                <span className="text-[10px] text-muted-foreground/40 tabular-nums">{ttsElapsed}s</span>
+              )}
+            </div>
+            {ttsElapsed >= 3 && (
+              <span className="text-[10px] text-muted-foreground/40">~5-15 detik untuk suara anime</span>
+            )}
           </div>
         </div>
       )}
@@ -110,6 +145,7 @@ interface ChatMessageListProps {
   onSendPrompt: (text: string) => void;
   onRegenerate: () => void;
   onReplay?: (text: string) => void;
+  searchQuery?: string;
 }
 
 export function ChatMessageList({
@@ -119,10 +155,11 @@ export function ChatMessageList({
   onSendPrompt,
   onRegenerate,
   onReplay,
+  searchQuery,
 }: ChatMessageListProps) {
   return (
     <div className="space-y-3 px-1">
-      {messages.length === 0 && (
+      {messages.length === 0 && !searchQuery && (
         <div className="flex flex-col items-center gap-4 py-8 text-center">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
             <Bot className="w-6 h-6 text-primary/60" />
@@ -151,7 +188,12 @@ export function ChatMessageList({
           </div>
         </div>
       )}
-      {messages.map((msg, i) => <MessageBubble key={i} msg={msg} onReplay={onReplay} />)}
+      {messages.length === 0 && searchQuery && (
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <p className="text-sm text-muted-foreground">Tidak ada pesan yang cocok dengan "<span className="text-primary">{searchQuery}</span>"</p>
+        </div>
+      )}
+      {messages.map((msg, i) => <MessageBubble key={i} msg={msg} onReplay={onReplay} searchQuery={searchQuery} />)}
       <LoadingIndicators isLoading={isLoading} isTTSLoading={isTTSLoading} messages={messages} />
       {/* Regenerate button */}
       {!isLoading && !isTTSLoading && messages.length >= 2 && messages[messages.length - 1]?.role === 'assistant' && (

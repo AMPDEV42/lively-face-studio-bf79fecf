@@ -7,6 +7,7 @@ export interface Conversation {
   title: string;
   updated_at: string;
   preview?: string;
+  pinned?: boolean;
 }
 
 const LS_KEY = (userId: string) => `vrm_conversations_${userId}`;
@@ -17,6 +18,7 @@ interface StoredConversation {
   updated_at: string;
   messages: ChatMessage[];
   exported_at?: string;
+  pinned?: boolean;
 }
 
 function loadFromStorage(userId: string): StoredConversation[] {
@@ -56,6 +58,7 @@ export function useConversations(userId: string | undefined) {
         title: c.title,
         updated_at: c.updated_at,
         preview: c.messages.at(-1)?.content.slice(0, 60),
+        pinned: c.pinned,
       }))
     );
     setLoading(false);
@@ -110,6 +113,7 @@ export function useConversations(userId: string | undefined) {
       storageRef.current.map(c => ({
         id: c.id, title: c.title, updated_at: c.updated_at,
         preview: c.messages.at(-1)?.content.slice(0, 60),
+        pinned: c.pinned,
       }))
     );
   }, [userId]);
@@ -186,6 +190,16 @@ export function useConversations(userId: string | undefined) {
     }
   }, [userId]);
 
+  /** Pin or unpin a conversation */
+  const pinConversation = useCallback((id: string, pinned: boolean) => {
+    if (!userId) return;
+    const idx = storageRef.current.findIndex(c => c.id === id);
+    if (idx === -1) return;
+    storageRef.current[idx] = { ...storageRef.current[idx], pinned };
+    saveToStorage(userId, storageRef.current);
+    setConversations(prev => prev.map(c => c.id === id ? { ...c, pinned } : c));
+  }, [userId]);
+
   /** Clear all conversations */
   const clearAllConversations = useCallback(() => {
     if (!userId) return;
@@ -208,6 +222,7 @@ export function useConversations(userId: string | undefined) {
     deleteConversation,
     deleteMultipleConversations,
     renameConversation,
+    pinConversation,
     importConversations,
     clearAllConversations,
   };

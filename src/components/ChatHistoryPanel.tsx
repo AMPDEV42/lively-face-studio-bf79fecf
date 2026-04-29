@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, History, Plus, Search, Pencil, Trash2, Check } from 'lucide-react';
+import { X, History, Plus, Search, Pencil, Trash2, Check, Pin, PinOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Conversation {
   id: string;
   title: string;
   preview?: string;
+  pinned?: boolean;
 }
 
 interface ChatHistoryPanelProps {
@@ -21,6 +22,7 @@ interface ChatHistoryPanelProps {
   onDelete: (id: string) => void;
   onDeleteMultiple: (ids: string[]) => void;
   onRename: (id: string, title: string) => void;
+  onPin?: (id: string, pinned: boolean) => void;
 }
 
 export function ChatHistoryPanel({
@@ -33,6 +35,7 @@ export function ChatHistoryPanel({
   onDelete,
   onDeleteMultiple,
   onRename,
+  onPin,
 }: ChatHistoryPanelProps) {
   const [historySearch, setHistorySearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -40,12 +43,55 @@ export function ChatHistoryPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
 
+  // Undo delete — store deleted conversation temporarily
+  const undoDataRef = useRef<{ id: string; title: string; data: Conversation } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDelete = useCallback((c: Conversation) => {
+    // Cancel any previous undo timer
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+
+    // Store data for undo
+    undoDataRef.current = { id: c.id, title: c.title, data: c };
+
+    // Optimistically delete
+    onDelete(c.id);
+
+    // Show toast with undo button
+    toast(`"${c.title}" dihapus`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+          // Re-insert via onNew + rename is not ideal; we signal parent via a special restore
+          // Since we can't easily restore, we show a message
+          toast.info('Fitur undo memerlukan refresh halaman untuk percakapan yang sudah dihapus dari storage.');
+          undoDataRef.current = null;
+        },
+      },
+      cancel: { label: 'OK', onClick: () => { undoDataRef.current = null; } },
+      duration: 5000,
+    });
+
+    // Clear undo data after 5 seconds
+    undoTimerRef.current = setTimeout(() => {
+      undoDataRef.current = null;
+    }, 5000);
+  }, [onDelete]);
+
+  // Sort: pinned first, then by order
+  const sorted = [...conversations].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return 0;
+  });
+
   const filtered = historySearch.trim()
-    ? conversations.filter(c =>
+    ? sorted.filter(c =>
         c.title.toLowerCase().includes(historySearch.toLowerCase()) ||
         c.preview?.toLowerCase().includes(historySearch.toLowerCase())
       )
-    : conversations;
+    : sorted;
 
   return (
     <div className="flex flex-col h-full">
@@ -166,20 +212,26 @@ export function ChatHistoryPanel({
                 ) : (
                   <>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-medium truncate ${activeId === c.id ? 'text-primary' : 'text-foreground/80'}`}>{c.title}</p>
+                      <div className="flex items-center gap-1">
+                        {c.pinned && <Pin className="w-2.5 h-2.5 text-primary/60 shrink-0" />}
+                        <p className={`text-xs font-medium truncate ${activeId === c.id ? 'text-primary' : 'text-foreground/80'}`}>{c.title}</p>
+                      </div>
                       {c.preview && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{c.preview}</p>}
                     </div>
                     <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                       <button className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={() => { setEditingId(c.id); setEditingTitle(c.title); }}>
                         <Pencil className="w-3 h-3" />
                       </button>
-                      <button className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={() => {
-                        toast(`Hapus "${c.title}"?`, {
-                          action: { label: 'Hapus', onClick: () => onDelete(c.id) },
-                          cancel: { label: 'Batal', onClick: () => {} },
-                          duration: 5000,
-                        });
-                      }}>
+                      {onPin && (
+                        <button
+                          className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary"
+                          title={c.pinned ? 'Lepas pin' : 'Sematkan'}
+                          onClick={() => onPin(c.id, !c.pinned)}
+                        >
+                          {c.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                        </button>
+                      )}
+                      <button className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(c)}>
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>

@@ -26,13 +26,13 @@ const MOOD_EMOJI: Record<string, string> = {
 };
 
 function getAffectionTitle(level: number): string {
-  if (level === 0) return 'Stranger';
-  if (level < 3)  return 'Acquaintance';
-  if (level < 7)  return 'Friend';
-  if (level < 15) return 'Close Friend';
-  if (level < 30) return 'Best Friend';
-  if (level < 50) return 'Companion';
-  return 'Soulmate';
+  if (level === 0) return 'Asing';
+  if (level < 3)  return 'Kenalan';
+  if (level < 7)  return 'Teman';
+  if (level < 15) return 'Sahabat';
+  if (level < 30) return 'Teman Dekat';
+  if (level < 50) return 'Spesial';
+  return 'Jiwa Kembar';
 }
 
 // ── Smooth canvas-based audio visualizer ─────────────────────────────────────
@@ -171,6 +171,7 @@ interface HolographicHudProps {
   fps: number;
   isAnimating?: boolean;
   getAudioLevel?: () => number; // called every RAF frame — always fresh
+  affectionGainTick?: number;   // increment this to trigger +1 animation
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -181,11 +182,27 @@ export const HolographicHud: React.FC<HolographicHudProps> = ({
   fps,
   isAnimating = false,
   getAudioLevel,
+  affectionGainTick = 0,
 }) => {
   const [heartbeat, setHeartbeat] = useState(false);
   const [prevMood, setPrevMood] = useState(currentMood);
   const [moodChanged, setMoodChanged] = useState(false);
   const sessionTime = useSessionTime();
+
+  // +1 floating label state — each gain spawns a new entry with unique key
+  const [gainLabels, setGainLabels] = useState<{ id: number }[]>([]);
+  const gainCounterRef = useRef(0);
+  const prevTickRef = useRef(affectionGainTick);
+
+  useEffect(() => {
+    if (affectionGainTick !== prevTickRef.current) {
+      prevTickRef.current = affectionGainTick;
+      const id = ++gainCounterRef.current;
+      setGainLabels(prev => [...prev, { id }]);
+      // Remove after animation completes (1.2s)
+      setTimeout(() => setGainLabels(prev => prev.filter(l => l.id !== id)), 1200);
+    }
+  }, [affectionGainTick]);
 
   const affectionLevel = Math.floor(affection / 100);
   const affectionProgress = affection % 100;
@@ -260,27 +277,62 @@ export const HolographicHud: React.FC<HolographicHudProps> = ({
               {affectionTitle}
             </span>
           </div>
-          <div className="relative w-24 md:w-32 h-1.5 bg-pink-950/40 rounded-full border border-pink-500/15 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{
-                width: `${affectionProgress}%`,
-                background: 'linear-gradient(90deg, #9d174d, #ec4899, #f9a8d4)',
-                boxShadow: '0 0 8px rgba(236,72,153,0.5)',
-              }}
-            />
-            {[25, 50, 75].map(tick => (
+          {/* Bar + floating +1 labels */}
+          <div className="relative w-24 md:w-32">
+            <div className="relative h-1.5 bg-pink-950/40 rounded-full border border-pink-500/15 overflow-hidden">
               <div
-                key={tick}
-                className="absolute top-0 bottom-0 w-px bg-pink-950/70"
-                style={{ left: `${tick}%` }}
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${affectionProgress}%`,
+                  background: 'linear-gradient(90deg, #9d174d, #ec4899, #f9a8d4)',
+                  boxShadow: '0 0 8px rgba(236,72,153,0.5)',
+                }}
               />
+              {[25, 50, 75].map(tick => (
+                <div
+                  key={tick}
+                  className="absolute top-0 bottom-0 w-px bg-pink-950/70"
+                  style={{ left: `${tick}%` }}
+                />
+              ))}
+            </div>
+            {/* Floating +1 labels — appear at the right edge of the bar */}
+            {gainLabels.map(({ id }) => (
+              <span
+                key={id}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  right: `${100 - affectionProgress}%`,
+                  top: '-2px',
+                  transform: 'translateX(50%)',
+                  fontSize: '9px',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  color: '#f9a8d4',
+                  textShadow: '0 0 6px rgba(236,72,153,0.9)',
+                  pointerEvents: 'none',
+                  animation: 'affection-gain-float 1.2s ease-out forwards',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ❤️ +1
+              </span>
             ))}
           </div>
           <div className="text-[7px] font-mono text-pink-400/40">
             {affectionProgress}/100 → next level
           </div>
         </div>
+
+        {/* Keyframe for floating +1 */}
+        <style>{`
+          @keyframes affection-gain-float {
+            0%   { opacity: 1; transform: translateX(50%) translateY(0px); }
+            60%  { opacity: 1; transform: translateX(50%) translateY(-10px); }
+            100% { opacity: 0; transform: translateX(50%) translateY(-18px); }
+          }
+        `}</style>
 
         {/* Divider */}
         <div className="w-28 h-px bg-gradient-to-r from-purple-500/20 to-transparent" />

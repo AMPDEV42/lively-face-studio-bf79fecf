@@ -132,6 +132,7 @@ export function ChatInputBar({
           type="button"
           size="icon"
           onClick={onToggleSubtitles}
+          aria-label={showSubtitles ? 'Matikan subtitle' : 'Aktifkan subtitle'}
           className={`h-10 w-10 shrink-0 btn-overlay transition-all ${
             showSubtitles ? 'text-primary neon-glow-purple brightness-125' : 'text-muted-foreground opacity-40'
           }`}
@@ -161,6 +162,8 @@ export function ChatInputBar({
             }
             disabled={isLoading || !online}
             rows={1}
+            maxLength={500}
+            aria-label="Ketik pesan"
             className="resize-none min-h-[40px] max-h-[120px] panel-overlay text-sm placeholder:text-muted-foreground/50 focus:border-neon-purple-bright transition-all scrollbar-thin w-full"
             style={{ height: 'auto' }}
           />
@@ -174,7 +177,7 @@ export function ChatInputBar({
         </div>
 
         {isLoading || isTTSLoading ? (
-          <Button type="button" size="icon" onClick={onStop}
+          <Button type="button" size="icon" onClick={onStop} aria-label="Hentikan"
             className="h-10 w-10 shrink-0 bg-destructive hover:bg-destructive/90 text-white shadow-sm neon-glow-magenta border-0" title="Hentikan">
             <Square className="w-3.5 h-3.5 fill-current" />
           </Button>
@@ -184,6 +187,7 @@ export function ChatInputBar({
             size="icon"
             onClick={onSend}
             disabled={!input.trim() || !online}
+            aria-label="Kirim pesan"
             className={`h-10 w-10 shrink-0 shadow-sm border-0 transition-all ${
               input.trim() && online
                 ? 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow-purple hover-neon-lift'
