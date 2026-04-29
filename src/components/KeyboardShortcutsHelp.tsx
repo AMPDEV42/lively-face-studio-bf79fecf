@@ -11,6 +11,8 @@ const SHORTCUTS = [
   { keys: ['3'], desc: 'Kamera: Full body' },
   { keys: ['4'], desc: 'Kamera: Wide' },
   { keys: ['P'], desc: 'Toggle efek partikel' },
+  { keys: ['M'], desc: 'Mute / unmute suara' },
+  { keys: ['E'], desc: 'Panel ekspresi VRM' },
   { keys: ['?'], desc: 'Tampilkan shortcut ini' },
 ];
 

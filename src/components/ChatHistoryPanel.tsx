@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, History, Plus, Search, Pencil, Trash2, Check, Pin, PinOff } from 'lucide-react';
+import { X, History, Plus, Search, Pencil, Trash2, Check, Pin, PinOff, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Conversation {
@@ -42,6 +42,8 @@ export function ChatHistoryPanel({
   const [editingTitle, setEditingTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Undo delete — store deleted conversation temporarily
   const undoDataRef = useRef<{ id: string; title: string; data: Conversation } | null>(null);
@@ -142,8 +144,11 @@ export function ChatHistoryPanel({
         </div>
       )}
 
-      <ScrollArea className="flex-1 scrollbar-thin">
-        <div className="p-2 space-y-0.5">
+      <ScrollArea className="flex-1 scrollbar-thin" ref={scrollAreaRef}>
+        <div
+          className="p-2 space-y-0.5"
+          onScroll={(e) => setShowScrollTop((e.currentTarget.scrollTop ?? 0) > 200)}
+        >
           <button
             onClick={onNew}
             className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs text-primary hover:bg-primary/10 transition-colors text-left"
@@ -241,6 +246,21 @@ export function ChatHistoryPanel({
             ))
           )}
         </div>
+        {/* Scroll to top button */}
+        {showScrollTop && (
+          <div className="sticky bottom-2 flex justify-center pointer-events-none">
+            <button
+              className="pointer-events-auto flex items-center gap-1 px-3 py-1 rounded-full text-[10px] cyber-glass border border-primary/30 text-primary/70 hover:text-primary transition-colors shadow-md"
+              onClick={() => {
+                const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+                if (viewport) viewport.scrollTop = 0;
+                setShowScrollTop(false);
+              }}
+            >
+              <ChevronUp className="w-3 h-3" /> Ke atas
+            </button>
+          </div>
+        )}
       </ScrollArea>
     </div>
   );

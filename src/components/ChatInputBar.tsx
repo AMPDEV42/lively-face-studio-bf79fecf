@@ -23,6 +23,7 @@ interface ChatInputBarProps {
   pendingTranscript: string;
   showSubtitles: boolean;
   isSpeaking: boolean;
+  isStreaming?: boolean; // true once first chunk has arrived
   onInputChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
@@ -42,6 +43,7 @@ export function ChatInputBar({
   pendingTranscript,
   showSubtitles,
   isSpeaking,
+  isStreaming = false,
   onInputChange,
   onSend,
   onStop,
@@ -178,7 +180,13 @@ export function ChatInputBar({
 
         {isLoading || isTTSLoading ? (
           <Button type="button" size="icon" onClick={onStop} aria-label="Hentikan"
-            className="h-10 w-10 shrink-0 bg-destructive hover:bg-destructive/90 text-white shadow-sm neon-glow-magenta border-0" title="Hentikan">
+            className={`h-10 w-10 shrink-0 border-0 transition-all ${
+              isLoading && !isStreaming
+                ? 'bg-destructive/60 hover:bg-destructive/80 text-white cursor-wait opacity-80'
+                : 'bg-destructive hover:bg-destructive/90 text-white shadow-sm neon-glow-magenta'
+            }`}
+            title={isLoading && !isStreaming ? 'Menunggu respons…' : 'Hentikan'}
+          >
             <Square className="w-3.5 h-3.5 fill-current" />
           </Button>
         ) : (

@@ -4,6 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ChevronDown, X, Bot,
   Plus, History, Download, RefreshCw, MoreVertical, Upload, Trash2, Search, SearchX,
+  Bookmark, Volume2, VolumeX,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -18,6 +19,7 @@ import { ChatMessageList } from '@/components/ChatMessageList';
 import { ChatHistoryPanel } from '@/components/ChatHistoryPanel';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import { useAiInitiative } from '@/hooks/useAiInitiative';
+import { handleSlashCommand } from '@/lib/slash-commands';
 
 // ── VITS helper — extracted to avoid 4x duplication ──────────────────────────
 async function runVitsTTS(text: string, signal?: AbortSignal): Promise<{ url: string | null; source: 'vits' | 'none'; error: string | null }> {
@@ -52,6 +54,9 @@ interface ChatPanelProps {
   showSubtitles?: boolean;
   onToggleSubtitles?: () => void;
   availableAnimations?: string[];
+  onMoodChange?: (mood: string) => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
 }
 
 export default function ChatPanel({
@@ -70,6 +75,9 @@ export default function ChatPanel({
   showSubtitles = true,
   onToggleSubtitles,
   availableAnimations = [],
+  onMoodChange,
+  isMuted = false,
+  onToggleMute,
 }: ChatPanelProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -78,6 +86,7 @@ export default function ChatPanel({
   const isLoadingRef = useRef(false);
   isLoadingRef.current = isLoading;
   const [isTTSLoading, setIsTTSLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false); // true once first chunk arrives
   const [showHistory, setShowHistory] = useState(false);
   const [lastAssistantText, setLastAssistantText] = useState('');
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -85,6 +94,14 @@ export default function ChatPanel({
   // Message search
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+
+  // Bookmark state — persisted per conversation in localStorage
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
+
+  // Confirm delete all state
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const confirmDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Draft auto-save per conversation
   const draftMap = useRef<Map<string, string>>(new Map());
@@ -174,6 +191,27 @@ export default function ChatPanel({
     saveMessage, maybeSetTitle, deleteConversation, deleteMultipleConversations, renameConversation,
     pinConversation, importConversations, clearAllConversations,
   } = useConversations(user?.id);
+
+  // Load bookmarks when active conversation changes
+  useEffect(() => {
+    if (!activeId) { setBookmarkedIds(new Set()); return; }
+    try {
+      const raw = localStorage.getItem(`vrm.bookmarks.${activeId}`);
+      setBookmarkedIds(raw ? new Set(JSON.parse(raw)) : new Set());
+    } catch { setBookmarkedIds(new Set()); }
+  }, [activeId]);
+
+  const handleToggleBookmark = useCallback((msgId: string) => {
+    if (!activeId) return;
+    setBookmarkedIds(prev => {
+      const next = new Set(prev);
+      next.has(msgId) ? next.delete(msgId) : next.add(msgId);
+      try {
+        localStorage.setItem(`vrm.bookmarks.${activeId}`, JSON.stringify([...next]));
+      } catch { /* storage full */ }
+      return next;
+    });
+  }, [activeId]);
 
   // Network status
   const [online, setOnline] = useState(isOnline());
@@ -278,6 +316,7 @@ export default function ChatPanel({
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
     setIsLoading(false);
+    setIsStreaming(false);
     setIsTTSLoading(false);
   }, []);
 
@@ -479,59 +518,18 @@ export default function ChatPanel({
 
     // --- Slash Commands Interceptor ---
     if (text.startsWith('/')) {
-      const parts = text.slice(1).split(' ');
-      const cmd = parts[0].toLowerCase();
-      const arg = parts.slice(1).join(' ');
+      const result = handleSlashCommand(text, {
+        availableAnimations,
+        onPlayAnim: (animName) => onSpeakStart('', `[ANIM:${animName}]`),
+        onNewConversation: () => { startNewConversation(); toast.success('Percakapan baru dimulai'); },
+        onMoodChange: (mood) => onMoodChange?.(mood),
+      });
 
-      if (cmd === 'anim' || cmd === 'play' || availableAnimations.includes(text.slice(1))) {
-        const animName = arg || text.slice(1);
-        onSpeakStart('', `[ANIM:${animName}]`); // Trigger animation locally
+      if (result.handled) {
         setInput('');
-        return;
-      }
-      
-      // Shortcut commands for popular animations
-      const shortcuts: Record<string, string> = {
-        'dance': 'Silly_Dance',
-        'wave': 'Wave',
-        'bow': 'Bow',
-        'think': 'Thinking',
-        'laugh': 'Laughing'
-      };
-      
-      if (shortcuts[cmd]) {
-        onSpeakStart('', `[ANIM:${shortcuts[cmd]}]`);
-        setInput('');
-        return;
-      }
-
-      // /help — show available commands as system message
-      if (cmd === 'help') {
-        const helpLines = [
-          '**Slash Commands yang tersedia:**',
-          '`/dance` — animasi dance',
-          '`/wave` — animasi wave',
-          '`/bow` — animasi bow',
-          '`/think` — animasi thinking',
-          '`/laugh` — animasi laughing',
-          '`/anim <nama>` — mainkan animasi custom',
-          '`/clear` — mulai percakapan baru',
-          '',
-          '**Keyboard Shortcuts:**',
-          '`Ctrl+K` — buka/tutup chat',
-          '`1` `2` `3` `4` — preset kamera',
-          '`P` — toggle efek partikel',
-          '`Esc` — tutup chat',
-        ].join('\n');
-        setMessages(prev => [...prev, { role: 'assistant', content: helpLines }]);
-        setInput('');
-        return;
-      }
-
-      if (cmd === 'clear') {
-        startNewConversation();
-        setInput('');
-        toast.success('Percakapan baru dimulai');
+        if (result.response) {
+          setMessages(prev => [...prev, { role: 'assistant', content: result.response! }]);
+        }
         return;
       }
     }
@@ -549,7 +547,9 @@ export default function ChatPanel({
     if (messageCountRef.current === 1) maybeSetTitle(convoId, text);
 
     let assistantSoFar = '';
+    let firstChunk = true;
     const upsertAssistant = (chunk: string) => {
+      if (firstChunk) { firstChunk = false; setIsStreaming(true); }
       assistantSoFar += chunk;
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -576,6 +576,7 @@ export default function ChatPanel({
         signal: ctrl.signal,
         onDone: async () => {
           setIsLoading(false);
+          setIsStreaming(false);
           if (isMobile && !isOpen && onUnreadChange) onUnreadChange(true);
           // Browser notification when tab is not active
           if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
@@ -640,7 +641,11 @@ export default function ChatPanel({
     return messages.filter(m => m.content.toLowerCase().includes(q));
   }, [messages, searchQuery]);
 
-  // Import conversations from JSON file
+  // Cleanup confirm-delete timer on unmount
+  useEffect(() => () => {
+    if (confirmDeleteTimerRef.current) clearTimeout(confirmDeleteTimerRef.current);
+  }, []);
+
   const handleImport = useCallback(() => {
     const el = document.createElement('input');
     el.type = 'file';
@@ -704,6 +709,7 @@ export default function ChatPanel({
       pendingTranscript={pendingTranscriptRef.current}
       showSubtitles={showSubtitles}
       isSpeaking={isSpeaking}
+      isStreaming={isStreaming}
       onInputChange={setInput}
       onSend={() => handleSend()}
       onStop={handleStop}
@@ -725,6 +731,9 @@ export default function ChatPanel({
       onRegenerate={handleRegenerate}
       onReplay={(text) => handleRetryTTS(text)}
       searchQuery={searchQuery}
+      bookmarkedIds={bookmarkedIds}
+      onToggleBookmark={handleToggleBookmark}
+      showBookmarksOnly={showBookmarksOnly}
     />
   );
 
@@ -795,6 +804,14 @@ export default function ChatPanel({
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover-neon-glow touch-manipulation" onClick={() => setShowHistory(true)}><History className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover-neon-glow touch-manipulation" onClick={startNewConversation}><Plus className="w-4 h-4" /></Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className={`h-10 w-10 touch-manipulation hover-neon-glow ${showBookmarksOnly ? 'text-primary' : 'text-muted-foreground'}`}
+                  onClick={() => setShowBookmarksOnly(s => !s)}
+                  title={showBookmarksOnly ? 'Semua pesan' : 'Pesan tersimpan'}
+                >
+                  {showBookmarksOnly ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                </Button>
                 <Button variant="ghost" size="icon" onClick={onToggle} className="h-10 w-10 text-muted-foreground touch-manipulation hover-neon-glow"><X className="w-4 h-4" /></Button>
               </div>
             </div>
@@ -859,6 +876,24 @@ export default function ChatPanel({
               >
                 {showSearch ? <SearchX className="w-3.5 h-3.5" /> : <Search className="w-3.5 h-3.5" />}
               </Button>
+              <Button
+                variant="ghost" size="icon"
+                className={`h-7 w-7 hover:text-foreground hover-neon-glow ${showBookmarksOnly ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => setShowBookmarksOnly(s => !s)}
+                title={showBookmarksOnly ? 'Semua pesan' : 'Pesan tersimpan'}
+              >
+                {showBookmarksOnly ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+              </Button>
+              {onToggleMute && (
+                <Button
+                  variant="ghost" size="icon"
+                  className={`h-7 w-7 hover:text-foreground hover-neon-glow ${isMuted ? 'text-destructive' : 'text-muted-foreground'}`}
+                  onClick={onToggleMute}
+                  title={isMuted ? 'Unmute suara' : 'Mute suara'}
+                >
+                  {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                </Button>
+              )}
               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground hover-neon-glow" onClick={() => setShowHistory(true)} title="Riwayat">
                 <History className="w-3.5 h-3.5" />
               </Button>
@@ -892,12 +927,37 @@ export default function ChatPanel({
                     <RefreshCw className="w-3.5 h-3.5" /> Regenerasi
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => { if (confirm('Hapus semua riwayat chat?')) { clearAllConversations(); toast.success('Semua riwayat dihapus'); } }}
-                    className="text-xs gap-2 text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Hapus semua riwayat
-                  </DropdownMenuItem>
+                  {confirmDeleteAll ? (
+                    <div className="px-2 py-1.5 space-y-1.5">
+                      <p className="text-[10px] text-muted-foreground">Yakin? Ini tidak bisa dibatalkan.</p>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => { setConfirmDeleteAll(false); if (confirmDeleteTimerRef.current) clearTimeout(confirmDeleteTimerRef.current); }}
+                          className="flex-1 text-[10px] py-1 rounded border border-border/40 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={() => { clearAllConversations(); setConfirmDeleteAll(false); toast.success('Semua riwayat dihapus'); }}
+                          className="flex-1 text-[10px] py-1 rounded bg-destructive/20 border border-destructive/40 text-destructive hover:bg-destructive/30 transition-colors"
+                        >
+                          Hapus Semua
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setConfirmDeleteAll(true);
+                        if (confirmDeleteTimerRef.current) clearTimeout(confirmDeleteTimerRef.current);
+                        confirmDeleteTimerRef.current = setTimeout(() => setConfirmDeleteAll(false), 5000);
+                      }}
+                      className="text-xs gap-2 text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Hapus semua riwayat
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

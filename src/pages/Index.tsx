@@ -9,6 +9,7 @@ import BackgroundSelector from '@/components/BackgroundSelector';
 import OnboardingGuide from '@/components/OnboardingGuide';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
+import { ExpressionPanel } from '@/components/ExpressionPanel';
 import { MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -53,6 +54,8 @@ export default function Index() {
     false // Always start closed for both desktop and mobile
   );
   const [hasUnread, setHasUnread] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => localStorage.getItem('vrm.muted') === 'true');
+  const [showExpressionPanel, setShowExpressionPanel] = useState(false);
   const lastInteractionTime = useRef(Date.now());
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -219,6 +222,12 @@ export default function Index() {
         }
       }
 
+      // If muted, skip audio playback but still trigger animations
+      if (isMuted) {
+        setIsSpeaking(false);
+        return;
+      }
+
       if (isWebSpeechUrl(audioUrl)) {
         // Web Speech path — ElevenLabs is NOT used
         const text = getWebSpeechText(audioUrl);
@@ -242,7 +251,7 @@ export default function Index() {
         });
       }
     },
-    [findMatch, findClipByName, userLangPref, audioConnected],
+    [findMatch, findClipByName, userLangPref, audioConnected, isMuted],
   );
 
   const handleSpeakEnd = useCallback(() => {
@@ -279,6 +288,26 @@ export default function Index() {
       return !v;
     });
     lastInteractionTime.current = Date.now();
+  }, []);
+
+  const handleToggleMute = useCallback(() => {
+    setIsMuted(prev => {
+      const next = !prev;
+      localStorage.setItem('vrm.muted', String(next));
+      if (next) {
+        // Mute: stop current audio
+        audioRef.current?.pause();
+        stopWebSpeech();
+      }
+      toast(next ? '🔇 Suara dimatikan' : '🔊 Suara dinyalakan', { duration: 1500 });
+      return next;
+    });
+  }, []);
+
+  const handleMoodChange = useCallback((mood: string) => {
+    viewerRef.current?.applyBlendshape({ [mood]: 1 });
+    // Auto-clear after 4 seconds
+    setTimeout(() => viewerRef.current?.clearBlendshape(), 4000);
   }, []);
 
   const handleLevelUp = useCallback((level: number) => {
@@ -321,9 +350,14 @@ export default function Index() {
   // Global keyboard shortcuts
   useKeyboardShortcuts({
     onToggleChat: handleToggleChat,
-    onEscape: () => { if (chatOpen) setChatOpen(false); },
+    onEscape: () => {
+      if (showExpressionPanel) { setShowExpressionPanel(false); return; }
+      if (chatOpen) setChatOpen(false);
+    },
     onCameraPreset: (preset) => handleCameraPresetChange(preset as CameraPreset),
     onToggleParticles: handleToggleParticles,
+    onToggleMute: handleToggleMute,
+    onToggleExpressionPanel: () => setShowExpressionPanel(s => !s),
   });
 
   return (
@@ -362,7 +396,29 @@ export default function Index() {
         </Suspense>
       </div>
 
-      {/* Content Layer - VRM Viewer area (for controls only) */}
+      {/* Expression Panel — floats above VRM viewer, centered bottom */}
+      {modelUrl && (
+        <div className="absolute inset-0 z-40 pointer-events-none flex items-end justify-center pb-28">
+          <div className="pointer-events-auto">
+            <ExpressionPanel
+              isOpen={showExpressionPanel}
+              onClose={() => setShowExpressionPanel(false)}
+              onExpression={(weights) => viewerRef.current?.applyBlendshape(weights)}
+              onClear={() => viewerRef.current?.clearBlendshape()}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Mute indicator badge */}
+      {isMuted && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full cyber-glass border border-destructive/40 text-xs text-destructive">
+            🔇 Suara dimatikan — tekan M untuk unmute
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 relative min-w-0 scanlines z-30 pointer-events-none">
         {/* Right-side vertical control column — all controls in one column */}
         <TooltipProvider delayDuration={600}>
@@ -466,6 +522,9 @@ export default function Index() {
         showSubtitles={showSubtitles}
         onToggleSubtitles={handleToggleSubtitles}
         availableAnimations={clips.map(c => c.name)}
+        onMoodChange={handleMoodChange}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
       />
     </div>
   );

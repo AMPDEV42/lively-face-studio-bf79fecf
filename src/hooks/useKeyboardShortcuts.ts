@@ -6,6 +6,8 @@ interface Shortcuts {
   onEscape?: () => void;
   onCameraPreset?: (preset: string) => void;
   onToggleParticles?: () => void;
+  onToggleMute?: () => void;
+  onToggleExpressionPanel?: () => void;
 }
 
 /**
@@ -15,8 +17,10 @@ interface Shortcuts {
  * - Escape         → close overlays
  * - 1/2/3/4        → camera presets (close-up / medium / full-body / wide)
  * - P              → toggle ambient particles
+ * - M              → mute/unmute TTS
+ * - E              → toggle expression panel
  */
-export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape, onCameraPreset, onToggleParticles }: Shortcuts) {
+export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape, onCameraPreset, onToggleParticles, onToggleMute, onToggleExpressionPanel }: Shortcuts) {
   useEffect(() => {
     const CAMERA_KEYS: Record<string, string> = {
       '1': 'close-up',
@@ -53,9 +57,19 @@ export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape
       // P — toggle ambient particles
       if (!mod && !isInput && (e.key === 'p' || e.key === 'P')) {
         onToggleParticles?.();
+        return;
+      }
+      // M — mute/unmute TTS
+      if (!mod && !isInput && (e.key === 'm' || e.key === 'M')) {
+        onToggleMute?.();
+        return;
+      }
+      // E — toggle expression panel
+      if (!mod && !isInput && (e.key === 'e' || e.key === 'E')) {
+        onToggleExpressionPanel?.();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onToggleChat, onNewConversation, onEscape, onCameraPreset, onToggleParticles]);
+  }, [onToggleChat, onNewConversation, onEscape, onCameraPreset, onToggleParticles, onToggleMute, onToggleExpressionPanel]);
 }
