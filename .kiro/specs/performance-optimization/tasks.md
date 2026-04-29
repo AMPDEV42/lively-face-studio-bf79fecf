@@ -43,10 +43,10 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 9.2, 9.5**
     - Untuk N calls ke `connectAudioElement` dengan elemen yang sama, verifikasi `createMediaElementSource` dipanggil tepat 1 kali
 
-- [-] 4. Checkpoint — Verifikasi quick wins
+- [x] 4. Checkpoint — Verifikasi quick wins
   - Pastikan semua tests pass, tanyakan ke user jika ada pertanyaan.
 
-- [~] 5. Optimasi render loop throttling dan Page Visibility API
+- [x] 5. Optimasi render loop throttling dan Page Visibility API
   - Verifikasi implementasi frame throttler di `VrmViewer.tsx` sudah konsisten: hidden=10fps, mobile=30fps, desktop=60fps
   - Tambahkan event listener `visibilitychange` ke setup effect untuk update `isVisibleRef`
   - Pastikan cleanup effect menghapus event listener `visibilitychange`
@@ -58,7 +58,7 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5**
     - Gunakan `fast-check` dengan `fc.record({ isVisible, isMobile, elapsed })` untuk verifikasi semua kombinasi
 
-- [~] 6. Implementasi frame budget monitor dan spring bones skip frequency
+- [x] 6. Implementasi frame budget monitor dan spring bones skip frequency
   - Ekstrak fungsi pure `computeSpringSkipFrequency(cameraDistance: number, isMobile: boolean): 1 | 2 | 4`
   - Verifikasi delta compensation: `updateSpringBones(delta * skipFrequency, vrm)` sudah benar
   - Tambahkan frame budget monitor di render loop (dev-only): log warning jika frame time > 16ms (desktop) atau > 33ms (mobile)
@@ -70,7 +70,7 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5**
     - Verifikasi semua 3 kasus: distance > 4 → 4, distance ≤ 4 + mobile → 2, distance ≤ 4 + desktop → 1
 
-- [~] 7. Implementasi lighting cache di LightingManager
+- [x] 7. Implementasi lighting cache di LightingManager
   - Tambahkan field `private cache: LightingCacheEntry | null = null` ke class `LightingManager`
   - Tambahkan konstanta `private readonly THRESHOLD = 0.01`
   - Modifikasi `updateLighting()` untuk skip update jika max delta intensitas < THRESHOLD
@@ -83,7 +83,7 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 3.2, 3.3**
     - Verifikasi: delta < 0.01 → skip update, delta ≥ 0.01 → apply update dan update cache
 
-- [~] 8. Implementasi Three.js resource disposal
+- [x] 8. Implementasi Three.js resource disposal
   - Tambahkan fungsi `disposeVrmResources(vrm: VRM): void` yang memanggil `VRMUtils.deepDispose(vrm.scene)`
   - Tambahkan fungsi `disposeSceneObjects(scene: THREE.Scene): void` yang traverse scene dan dispose geometry, material, texture
   - Tambahkan fungsi `disposeMaterial(mat: THREE.Material): void` yang dispose semua texture properties
@@ -91,14 +91,14 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
   - Pastikan cleanup effect di `VrmViewer.tsx` memanggil disposal untuk renderer, controls, dan semua scene objects saat unmount
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 13.1, 13.2, 13.3, 13.4_
 
-- [~] 9. Implementasi mobile performance config
+- [x] 9. Implementasi mobile performance config
   - Pastikan `renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))` diterapkan saat `isMobile === true`
   - Pastikan `antialias: false` di WebGLRenderer constructor saat mobile
   - Disable dynamic light pulsing di render loop saat `isMobileRef.current === true` (sudah ada, verifikasi)
   - Pastikan ambient particles dinonaktifkan via `ambientEffect` prop dari `Index.tsx` saat mobile terdeteksi
   - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
 
-- [~] 10. Checkpoint — Verifikasi render loop dan Three.js optimasi
+- [x] 10. Checkpoint — Verifikasi render loop dan Three.js optimasi
   - Pastikan semua tests pass, tanyakan ke user jika ada pertanyaan.
 
 - [~] 11. Implementasi idle expression fade optimization

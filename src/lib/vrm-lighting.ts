@@ -10,6 +10,13 @@ export interface LightingConfig {
   keyLightColor: string;
 }
 
+interface LightingCacheEntry {
+  ambientIntensity: number;
+  keyLightIntensity: number;
+  fillLightIntensity: number;
+  rimLightIntensity: number;
+}
+
 export class LightingManager {
   private scene: THREE.Scene;
   private ambientLight: THREE.AmbientLight | null = null;
@@ -17,6 +24,8 @@ export class LightingManager {
   private fillLight: THREE.DirectionalLight | null = null;
   private rimLight: THREE.DirectionalLight | null = null;
   private isMobile: boolean;
+  private cache: LightingCacheEntry | null = null;
+  private readonly THRESHOLD = 0.01;
 
   constructor(scene: THREE.Scene, isMobile: boolean = false) {
     this.scene = scene;
@@ -55,6 +64,17 @@ export class LightingManager {
   }
 
   updateLighting(config: LightingConfig) {
+    // Skip update if all intensity values are within threshold of cached values
+    if (this.cache) {
+      const delta = Math.max(
+        Math.abs(config.ambientIntensity - this.cache.ambientIntensity),
+        Math.abs(config.keyLightIntensity - this.cache.keyLightIntensity),
+        Math.abs(config.fillLightIntensity - this.cache.fillLightIntensity),
+        Math.abs(config.rimLightIntensity - this.cache.rimLightIntensity),
+      );
+      if (delta < this.THRESHOLD) return; // skip update — no significant change
+    }
+
     // Update ambient light
     if (this.ambientLight) {
       this.ambientLight.color.setHex(parseInt(config.ambientColor.replace('#', '0x')));
@@ -76,6 +96,14 @@ export class LightingManager {
     if (this.rimLight && !this.isMobile) {
       this.rimLight.intensity = config.rimLightIntensity;
     }
+
+    // Update cache with new values
+    this.cache = {
+      ambientIntensity: config.ambientIntensity,
+      keyLightIntensity: config.keyLightIntensity,
+      fillLightIntensity: config.fillLightIntensity,
+      rimLightIntensity: config.rimLightIntensity,
+    };
   }
 
   setMobileMode(isMobile: boolean) {

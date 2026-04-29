@@ -399,7 +399,7 @@ export default function Index() {
               getAudioLevel={audioConnected ? getAudioLevel : undefined}
               getFrequencyData={audioConnected ? getFrequencyData : undefined}
               onLevelUp={handleLevelUp}
-              ambientEffect={ambientEffect}
+              ambientEffect={isMobile ? 'none' : ambientEffect}
               showSubtitles={showSubtitles}
               clips={clips}
               userId={user?.id}

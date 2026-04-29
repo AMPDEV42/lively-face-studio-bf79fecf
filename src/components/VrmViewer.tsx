@@ -67,6 +67,77 @@ const INTERACTION = {
   affectionThrottle:  1000,
 } as const;
 
+// ── Pure frame throttle helper ────────────────────────────────────────────────
+/**
+ * Returns the target frame interval in milliseconds based on tab visibility
+ * and device type.
+ *
+ * - Hidden tab  → 100 ms  (10 fps)  — saves battery when tab is not visible
+ * - Mobile      →  33.33 ms (30 fps) — conservative for mobile GPUs
+ * - Desktop     →  16.67 ms (60 fps) — full frame rate
+ */
+export function computeTargetInterval(isVisible: boolean, isMobile: boolean): number {
+  if (!isVisible) return 1000 / 10;   // 100ms — hidden tab
+  if (isMobile)   return 1000 / 30;   // 33.33ms — mobile
+  return 1000 / 60;                   // 16.67ms — desktop
+}
+
+/**
+ * Computes spring bones skip frequency based on camera distance and device type.
+ * 
+ * - distance > 4  → skip 4 frames (update every 4th frame)
+ * - distance ≤ 4 AND mobile → skip 2 frames (update every 2nd frame)
+ * - distance ≤ 4 AND desktop → skip 1 frame (update every frame)
+ * 
+ * @param cameraDistance - Distance from camera to origin
+ * @param isMobile - Whether device is mobile
+ * @returns Skip frequency (1, 2, or 4)
+ */
+export function computeSpringSkipFrequency(cameraDistance: number, isMobile: boolean): 1 | 2 | 4 {
+  if (cameraDistance > 4) return 4;
+  if (isMobile) return 2;
+  return 1;
+}
+
+// ── Three.js resource disposal helpers ───────────────────────────────────────
+
+/**
+ * Dispose all texture properties on a material, then dispose the material itself.
+ * Iterates over all keys of the material and disposes any THREE.Texture values.
+ */
+export function disposeMaterial(mat: THREE.Material): void {
+  for (const key of Object.keys(mat)) {
+    const val = (mat as unknown as Record<string, unknown>)[key];
+    if (val instanceof THREE.Texture) val.dispose();
+  }
+  mat.dispose();
+}
+
+/**
+ * Traverse a THREE.Scene and dispose geometry, materials, and textures
+ * for every Mesh found.
+ */
+export function disposeSceneObjects(scene: THREE.Scene): void {
+  scene.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.geometry?.dispose();
+      if (Array.isArray(obj.material)) {
+        obj.material.forEach((m) => disposeMaterial(m));
+      } else if (obj.material) {
+        disposeMaterial(obj.material);
+      }
+    }
+  });
+}
+
+/**
+ * Dispose all Three.js resources owned by a VRM model using VRMUtils.deepDispose.
+ * This releases GPU memory for all geometries, materials, and textures in the VRM scene.
+ */
+export function disposeVrmResources(vrm: VRM): void {
+  VRMUtils.deepDispose(vrm.scene);
+}
+
 export interface VrmViewerHandle {
   playVrmaUrl: (url: string, opts?: PlayVrmaOptions) => Promise<void>;
   stopVrma: (fadeOut?: number) => void;
@@ -478,10 +549,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
     const now = performance.now();
     // Target: 60fps desktop, 30fps mobile. Drops strictly to 10fps if hidden tab to save battery.
-    const targetInterval = !isVisibleRef.current ? 1000 / 10 : (isMobileRef.current ? 1000 / 30 : 1000 / 60);
+    const targetInterval = computeTargetInterval(isVisibleRef.current, isMobileRef.current);
     const elapsed = now - lastFrameTimeRef.current;
     if (elapsed < targetInterval) return;
     lastFrameTimeRef.current = now - (elapsed % targetInterval);
+
+    // Frame budget monitor — track start time for budget check at end of frame
+    const frameStart = now;
 
     const delta = Math.min(clockRef.current.getDelta(), 0.1);
     const elapsedTime = clockRef.current.getElapsedTime();
@@ -609,11 +683,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         updateIdleMicroGestures(elapsedTime, vrm, activeDrivenBonesRef.current, delta);
       }
 
+      // Check mid-frame budget before non-critical operations
+      // Skip spring bones if we're already over budget (Req 22.3)
+      const midFrameTime = performance.now() - frameStart;
+      const frameBudget = isMobileRef.current ? 33 : 16;
+      const isOverBudget = midFrameTime >= frameBudget;
+
       // 8. Spring bones — secondary motion (hair, accessories, etc.)
+      // Skipped if frame budget already exceeded to prioritize critical operations
       const dist = cameraRef.current ? cameraRef.current.position.length() : 0;
-      const skipFrequency = dist > 4 ? 4 : (isMobileRef.current ? 2 : 1);
-      if (frameCountRef.current % skipFrequency === 0) {
-        updateSpringBones(delta * skipFrequency, vrm);
+      const skipFrequency = computeSpringSkipFrequency(dist, isMobileRef.current);
+      if (!isOverBudget && frameCountRef.current % skipFrequency === 0) {
+        updateSpringBones(delta * skipFrequency, vrm); // compensate delta for skipped frames
       }
     }
 
@@ -624,6 +705,15 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     // Hanya draw scene jika tab peramban benar-benar sedang dibuka (visibilitas tak tersembunyi), menghemat drastis beban GPU.
     if (rendererRef.current && sceneRef.current && cameraRef.current && isVisibleRef.current) {
       rendererRef.current.render(sceneRef.current, cameraRef.current);
+    }
+
+    // Frame budget monitor (dev-only) — log warning if frame time exceeds budget
+    if (import.meta.env.DEV) {
+      const frameTime = performance.now() - frameStart;
+      const budget = isMobileRef.current ? 33 : 16;
+      if (frameTime > budget) {
+        console.warn(`[RenderLoop] Frame budget exceeded: ${frameTime.toFixed(1)}ms (budget: ${budget}ms)`);
+      }
     }
   }, []);
 
@@ -638,6 +728,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       rendererRef.current.dispose();
       rendererRef.current.domElement.parentNode?.removeChild(rendererRef.current.domElement);
     }
+
+    // Dispose previous VRM resources before loading a new model (Req 2.1, 2.3)
+    if (vrmRef.current) {
+      try { disposeVrmResources(vrmRef.current); } catch (_) { /* ok */ }
+      vrmRef.current = null;
+    }
+
     sceneRef.current?.clear();
     adaptivePresetsRef.current = null;
     vrmSceneHiddenRef.current = null; // Reset hidden scene reference
@@ -655,7 +752,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    const isMobile = container.clientWidth < 768;
+    const isMobile = container.clientWidth < 768 || ('ontouchstart' in window);
     isMobileRef.current = isMobile;
 
     // Initialize environment manager
@@ -842,7 +939,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       if (!container || !renderer || !camera) return;
       
       const wasMobile = isMobileRef.current;
-      const nowMobile = container.clientWidth < 768;
+      const nowMobile = container.clientWidth < 768 || ('ontouchstart' in window);
       isMobileRef.current = nowMobile;
 
       if (vrmRef.current && wasMobile !== nowMobile && adaptivePresetsRef.current) {
@@ -898,25 +995,10 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       cancelAnimationFrame(rafRef.current);
       if (cameraAnimationRef.current) cancelAnimationFrame(cameraAnimationRef.current);
 
-      // Dispose VRM model — geometry, materials, textures
+      // Dispose VRM model — geometry, materials, textures (Req 2.2, 2.3, 13.1)
       const vrm = vrmRef.current;
       if (vrm) {
-        vrm.scene.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) {
-            obj.geometry?.dispose();
-            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-            mats.forEach((m) => {
-              if (m) {
-                // Dispose all texture maps on the material
-                Object.values(m).forEach((val) => {
-                  if (val instanceof THREE.Texture) val.dispose();
-                });
-                m.dispose();
-              }
-            });
-          }
-        });
-        try { VRMUtils.deepDispose(vrm.scene); } catch (_) { /* ok */ }
+        try { disposeVrmResources(vrm); } catch (_) { /* ok */ }
         vrmRef.current = null;
       }
 
@@ -926,7 +1008,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           if (obj instanceof THREE.Mesh) {
             obj.geometry?.dispose();
             const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-            mats.forEach((m) => { m?.dispose(); });
+            mats.forEach((m) => { if (m) disposeMaterial(m); });
           }
         });
         vrmSceneHiddenRef.current = null;
@@ -939,22 +1021,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         mixerRef.current = null;
       }
 
-      // Dispose scene objects
-      sceneRef.current?.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry?.dispose();
-          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          mats.forEach((m) => {
-            if (m) {
-              Object.values(m).forEach((val) => {
-                if (val instanceof THREE.Texture) val.dispose();
-              });
-              m.dispose();
-            }
-          });
-        }
-      });
-      sceneRef.current?.clear();
+      // Dispose all scene objects — geometry, materials, textures (Req 2.2, 2.4, 13.1)
+      if (sceneRef.current) {
+        disposeSceneObjects(sceneRef.current);
+        sceneRef.current.clear();
+      }
 
       renderer.dispose();
       renderer.forceContextLoss();
