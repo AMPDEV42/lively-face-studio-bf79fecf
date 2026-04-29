@@ -52,7 +52,7 @@ const MOOD_MOMENTUM_BOOST = 1.2;
 // INCREASED to avoid "slowly closing eyes" effect
 const LERP_SPEED_MIN = 0.8; 
 const LERP_SPEED_MAX = 1.8; 
-const LERP_SPEED_RESUME = 0.5; 
+const LERP_SPEED_RESUME = 2.0; // ~500ms fade in after TTS ends (Requirement 19.3)
 
 // Intensity fluctuation during hold
 const INTENSITY_FLUCTUATION_SPEED = 0.15; 
@@ -169,9 +169,9 @@ function _pickNext(): {
   const bias = (Math.random() + Math.random()) / 2; // Triangular distribution
   const duration = chosen.minDuration + bias * durationRange;
   
-  // Randomize lerp speed - slower for first few transitions after resume
+  // Randomize lerp speed - use resume speed for first few transitions after TTS ends
   if (_resumeTransitionCount < 5) {
-    // Gradually increase speed: 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → normal (extremely slow progression)
+    // Gradually increase speed from LERP_SPEED_RESUME toward normal range
     _lerpSpeed = LERP_SPEED_RESUME + (_resumeTransitionCount * 0.1);
     _resumeTransitionCount++;
   } else {
@@ -200,8 +200,22 @@ function _pickNext(): {
   };
 }
 
+/**
+ * Pure linear interpolation function.
+ * Exported for testability and reuse.
+ * 
+ * @param start - Start value
+ * @param end - End value
+ * @param t - Interpolation factor in [0, 1]
+ * @returns Interpolated value in [min(start, end), max(start, end)]
+ */
+export function lerp(start: number, end: number, t: number): number {
+  return start + (end - start) * t;
+}
+
+/** @internal Alias for backward compatibility within this module */
 function _lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
+  return lerp(a, b, t);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -289,7 +303,10 @@ export function fadeOutIdleExpressions(delta: number, vrm: VRM): boolean {
   if (!vrm.expressionManager) return true;
   
   const em = vrm.expressionManager;
-  const FADE_SPEED = 0.3; // Reduced from 0.5 - extremely slow fade for maximum natural transition
+  // Fade out in ~300ms: t = delta / 0.3 gives full transition in 300ms
+  // Clamped to [0, 1] so it never overshoots
+  const FADE_DURATION = 0.3; // 300ms fade out (Requirement 19.1)
+  const t = Math.min(delta / FADE_DURATION, 1);
   
   // Mouth expressions that should NOT be faded (reserved for lip sync)
   const mouthExpressions = new Set(['aa', 'ih', 'ou', 'ee', 'oh']);
@@ -302,7 +319,7 @@ export function fadeOutIdleExpressions(delta: number, vrm: VRM): boolean {
       continue;
     }
     
-    const newValue = value * (1 - FADE_SPEED * delta);
+    const newValue = lerp(value, 0, t);
     _currentWeights[key] = newValue;
     maxValue = Math.max(maxValue, Math.abs(newValue));
     

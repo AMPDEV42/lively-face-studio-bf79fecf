@@ -101,7 +101,7 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
 - [x] 10. Checkpoint — Verifikasi render loop dan Three.js optimasi
   - Pastikan semua tests pass, tanyakan ke user jika ada pertanyaan.
 
-- [~] 11. Implementasi idle expression fade optimization
+- [x] 11. Implementasi idle expression fade optimization
   - Ekstrak fungsi pure `lerp(start: number, end: number, t: number): number`
   - Verifikasi bahwa fade out idle expression (300ms) dan fade in (500ms) menggunakan lerp
   - Pastikan idle expression update loop di-pause saat TTS aktif (`setIdleExpressionPaused(true)`)
@@ -113,7 +113,7 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 19.4**
     - Verifikasi `lerp(s, e, t)` selalu menghasilkan nilai dalam range `[min(s,e), max(s,e)]`
 
-- [~] 12. Implementasi raycasting throttle untuk interaction hitbox
+- [ ] 12. Implementasi raycasting throttle untuk interaction hitbox
   - Ubah raycasting dari per-frame menjadi event-driven: hanya saat `pointermove`
   - Tambahkan throttle 30x/detik menggunakan timestamp comparison
   - Limit raycasting ke hitbox meshes saja (bukan seluruh scene)
@@ -125,24 +125,24 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 26.4**
     - Verifikasi N pointer events dalam 1 detik menghasilkan ≤ 30 raycasting operations
 
-- [~] 13. Verifikasi lazy loading face-api dan bundle chunks
+- [ ] 13. Verifikasi lazy loading face-api dan bundle chunks
   - Verifikasi bahwa `@vladmandic/face-api` tidak di-import secara static di mana pun
   - Pastikan semua import face-api menggunakan dynamic `import()` dengan loading indicator
   - Verifikasi konfigurasi `manualChunks` di `vite.config.ts` sudah benar untuk semua vendor chunks
   - Jalankan `vite build` dan verifikasi chunk sizes sesuai requirements (three ≤ 200KB, vrm ≤ 150KB, faceapi ≤ 300KB, ui ≤ 100KB)
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [~] 14. Implementasi React re-render optimization
+- [ ] 14. Implementasi React re-render optimization
   - Audit `Index.tsx` untuk state yang tidak mempengaruhi UI — pindahkan ke `useRef` (contoh: `lastInteractionTime` sudah ref, verifikasi lainnya)
   - Verifikasi semua event handlers di `Index.tsx` sudah menggunakan `useCallback`
   - Tambahkan `useCallback` untuk handlers yang belum menggunakannya
   - Tambahkan `useMemo` untuk computed values yang expensive jika ada
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
 
-- [~] 15. Checkpoint — Verifikasi client-side optimasi lengkap
+- [ ] 15. Checkpoint — Verifikasi client-side optimasi lengkap
   - Pastikan semua tests pass, tanyakan ke user jika ada pertanyaan.
 
-- [~] 16. Implementasi rate limiter di Edge Function "chat"
+- [ ] 16. Implementasi rate limiter di Edge Function "chat"
   - Buat interface `RateLimitEntry { count: number; resetAt: number }` di Edge Function
   - Implementasikan fungsi `checkRateLimit(userId, limit, windowMs)` menggunakan in-memory Map dengan TTL
   - Terapkan rate limit 20 request/menit untuk Edge Function "chat" menggunakan `user_id` dari Supabase Auth
@@ -154,13 +154,13 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 14.1, 14.2, 14.3**
     - Verifikasi: tepat `limit` requests pertama diizinkan, semua request berikutnya dalam window mendapat 429
 
-- [~] 17. Implementasi rate limiter di Edge Function "tts"
+- [ ] 17. Implementasi rate limiter di Edge Function "tts"
   - Reuse fungsi `checkRateLimit` dari task 16 (atau ekstrak ke shared module)
   - Terapkan rate limit 30 request/menit untuk Edge Function "tts"
   - Return HTTP 429 dengan header `Retry-After: 60` saat limit terlampaui
   - _Requirements: 14.2, 14.3, 14.4_
 
-- [~] 18. Implementasi animation catalog in-memory cache di Edge Function "chat"
+- [ ] 18. Implementasi animation catalog in-memory cache di Edge Function "chat"
   - Tambahkan variabel module-level `let catalogCache: AnimationCatalogCache | null = null`
   - Implementasikan cache check: jika `catalogCache` valid (belum expired), skip query ke `vrma_animations`
   - Set TTL cache 5 menit: `expiresAt: Date.now() + 5 * 60 * 1000`
@@ -172,7 +172,7 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 18.1, 18.2**
     - Verifikasi N requests dalam 5 menit window menghasilkan tepat 1 database query
 
-- [~] 19. Implementasi TTS response caching di Edge Function "tts"
+- [ ] 19. Implementasi TTS response caching di Edge Function "tts"
   - Implementasikan fungsi `getCacheKey(text, voiceId)` menggunakan Web Crypto API (SHA-256, 16 char prefix)
   - Implementasikan `getCachedAudio(key)` yang lookup di Supabase Storage bucket `tts-cache`
   - Implementasikan `saveCachedAudio(key, audioData)` yang simpan ke Supabase Storage dengan metadata JSON
@@ -184,10 +184,10 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
     - **Validates: Requirements 15.1, 15.3, 15.5**
     - Verifikasi request kedua untuk (text, voiceId) yang sama mengembalikan audio yang identik tanpa memanggil ElevenLabs API
 
-- [~] 20. Checkpoint — Verifikasi Edge Function optimasi
+- [ ] 20. Checkpoint — Verifikasi Edge Function optimasi
   - Pastikan semua tests pass, tanyakan ke user jika ada pertanyaan.
 
-- [~] 21. Implementasi WebGL context loss recovery
+- [ ] 21. Implementasi WebGL context loss recovery
   - Tambahkan event listener `webglcontextlost` pada canvas element di setup effect `VrmViewer.tsx`
   - Saat context hilang: pause render loop (`cancelAnimationFrame`), tampilkan recovery message via state
   - Tambahkan event listener `webglcontextrestored` untuk resume render loop dan reload VRM model
@@ -195,14 +195,14 @@ Semua perubahan bersifat additive dan backward-compatible — tidak ada breaking
   - Cleanup kedua event listeners saat component unmount
   - _Requirements: 29.1, 29.2, 29.3, 29.4, 29.5_
 
-- [~] 22. Implementasi performance monitoring overlay
+- [ ] 22. Implementasi performance monitoring overlay
   - Tambahkan performance overlay component (fps, memory, draw calls) yang hanya muncul saat `?debug=true` di URL
   - Implementasikan frame rate logging setiap 10 detik (dev mode atau analytics)
   - Implementasikan memory usage logging setiap 30 detik menggunakan `performance.memory` jika tersedia
   - Integrasikan `web-vitals` library untuk log LCP, FID, CLS saat page load selesai
   - _Requirements: 30.1, 30.2, 30.3, 30.5_
 
-- [~] 23. Final checkpoint — Verifikasi semua optimasi
+- [ ] 23. Final checkpoint — Verifikasi semua optimasi
   - Pastikan semua tests pass, tanyakan ke user jika ada pertanyaan.
   - Jalankan `vite build` dan verifikasi tidak ada regresi pada chunk sizes
   - Verifikasi tidak ada TypeScript errors di semua file yang dimodifikasi
