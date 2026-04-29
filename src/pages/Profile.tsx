@@ -4,16 +4,22 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { usePlan } from '@/hooks/usePlan';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, Crown, Camera, LogOut, User, Sparkles, Trash2, Heart } from 'lucide-react';
+import {
+  ArrowLeft, Crown, Camera, LogOut, User, Sparkles, Trash2, Heart,
+  Zap, Lock, BarChart2, MessageSquare,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { formatNumber, getProgressColor, MAX_TOPUP_MESSAGES } from '@/lib/plan-config';
 
 const displayNameSchema = z.string().trim().min(1, 'Nama tidak boleh kosong').max(50);
 
@@ -21,6 +27,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isPro, roles } = useUserRole();
+  const { stats, messagePercent, planConfig } = usePlan();
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [affection, setAffection] = useState<number>(0);
@@ -164,6 +171,76 @@ export default function Profile() {
               <Sparkles className="w-3 h-3" /> Upgrade
             </Button>
           )}
+        </div>
+
+        {/* Billing & Usage section */}
+        <div className="rounded-xl border border-neon-purple cyber-glass p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Penggunaan Bulan Ini</p>
+            <Link to="/usage" className="text-[10px] text-violet-400 hover:text-violet-300 flex items-center gap-1">
+              <BarChart2 className="w-3 h-3" /> Detail
+            </Link>
+          </div>
+
+          {/* Message usage */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-white/50">
+                <MessageSquare className="w-3 h-3 text-violet-400/60" />
+                Pesan
+              </div>
+              <span className="text-white/60 tabular-nums">
+                {formatNumber(stats.messagesThisMonth)} / {formatNumber(stats.totalMessageQuota ?? planConfig.limits.messagesPerMonth)}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              <div className={`h-full rounded-full bg-gradient-to-r ${getProgressColor(messagePercent)} transition-all duration-500`}
+                style={{ width: `${Math.max(messagePercent, 1)}%` }} />
+            </div>
+          </div>
+
+          {/* Top-up status */}
+          {isPro && stats.topUpMessages > 0 && (
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.06]">
+              <div className="flex items-center gap-1.5 text-white/40">
+                <Zap className="w-3 h-3 text-violet-400/50" />
+                Saldo top-up
+              </div>
+              <span className="text-violet-300 font-medium">
+                {stats.topUpMessages.toLocaleString('id-ID')} pesan tersisa
+              </span>
+            </div>
+          )}
+
+          {/* Frozen top-up notice */}
+          {!isPro && stats.topUpMessages > 0 && (
+            <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs"
+              style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.15)' }}>
+              <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+              <p className="text-white/40 flex-1">
+                <span className="text-amber-300">{stats.topUpMessages.toLocaleString('id-ID')} pesan</span> top-up dibekukan
+              </p>
+              <Link to="/pricing" className="text-[10px] text-violet-400 hover:text-violet-300 underline underline-offset-2 shrink-0">
+                Aktifkan →
+              </Link>
+            </div>
+          )}
+
+          {/* CTA */}
+          <div className="flex gap-2 pt-1">
+            {!isPro ? (
+              <Button size="sm" onClick={() => navigate('/pricing')}
+                className="flex-1 h-8 text-xs gap-1.5 border-0"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #9333ea)' }}>
+                <Crown className="w-3 h-3" /> Upgrade ke Pro
+              </Button>
+            ) : messagePercent >= 80 && stats.topUpHeadroom > 0 ? (
+              <Button size="sm" onClick={() => navigate('/pricing#topup')}
+                className="flex-1 h-8 text-xs gap-1.5 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30">
+                <Zap className="w-3 h-3" /> Top-up Kuota
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         {/* Affection level */}

@@ -83,7 +83,7 @@ export default function ChatPanel({
   onToggleMute,
 }: ChatPanelProps) {
   const { user } = useAuth();
-  const { canSendMessage, recordMessage } = usePlan();
+  const { canSendMessage, recordMessage, isPro, stats } = usePlan();
   const { openUpgradeModal, UpgradeModalElement } = useUpgradeModal();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -520,10 +520,21 @@ export default function ChatPanel({
 
     // ── Plan limit check ──────────────────────────────────────────────────────
     if (!canSendMessage()) {
-      openUpgradeModal({
-        reason: 'Batas pesan bulanan tercapai',
-        featureDescription: 'Upgrade ke Pro untuk mendapatkan 1.500 pesan per bulan, top-up jika habis, dan fitur premium lainnya.',
-      });
+      // Pro user yang kehabisan kuota → tawarkan top-up
+      if (isPro) {
+        openUpgradeModal({
+          reason: 'Kuota pesan habis',
+          featureDescription: stats.topUpHeadroom > 0
+            ? `Beli top-up mulai Rp 15.000 untuk melanjutkan. Sisa tidak hangus.`
+            : `Kuota top-up penuh (maks. 3.000 pesan). Tunggu reset bulan depan.`,
+        });
+      } else {
+        // Free user → tawarkan upgrade
+        openUpgradeModal({
+          reason: 'Batas pesan bulanan tercapai',
+          featureDescription: 'Upgrade ke Pro untuk mendapatkan 1.500 pesan per bulan, top-up jika habis, dan fitur premium lainnya.',
+        });
+      }
       return;
     }
     // Record usage (estimate ~100 tokens per message)
