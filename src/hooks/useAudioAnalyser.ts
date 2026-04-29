@@ -46,7 +46,7 @@ export function useAudioAnalyser(): AudioAnalyserControls {
     if (!analyserRef.current) {
       const analyser = audioContextRef.current.createAnalyser();
       analyser.fftSize = 128;
-      analyser.smoothingTimeConstant = 0.8;
+      analyser.smoothingTimeConstant = 0.5; // lower = faster response to audio changes
       analyserRef.current = analyser;
       dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
       if (import.meta.env.DEV) console.log('[useAudioAnalyser] AnalyserNode created');

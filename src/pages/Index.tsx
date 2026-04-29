@@ -66,6 +66,8 @@ export default function Index() {
   const [autoEnvironment, setAutoEnvironment] = useState(() => 
     localStorage.getItem('vrm.autoEnvironment') !== 'false'
   );
+  // Track if user has manually picked a background — suppresses auto day/night cycle
+  const userPickedBgRef = useRef(false);
 
   const viewerRef = useRef<VrmViewerHandle>(null);
 
@@ -181,6 +183,7 @@ export default function Index() {
   }, []);
 
   const handleEnvironmentChange = useCallback((preset: string) => {
+    userPickedBgRef.current = true; // user manually picked — suppress auto cycle
     viewerRef.current?.setEnvironment(preset);
     if (autoEnvironment) {
        const envToLight: Record<string, string> = {
@@ -195,7 +198,6 @@ export default function Index() {
       const config = LIGHTING_PRESETS[lightPreset];
       if (config) {
         viewerRef.current?.setLighting(config);
-        // Add toast to let user know it happened
         toast.success(`Scene: ${preset.split('-')[0].toUpperCase()} mode activated`, {
           description: `Lighting automatically set to ${lightPreset} mode.`,
           duration: 2000,
@@ -310,10 +312,15 @@ export default function Index() {
   }, [clips, findClipByName]);
 
   // Dynamic Environment Cycle (Day/Night)
+  // Only runs via interval — never on mount — so it doesn't override user's manual choice.
   useEffect(() => {
-    if (!autoEnvironment || !viewerRef.current?.isVrmLoaded()) return;
+    if (!autoEnvironment) return;
 
     const updateEnvironmentByTime = () => {
+      // If user manually picked a background/environment, don't override it
+      if (userPickedBgRef.current) return;
+      if (!viewerRef.current?.isVrmLoaded()) return;
+
       const hour = new Date().getHours();
       let lighting: string;
       let env: string;
@@ -333,25 +340,21 @@ export default function Index() {
       }
 
       const viewer = viewerRef.current;
-      if (viewer) {
-        // Only trigger if background images aren't currently override everything 
-        // Background images are usually set via setImageBackground
-        // We'll trust setEnvironment/setLighting to handle state properly inside VrmViewer
-        const currentEnv = viewer.getCurrentEnvironment();
-        if (currentEnv !== env) {
-          viewer.setEnvironment(env);
-          
-          import('@/lib/vrm-lighting').then(({ LIGHTING_PRESETS }) => {
-            if (LIGHTING_PRESETS[lighting]) {
-              viewer.setLighting(LIGHTING_PRESETS[lighting]);
-            }
-          });
-        }
+      if (!viewer) return;
+
+      const currentEnv = viewer.getCurrentEnvironment();
+      if (currentEnv !== env) {
+        viewer.setEnvironment(env);
+        import('@/lib/vrm-lighting').then(({ LIGHTING_PRESETS }) => {
+          if (LIGHTING_PRESETS[lighting]) {
+            viewer.setLighting(LIGHTING_PRESETS[lighting]);
+          }
+        });
       }
     };
 
-    updateEnvironmentByTime();
-    const interval = setInterval(updateEnvironmentByTime, 60000); // Check every minute
+    // Only run on interval — NOT immediately on mount
+    const interval = setInterval(updateEnvironmentByTime, 60000);
     return () => clearInterval(interval);
   }, [autoEnvironment]);
 
@@ -468,7 +471,10 @@ export default function Index() {
                 <TooltipTrigger asChild>
                   <div>
                     <BackgroundSelector
-                      onBackgroundChange={(imageUrl) => viewerRef.current?.setImageBackground(imageUrl)}
+                      onBackgroundChange={(imageUrl) => {
+                        userPickedBgRef.current = true;
+                        viewerRef.current?.setImageBackground(imageUrl);
+                      }}
                       onEnvironmentChange={handleEnvironmentChange}
                       currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
                       ambientEffect={ambientEffect}

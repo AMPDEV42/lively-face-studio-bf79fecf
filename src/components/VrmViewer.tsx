@@ -555,17 +555,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
       // When paused, all idle expression weights are cleared to 0
       if (!manualBlendshapeRef.current && !isFadingOutRef.current) {
         const result = updateIdleExpression(delta, vrm);
-      if (result && result.name !== lastMoodRef.current) {
-        lastMoodRef.current = result.name;
-        setCurrentMoodName(result.name);
-        
-        // Trigger floating AR label on significant mood shift
-        if (result.name !== 'neutral' && Math.random() > 0.4) {
-          const id = floatingLabelCounter.current++;
-          setFloatingLabel({ text: result.name.toUpperCase() + '!', id });
-          setTimeout(() => setFloatingLabel(null), 1500);
+        // Update mood name for HUD
+        if (result && result.name !== lastMoodRef.current) {
+          lastMoodRef.current = result.name;
+          setCurrentMoodName(result.name);
         }
-      }
       }
 
       // 6. Apply all expression weights to morph targets - MUST be called after setting values
@@ -960,10 +954,8 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const [isHoveringHitbox, setIsHoveringHitbox] = useState(false);
   const [isPatting, setIsPatting] = useState(false);
   
-  // HUD & Floating Label states
+  // HUD & Mood state
   const [currentMoodName, setCurrentMoodName] = useState('neutral');
-  const [floatingLabel, setFloatingLabel] = useState<{ text: string, id: number } | null>(null);
-  const floatingLabelCounter = useRef(0);
   const lastMoodRef = useRef('neutral');
 
   // Affection Sync logic - Using User Metadata for persistence
@@ -1290,23 +1282,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             currentMood={currentMoodName} 
             isSpeaking={isSpeaking}
             fps={isMobileRef.current ? 30 : 60}
+            isAnimating={!!vrmaActionRef.current || isTalkingPlayingRef.current}
+            getAudioLevel={getAudioLevelRef.current ?? undefined}
           />
 
-          {/* Floating AR Mood Label */}
-          {floatingLabel && (
-            <div 
-              className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-full z-[100] animate-mood-label pointer-events-none"
-              key={floatingLabel.id}
-            >
-              <div className="px-3 py-1 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-md">
-                <span className="text-[10px] font-mono font-bold text-cyan-200 tracking-tighter drop-shadow-[0_0_8px_cyan]">
-                   {floatingLabel.text}
-                </span>
-              </div>
-            </div>
-          )}
-
-      {/* Ambient Aura Rendering */}
+          {/* Ambient Aura Rendering */}
       {ambientEffect !== 'none' && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
           {ambientEffect === 'sakura' && ambientParticles.sakura.map(p => (
