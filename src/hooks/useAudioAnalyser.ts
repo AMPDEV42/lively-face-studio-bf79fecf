@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState } from 'react';
+import { toast } from 'sonner';
 
 export interface AudioAnalyserControls {
   /** Connect an HTMLAudioElement or MediaStream to the analyser. Safe to call
@@ -14,6 +15,36 @@ export interface AudioAnalyserControls {
   isActive: boolean;
   /** Disconnect and clean up */
   disconnect: () => void;
+}
+
+/**
+ * Attempt to resume an AudioContext with exponential backoff retry.
+ * Shows a toast notification if all retries are exhausted (autoplay policy error).
+ * Requirements: 21.4, 21.5
+ */
+async function resumeAudioContextWithRetry(
+  ctx: AudioContext,
+  maxRetries = 3,
+): Promise<void> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await ctx.resume();
+      if (import.meta.env.DEV) console.log('[useAudioAnalyser] AudioContext resumed successfully');
+      return;
+    } catch (e) {
+      const delay = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+      if (import.meta.env.DEV) console.warn(`[useAudioAnalyser] Resume attempt ${attempt + 1} failed, retrying in ${delay}ms`, e);
+      if (attempt < maxRetries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  // All retries exhausted — autoplay policy is blocking audio
+  console.error('[useAudioAnalyser] AudioContext resume failed after', maxRetries, 'attempts (autoplay policy)');
+  toast.error('Audio blocked by browser', {
+    description: 'Click or tap anywhere on the page to enable audio playback.',
+    duration: 6000,
+  });
 }
 
 export function useAudioAnalyser(): AudioAnalyserControls {
@@ -39,9 +70,8 @@ export function useAudioAnalyser(): AudioAnalyserControls {
     }
     if (audioContextRef.current.state === 'suspended') {
       if (import.meta.env.DEV) console.log('[useAudioAnalyser] Resuming suspended AudioContext...');
-      audioContextRef.current.resume()
-        .then(() => { if (import.meta.env.DEV) console.log('[useAudioAnalyser] AudioContext resumed successfully'); })
-        .catch((e) => console.warn('[useAudioAnalyser] Failed to resume AudioContext:', e));
+      // Fire-and-forget with retry + toast on failure (Req 21.3, 21.4, 21.5)
+      resumeAudioContextWithRetry(audioContextRef.current);
     }
     if (!analyserRef.current) {
       const analyser = audioContextRef.current.createAnalyser();
@@ -56,9 +86,11 @@ export function useAudioAnalyser(): AudioAnalyserControls {
 
   const connectAudioElement = useCallback((audio: HTMLAudioElement) => {
     if (attachedElementRef.current === audio && sourceRef.current) {
+      // Same element already connected — deduplication path (Req 9.2, 9.5)
       if (audioContextRef.current?.state === 'suspended') {
         if (import.meta.env.DEV) console.log('[useAudioAnalyser] Resuming AudioContext for existing connection...');
-        audioContextRef.current.resume().catch((e) => console.warn('[useAudioAnalyser] Resume failed:', e));
+        // Resume with retry + toast on failure (Req 21.3, 21.4, 21.5)
+        resumeAudioContextWithRetry(audioContextRef.current);
       }
       setIsActive(true);
       if (import.meta.env.DEV) console.log('[useAudioAnalyser] Audio element already connected, reusing connection');

@@ -103,52 +103,65 @@ export default function Index() {
   useEffect(() => {
     let cancelled = false;
     const loadActive = async () => {
-      const { data: activeModel } = await supabase
-        .from('vrm_models')
-        .select('file_path, personality')
-        .eq('is_active', true)
-        .maybeSingle();
+      // Run all three queries in parallel for faster initial load (Req 8.1, 8.2, 8.5)
+      const [activeModelResult, activeVoiceResult, profileResult] = await Promise.all([
+        supabase
+          .from('vrm_models')
+          .select('file_path, personality')
+          .eq('is_active', true)
+          .maybeSingle(),
+        supabase
+          .from('voice_settings')
+          .select('voice_id')
+          .eq('is_active', true)
+          .maybeSingle(),
+        supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('user_id', user?.id)
+          .maybeSingle(),
+      ]);
 
+      // All critical queries are done — check cancellation once after all complete (Req 8.4)
       if (cancelled) return;
-      if (activeModel?.file_path) {
-        const { data: urlData } = supabase.storage.from('vrm-models').getPublicUrl(activeModel.file_path);
-        if (urlData?.publicUrl) setModelUrl(urlData.publicUrl);
-        setPersonality(activeModel.personality || undefined);
-      } else {
+
+      // Handle vrm_models result independently (Req 8.3)
+      if (activeModelResult.error) {
+        console.warn('[loadActive] vrm_models query failed:', activeModelResult.error);
         setModelUrl('');
         setPersonality(undefined);
+      } else {
+        const activeModel = activeModelResult.data;
+        if (activeModel?.file_path) {
+          const { data: urlData } = supabase.storage.from('vrm-models').getPublicUrl(activeModel.file_path);
+          if (urlData?.publicUrl) setModelUrl(urlData.publicUrl);
+          setPersonality(activeModel.personality || undefined);
+        } else {
+          setModelUrl('');
+          setPersonality(undefined);
+        }
       }
 
-      const { data: activeVoice } = await supabase
-        .from('voice_settings')
-        .select('voice_id')
-        .eq('is_active', true)
-        .maybeSingle();
+      // Handle voice_settings result independently (Req 8.3)
+      if (activeVoiceResult.error) {
+        console.warn('[loadActive] voice_settings query failed:', activeVoiceResult.error);
+      } else {
+        setVoiceId(activeVoiceResult.data?.voice_id ?? undefined);
+      }
 
-      if (cancelled) return;
-      setVoiceId(activeVoice?.voice_id ?? undefined);
+      // Handle profiles result independently (Req 8.3)
+      if (profileResult.error) {
+        console.warn('[loadActive] profiles query failed:', profileResult.error);
+      }
+      const profileData = profileResult.data ?? null;
 
       // Load affection for initial greeting from Auth Metadata (safe optional chain)
       const metaAffection = user?.user_metadata?.affection ?? 0;
       const affection = typeof metaAffection === 'number' ? metaAffection : parseInt(metaAffection, 10);
       const level = Math.floor(affection / 100);
-      
-      let profileData: any = null;
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        profileData = data;
-      } catch (e) {
-        console.warn('[Profile] Profile fetch error:', e);
-      }
-
-      if (cancelled) return;
 
       if (affection > 50) {
-        toast.info(`Welcome back, ${profileData?.display_name || user.email?.split('@')[0]}!`, {
+        toast.info(`Welcome back, ${profileData?.display_name || user?.email?.split('@')[0]}!`, {
           description: level > 0 ? `Affection Level ${level} reached.` : 'Your companion has been waiting for you.',
           duration: 4000,
         });
