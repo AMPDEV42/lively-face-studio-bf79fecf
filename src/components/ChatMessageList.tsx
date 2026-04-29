@@ -4,7 +4,13 @@ import { Bot, User, RefreshCw, Volume2 } from 'lucide-react';
 import type { ChatMessage } from '@/lib/chat-api';
 
 // ── Message bubble ────────────────────────────────────────────────────────────
-export const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage }) {
+export const MessageBubble = memo(function MessageBubble({
+  msg,
+  onReplay,
+}: {
+  msg: ChatMessage;
+  onReplay?: (text: string) => void;
+}) {
   const isUser = msg.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -36,13 +42,24 @@ export const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMes
             <span>{msg.content}</span>
           )}
         </div>
-        {/* Copy button — appears on hover */}
-        <button
-          onClick={handleCopy}
-          className={`absolute -bottom-5 ${isUser ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/60 hover:text-primary flex items-center gap-1`}
-        >
-          {copied ? '✓ Disalin' : 'Salin'}
-        </button>
+        {/* Action buttons — appear on hover */}
+        <div className={`absolute -bottom-5 ${isUser ? 'right-0' : 'left-0'} flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity`}>
+          <button
+            onClick={handleCopy}
+            className="text-[10px] text-muted-foreground/60 hover:text-primary flex items-center gap-1"
+          >
+            {copied ? '✓ Disalin' : 'Salin'}
+          </button>
+          {!isUser && onReplay && (
+            <button
+              onClick={() => onReplay(msg.content)}
+              className="text-[10px] text-muted-foreground/60 hover:text-primary flex items-center gap-1"
+              title="Putar ulang suara"
+            >
+              <Volume2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -92,6 +109,7 @@ interface ChatMessageListProps {
   isTTSLoading: boolean;
   onSendPrompt: (text: string) => void;
   onRegenerate: () => void;
+  onReplay?: (text: string) => void;
 }
 
 export function ChatMessageList({
@@ -100,6 +118,7 @@ export function ChatMessageList({
   isTTSLoading,
   onSendPrompt,
   onRegenerate,
+  onReplay,
 }: ChatMessageListProps) {
   return (
     <div className="space-y-3 px-1">
@@ -132,7 +151,7 @@ export function ChatMessageList({
           </div>
         </div>
       )}
-      {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+      {messages.map((msg, i) => <MessageBubble key={i} msg={msg} onReplay={onReplay} />)}
       <LoadingIndicators isLoading={isLoading} isTTSLoading={isTTSLoading} messages={messages} />
       {/* Regenerate button */}
       {!isLoading && !isTTSLoading && messages.length >= 2 && messages[messages.length - 1]?.role === 'assistant' && (

@@ -38,8 +38,8 @@ export function stripForTTS(text: string): string {
     .replace(/[\u{FE00}-\u{FEFF}]/gu, '')      // Variation selectors, BOM
     // Remove decorative unicode: ♡♥★☆◆◇●○▲△▼▽◎※→←↑↓
     .replace(/[♡♥★☆◆◇●○▲△▼▽◎※→←↑↓♪♫♬♩〜～]/g, '')
-    // Remove tilde used as softener (〜 ~) but keep sentence-ending punctuation
-    .replace(/~/g, '')
+    // Remove tilde variants (ASCII ~ and fullwidth ～ and wave dash 〜)
+    .replace(/[~～〜\u301C\uFF5E]/g, '')
     // Collapse multiple spaces/newlines left by removals
     .replace(/\s{2,}/g, ' ')
     .trim();

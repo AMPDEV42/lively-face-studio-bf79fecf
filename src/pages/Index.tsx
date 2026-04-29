@@ -47,7 +47,9 @@ export default function Index() {
   const [personality, setPersonality] = useState<string | undefined>(undefined);
   const [spokenMessage, setSpokenMessage] = useState<string>('');
   const [isCameraFree, setIsCameraFree] = useState(false);
-  const [currentCameraPreset, setCurrentCameraPreset] = useState<CameraPreset>('medium-shot');
+  const [currentCameraPreset, setCurrentCameraPreset] = useState<CameraPreset>(
+    () => (localStorage.getItem('vrm.cameraPreset') as CameraPreset) ?? 'medium-shot'
+  );
   const [chatOpen, setChatOpen] = useState(() =>
     false // Always start closed for both desktop and mobile
   );
@@ -261,6 +263,7 @@ export default function Index() {
 
   const handleSpeakEnd = useCallback(() => {
     audioRef.current?.pause();
+    if (audioRef.current) audioRef.current.src = '';
     stopWebSpeech();
     setIsSpeaking(false);
     setIsWebSpeechActive(false);
@@ -277,6 +280,7 @@ export default function Index() {
 
   const handleCameraPresetChange = useCallback((preset: CameraPreset) => {
     setCurrentCameraPreset(preset);
+    localStorage.setItem('vrm.cameraPreset', preset);
     viewerRef.current?.setCameraPreset(preset);
   }, []);
 
@@ -380,6 +384,7 @@ export default function Index() {
   useKeyboardShortcuts({
     onToggleChat: handleToggleChat,
     onEscape: () => { if (chatOpen) setChatOpen(false); },
+    onCameraPreset: (preset) => handleCameraPresetChange(preset as CameraPreset),
   });
 
   return (

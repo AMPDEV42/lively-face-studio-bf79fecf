@@ -19,6 +19,22 @@ import { ChatHistoryPanel } from '@/components/ChatHistoryPanel';
 import { ChatInputBar } from '@/components/ChatInputBar';
 import { useAiInitiative } from '@/hooks/useAiInitiative';
 
+// ── VITS helper — extracted to avoid 4x duplication ──────────────────────────
+async function runVitsTTS(text: string): Promise<{ url: string | null; source: 'vits' | 'none'; error: string | null }> {
+  const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
+  const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
+  const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
+  let ttsInput = text;
+  if (lang === '日本語' && autoTranslate) ttsInput = await translateToJapanese(text);
+  ttsInput = truncateForVits(ttsInput);
+  try {
+    const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
+    return { url, source: 'vits', error: null };
+  } catch (err) {
+    return { url: null, source: 'none', error: (err as Error).message };
+  }
+}
+
 interface ChatPanelProps {
   onSpeakStart: (audioUrl: string, messageText?: string) => void;
   onSpeakEnd: () => void;
@@ -63,6 +79,7 @@ export default function ChatPanel({
   const [isTTSLoading, setIsTTSLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [lastAssistantText, setLastAssistantText] = useState('');
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -170,7 +187,21 @@ export default function ChatPanel({
     });
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+  // Smart auto-scroll: only scroll if user is already near the bottom
+  const isNearBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    setShowScrollBtn(!isNearBottom());
+  }, [isNearBottom]);
+
+  useEffect(() => {
+    if (isNearBottom()) scrollToBottom();
+    else setShowScrollBtn(true);
+  }, [messages, scrollToBottom, isNearBottom]);
   useEffect(() => {
     if (isOpen && onUnreadChange) onUnreadChange(false);
   }, [isOpen, onUnreadChange]);
@@ -244,19 +275,7 @@ export default function ChatPanel({
     setIsTTSLoading(true);
     let ttsResult;
     if (ttsProvider === 'vits') {
-      const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
-      const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
-      const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
-      let ttsInput = displayText;
-      if (lang === '日本語' && autoTranslate) ttsInput = await translateToJapanese(displayText);
-      // VITS API has a strict character limit — truncate to first sentence if too long
-      ttsInput = truncateForVits(ttsInput);
-      try {
-        const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
-        ttsResult = { url, error: null, source: 'vits' as const };
-      } catch (err) {
-        ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
-      }
+      ttsResult = await runVitsTTS(displayText);
     } else {
       ttsResult = await generateTTS(displayText, voiceId, 2, ttsProvider === 'elevenlabs');
     }
@@ -361,22 +380,7 @@ export default function ChatPanel({
             setIsTTSLoading(true);
             let ttsResult;
             if (ttsProvider === 'vits') {
-              const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
-              const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
-              const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
-              
-              let ttsInput = ttsText;
-              if (lang === '日本語' && autoTranslate) {
-                ttsInput = await translateToJapanese(ttsText);
-              }
-              ttsInput = truncateForVits(ttsInput);
-
-              try {
-                const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
-                ttsResult = { url, error: null, source: 'vits' as const };
-              } catch (err) {
-                ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
-              }
+              ttsResult = await runVitsTTS(ttsText);
             } else {
               ttsResult = await generateTTS(ttsText, voiceId, 2, ttsProvider === 'elevenlabs');
             }
@@ -401,22 +405,7 @@ export default function ChatPanel({
     setIsTTSLoading(true);
     let ttsResult;
     if (ttsProvider === 'vits') {
-      const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
-      const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
-      const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
-      
-      let ttsInput = text;
-      if (lang === '日本語' && autoTranslate) {
-        ttsInput = await translateToJapanese(text);
-      }
-      ttsInput = truncateForVits(ttsInput);
-
-      try {
-        const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
-        ttsResult = { url, error: null, source: 'vits' as const };
-      } catch (err) {
-        ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
-      }
+      ttsResult = await runVitsTTS(text);
     } else {
       ttsResult = await generateTTS(text, voiceId, 2, ttsProvider === 'elevenlabs');
     }
@@ -461,6 +450,27 @@ export default function ChatPanel({
       
       if (shortcuts[cmd]) {
         onSpeakStart('', `[ANIM:${shortcuts[cmd]}]`);
+        setInput('');
+        return;
+      }
+
+      // /help — show available commands as system message
+      if (cmd === 'help') {
+        const helpLines = [
+          '**Slash Commands yang tersedia:**',
+          '`/dance` — animasi dance',
+          '`/wave` — animasi wave',
+          '`/bow` — animasi bow',
+          '`/think` — animasi thinking',
+          '`/laugh` — animasi laughing',
+          '`/anim <nama>` — mainkan animasi custom',
+          '',
+          '**Keyboard Shortcuts:**',
+          '`Ctrl+K` — buka/tutup chat',
+          '`1` `2` `3` `4` — preset kamera',
+          '`Esc` — tutup chat',
+        ].join('\n');
+        setMessages(prev => [...prev, { role: 'assistant', content: helpLines }]);
         setInput('');
         return;
       }
@@ -530,22 +540,7 @@ export default function ChatPanel({
             setIsTTSLoading(true);
             let ttsResult;
             if (ttsProvider === 'vits') {
-              const speaker = localStorage.getItem('vrm.vits_speaker') || '特别周 Special Week (Umamusume Pretty Derby)';
-              const lang = localStorage.getItem('vrm.vits_lang') || '日本語';
-              const autoTranslate = localStorage.getItem('vrm.vits_auto_translate') !== 'false';
-              
-              let ttsInput = ttsText;
-              if (lang === '日本語' && autoTranslate) {
-                ttsInput = await translateToJapanese(ttsText);
-              }
-              ttsInput = truncateForVits(ttsInput);
-
-              try {
-                const url = await generateVitsAudio({ text: ttsInput, speaker, language: lang, speed: 1.0 });
-                ttsResult = { url, error: null, source: 'vits' as const };
-              } catch (err) {
-                ttsResult = { url: null, error: (err as Error).message, source: 'none' as const };
-              }
+              ttsResult = await runVitsTTS(ttsText);
             } else {
               ttsResult = await generateTTS(ttsText, voiceId, 2, ttsProvider === 'elevenlabs');
             }
@@ -661,6 +656,7 @@ export default function ChatPanel({
       isTTSLoading={isTTSLoading}
       onSendPrompt={(text) => handleSend(text)}
       onRegenerate={handleRegenerate}
+      onReplay={(text) => handleRetryTTS(text)}
     />
   );
 
@@ -733,7 +729,17 @@ export default function ChatPanel({
                 <Button variant="ghost" size="icon" onClick={onToggle} className="h-10 w-10 text-muted-foreground touch-manipulation hover-neon-glow"><X className="w-4 h-4" /></Button>
               </div>
             </div>
-            <ScrollArea className="flex-1 py-4 px-3" ref={scrollRef}>{messageList}</ScrollArea>
+            <div className="relative flex-1 min-h-0">
+              <ScrollArea className="h-full py-4 px-3" ref={scrollRef} onScrollCapture={handleScroll}>{messageList}</ScrollArea>
+              {showScrollBtn && (
+                <button
+                  onClick={() => { scrollToBottom(); setShowScrollBtn(false); }}
+                  className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cyber-glass border border-primary/40 text-primary shadow-lg animate-bounce-subtle z-10"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" /> Pesan baru
+                </button>
+              )}
+            </div>
             <div className="px-3 pt-2 border-t border-neon-purple"
               style={{
                 paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
@@ -804,7 +810,17 @@ export default function ChatPanel({
             </div>
           </div>
 
-          <ScrollArea className="flex-1 py-4 px-3 scrollbar-thin" ref={scrollRef}>{messageList}</ScrollArea>
+          <div className="relative flex-1 min-h-0">
+            <ScrollArea className="h-full py-4 px-3 scrollbar-thin" ref={scrollRef} onScrollCapture={handleScroll}>{messageList}</ScrollArea>
+            {showScrollBtn && (
+              <button
+                onClick={() => { scrollToBottom(); setShowScrollBtn(false); }}
+                className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cyber-glass border border-primary/40 text-primary shadow-lg z-10"
+              >
+                <ChevronDown className="w-3.5 h-3.5" /> Pesan baru
+              </button>
+            )}
+          </div>
 
           <div className="px-3 py-3 border-t border-neon-purple cyber-glass">
             {inputBar}

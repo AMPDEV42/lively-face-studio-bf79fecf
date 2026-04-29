@@ -4,6 +4,7 @@ interface Shortcuts {
   onToggleChat?: () => void;
   onNewConversation?: () => void;
   onEscape?: () => void;
+  onCameraPreset?: (preset: string) => void;
 }
 
 /**
@@ -11,9 +12,17 @@ interface Shortcuts {
  * - Ctrl/Cmd + K  → toggle chat
  * - Ctrl/Cmd + N  → new conversation
  * - Escape         → close overlays
+ * - 1/2/3/4        → camera presets (close-up / medium / full-body / wide)
  */
-export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape }: Shortcuts) {
+export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape, onCameraPreset }: Shortcuts) {
   useEffect(() => {
+    const CAMERA_KEYS: Record<string, string> = {
+      '1': 'close-up',
+      '2': 'medium-shot',
+      '3': 'full-body',
+      '4': 'wide',
+    };
+
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       // Don't fire when user is typing in an input/textarea
@@ -32,9 +41,14 @@ export function useKeyboardShortcuts({ onToggleChat, onNewConversation, onEscape
       }
       if (e.key === 'Escape') {
         onEscape?.();
+        return;
+      }
+      // Camera preset shortcuts — only when not in input and no modifier
+      if (!mod && !isInput && CAMERA_KEYS[e.key]) {
+        onCameraPreset?.(CAMERA_KEYS[e.key]);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onToggleChat, onNewConversation, onEscape]);
+  }, [onToggleChat, onNewConversation, onEscape, onCameraPreset]);
 }

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { X, History, Plus, Search, Pencil, Trash2, Check } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Conversation {
   id: string;
@@ -172,7 +173,13 @@ export function ChatHistoryPanel({
                       <button className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={() => { setEditingId(c.id); setEditingTitle(c.title); }}>
                         <Pencil className="w-3 h-3" />
                       </button>
-                      <button className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={() => onDelete(c.id)}>
+                      <button className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={() => {
+                        toast(`Hapus "${c.title}"?`, {
+                          action: { label: 'Hapus', onClick: () => onDelete(c.id) },
+                          cancel: { label: 'Batal', onClick: () => {} },
+                          duration: 5000,
+                        });
+                      }}>
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>

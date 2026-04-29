@@ -1,6 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, Heart, Zap, Cpu } from 'lucide-react';
 
+const MOOD_COLORS: Record<string, { text: string; border: string; bg: string }> = {
+  happy:       { text: '#f472b6', border: 'rgba(244,114,182,0.4)', bg: 'rgba(244,114,182,0.08)' },
+  excited:     { text: '#fb923c', border: 'rgba(251,146,60,0.4)',  bg: 'rgba(251,146,60,0.08)'  },
+  laughing:    { text: '#facc15', border: 'rgba(250,204,21,0.4)',  bg: 'rgba(250,204,21,0.08)'  },
+  sad:         { text: '#60a5fa', border: 'rgba(96,165,250,0.4)',  bg: 'rgba(96,165,250,0.08)'  },
+  sympathetic: { text: '#818cf8', border: 'rgba(129,140,248,0.4)', bg: 'rgba(129,140,248,0.08)' },
+  angry:       { text: '#f87171', border: 'rgba(248,113,113,0.4)', bg: 'rgba(248,113,113,0.08)' },
+  disgusted:   { text: '#a3e635', border: 'rgba(163,230,53,0.4)',  bg: 'rgba(163,230,53,0.08)'  },
+  surprised:   { text: '#34d399', border: 'rgba(52,211,153,0.4)',  bg: 'rgba(52,211,153,0.08)'  },
+  curious:     { text: '#22d3ee', border: 'rgba(34,211,238,0.4)',  bg: 'rgba(34,211,238,0.08)'  },
+  thinking:    { text: '#a78bfa', border: 'rgba(167,139,250,0.4)', bg: 'rgba(167,139,250,0.08)' },
+  bored:       { text: '#94a3b8', border: 'rgba(148,163,184,0.4)', bg: 'rgba(148,163,184,0.08)' },
+  embarrassed: { text: '#fb7185', border: 'rgba(251,113,133,0.4)', bg: 'rgba(251,113,133,0.08)' },
+  neutral:     { text: '#c084fc', border: 'rgba(192,132,252,0.3)', bg: 'rgba(168,85,247,0.08)'  },
+};
+
 interface HolographicHudProps {
   affection: number;
   currentMood: string;
@@ -39,12 +55,20 @@ export const HolographicHud: React.FC<HolographicHudProps> = ({
         </div>
       </div>
 
-      {/* Center: Mood Label (appears only briefly on change in VrmViewer, but static indicator here) */}
-      <div className="absolute top-1/4 left-6 flex flex-col gap-1 opacity-40">
-         <div className="text-[8px] font-mono text-pink-500/60 uppercase">Emote_Log //</div>
-         <div className="text-xs font-mono text-pink-400/80 uppercase tracking-tighter">
-            {currentMood || 'neutral'}
-         </div>
+      {/* Center: Mood Label */}
+      <div className="absolute top-1/4 left-6 flex flex-col gap-1">
+        <div className="text-[8px] font-mono text-pink-500/60 uppercase">Emote_Log //</div>
+        <div
+          className="text-xs font-mono uppercase tracking-tighter px-2 py-0.5 rounded-full border transition-all duration-700"
+          style={{
+            color: MOOD_COLORS[currentMood as keyof typeof MOOD_COLORS]?.text ?? '#c084fc',
+            borderColor: MOOD_COLORS[currentMood as keyof typeof MOOD_COLORS]?.border ?? 'rgba(192,132,252,0.3)',
+            background: MOOD_COLORS[currentMood as keyof typeof MOOD_COLORS]?.bg ?? 'rgba(168,85,247,0.08)',
+            opacity: 0.75,
+          }}
+        >
+          {currentMood || 'neutral'}
+        </div>
       </div>
 
       {/* Bottom Left: Affection & Vital Signs */}

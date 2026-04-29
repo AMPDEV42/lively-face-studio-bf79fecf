@@ -58,6 +58,7 @@ export function useAiInitiative({
 
     timerRef.current = setInterval(async () => {
       if (isRunningRef.current) return;
+      if (document.hidden) return; // jangan trigger saat tab tidak aktif
       if (isLoadingRef.current) return; // jangan trigger saat AI sedang generate
 
       const now = Date.now();

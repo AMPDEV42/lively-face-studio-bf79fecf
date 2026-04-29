@@ -149,7 +149,7 @@ export function ChatInputBar({
           </div>
         </Button>
 
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 relative">
           <Textarea
             ref={textareaRef}
             value={input}
@@ -164,6 +164,13 @@ export function ChatInputBar({
             className="resize-none min-h-[40px] max-h-[120px] panel-overlay text-sm placeholder:text-muted-foreground/50 focus:border-neon-purple-bright transition-all scrollbar-thin w-full"
             style={{ height: 'auto' }}
           />
+          {input.length > 300 && (
+            <span className={`absolute bottom-1.5 right-2 text-[10px] tabular-nums pointer-events-none ${
+              input.length > 450 ? 'text-destructive' : 'text-muted-foreground/50'
+            }`}>
+              {input.length}/500
+            </span>
+          )}
         </div>
 
         {isLoading || isTTSLoading ? (
