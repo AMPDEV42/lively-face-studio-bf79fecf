@@ -4,12 +4,14 @@ import {
   Check, Sparkles, ArrowLeft, Crown, Rocket, Zap,
   MessageSquare, Volume2, Upload, Palette, Brain,
   BarChart2, ChevronDown, ChevronUp, ArrowRight, Shield,
+  Lock, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import MetaTags from '@/components/MetaTags';
-import { TOP_UP_PACKAGES } from '@/lib/plan-config';
+import { TOP_UP_PACKAGES, MAX_TOPUP_MESSAGES } from '@/lib/plan-config';
+import { usePlan } from '@/hooks/usePlan';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -93,14 +95,21 @@ export default function Pricing() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPro } = useUserRole();
+  const { stats, canTopUp } = usePlan();
 
   const handleUpgrade = () => {
     window.location.href = 'mailto:sales@voxie.app?subject=Upgrade to Pro';
   };
 
-  const handleTopUp = (packageId: string) => {
+  const handleTopUp = (packageId: string, messages: number) => {
+    if (!isPro) return;
+    if (!canTopUp(messages)) return;
     window.location.href = `mailto:sales@voxie.app?subject=Top-up ${packageId}`;
   };
+
+  // Sisa ruang top-up yang bisa dibeli
+  const topUpHeadroom = stats.topUpHeadroom;
+  const isTopUpCapReached = topUpHeadroom === 0;
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
@@ -297,65 +306,121 @@ export default function Pricing() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto">
-            {TOP_UP_PACKAGES.map((pkg) => (
-              <div
-                key={pkg.id}
-                className={`relative rounded-2xl border flex flex-col p-5 gap-4 transition-all duration-200 hover:-translate-y-1 ${
-                  pkg.popular
-                    ? 'border-violet-500/50 shadow-xl shadow-violet-500/15'
-                    : 'border-white/[0.08] hover:border-white/15'
-                }`}
-                style={{
-                  background: pkg.popular
-                    ? 'linear-gradient(160deg, #1a1040 0%, #120d30 100%)'
-                    : 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)',
-                }}
-              >
-                {pkg.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[9px] font-bold whitespace-nowrap shadow-md">
-                    ✦ Paling Hemat
-                  </div>
-                )}
-
-                <div>
-                  <p className={`text-[10px] font-bold uppercase tracking-widest ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`}>
-                    {pkg.label}
-                  </p>
-                  <p className="text-2xl font-black text-white mt-1">{pkg.price}</p>
-                  <p className={`text-[10px] mt-0.5 ${pkg.popular ? 'text-violet-400/70' : 'text-white/25'}`}>
-                    {pkg.perMessage}
-                  </p>
-                </div>
-
-                <ul className="space-y-1.5 flex-1 text-xs">
-                  <li className="flex items-center gap-1.5 text-white/65">
-                    <Check className={`w-3 h-3 shrink-0 ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`} />
-                    +{pkg.messages.toLocaleString('id-ID')} pesan
-                  </li>
-                  <li className="flex items-center gap-1.5 text-white/65">
-                    <Check className={`w-3 h-3 shrink-0 ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`} />
-                    +{(pkg.ttsChars / 1000).toFixed(0)}K karakter TTS
-                  </li>
-                  <li className="flex items-center gap-1.5 text-white/35">
-                    <Check className="w-3 h-3 shrink-0 text-white/20" />
-                    Tidak hangus
-                  </li>
+          {/* Info kebijakan top-up */}
+          <div className="max-w-3xl mx-auto rounded-2xl border border-white/[0.07] p-4 flex flex-col sm:flex-row gap-4"
+            style={{ background: 'rgba(139,92,246,0.04)' }}>
+            <div className="flex items-start gap-3 flex-1">
+              <Info className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-white/80">Kebijakan Top-up</p>
+                <ul className="text-[11px] text-white/45 space-y-0.5">
+                  <li>• Maksimum {MAX_TOPUP_MESSAGES.toLocaleString('id-ID')} pesan top-up tersimpan sekaligus</li>
+                  <li>• Sisa top-up <strong className="text-white/60">dibekukan</strong> jika langganan Pro berakhir — tidak hangus</li>
+                  <li>• Aktif kembali otomatis saat berlangganan Pro lagi</li>
                 </ul>
-
-                <Button
-                  onClick={() => handleTopUp(pkg.id)}
-                  disabled={!isPro}
-                  className={`w-full h-9 text-xs rounded-xl font-semibold transition-all ${
-                    pkg.popular
-                      ? 'bg-violet-600 hover:bg-violet-500 text-white border-0 shadow-md shadow-violet-500/25'
-                      : 'bg-white/[0.06] hover:bg-white/10 text-white/70 border border-white/10'
-                  } disabled:opacity-35 disabled:cursor-not-allowed`}
-                >
-                  {isPro ? 'Beli Sekarang' : 'Perlu Pro'}
-                </Button>
               </div>
-            ))}
+            </div>
+            {isPro && (
+              <div className="shrink-0 text-right">
+                <p className="text-[10px] text-white/30">Sisa ruang top-up</p>
+                <p className={`text-lg font-black ${isTopUpCapReached ? 'text-red-400' : 'text-violet-300'}`}>
+                  {topUpHeadroom.toLocaleString('id-ID')} pesan
+                </p>
+                {isTopUpCapReached && (
+                  <p className="text-[10px] text-red-400/70">Batas maksimum tercapai</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Non-Pro frozen notice */}
+          {!isPro && stats.topUpMessages > 0 && (
+            <div className="max-w-3xl mx-auto rounded-2xl border border-amber-500/20 p-4 flex items-center gap-3"
+              style={{ background: 'rgba(245,158,11,0.05)' }}>
+              <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-amber-300">
+                  {stats.topUpMessages.toLocaleString('id-ID')} pesan top-up sedang dibekukan
+                </p>
+                <p className="text-[11px] text-white/40 mt-0.5">
+                  Aktifkan kembali dengan berlangganan Pro — kuota tidak hangus.
+                </p>
+              </div>
+              <Button
+                onClick={handleUpgrade}
+                size="sm"
+                className="ml-auto shrink-0 h-8 px-4 text-xs bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl"
+              >
+                Aktifkan Pro
+              </Button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto">
+            {TOP_UP_PACKAGES.map((pkg) => {
+              const isAffordable = canTopUp(pkg.messages);
+              const isDisabled = !isPro || !isAffordable;
+              return (
+                <div
+                  key={pkg.id}
+                  className={`relative rounded-2xl border flex flex-col p-5 gap-4 transition-all duration-200 ${
+                    isDisabled ? 'opacity-60' : 'hover:-translate-y-1'
+                  } ${
+                    pkg.popular && !isDisabled
+                      ? 'border-violet-500/50 shadow-xl shadow-violet-500/15'
+                      : 'border-white/[0.08] hover:border-white/15'
+                  }`}
+                  style={{
+                    background: pkg.popular
+                      ? 'linear-gradient(160deg, #1a1040 0%, #120d30 100%)'
+                      : 'linear-gradient(160deg, #111020 0%, #0c0b1a 100%)',
+                  }}
+                >
+                  {pkg.popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[9px] font-bold whitespace-nowrap shadow-md">
+                      ✦ Paling Hemat
+                    </div>
+                  )}
+
+                  <div>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`}>
+                      {pkg.label}
+                    </p>
+                    <p className="text-2xl font-black text-white mt-1">{pkg.price}</p>
+                    <p className={`text-[10px] mt-0.5 ${pkg.popular ? 'text-violet-400/70' : 'text-white/25'}`}>
+                      {pkg.perMessage}
+                    </p>
+                  </div>
+
+                  <ul className="space-y-1.5 flex-1 text-xs">
+                    <li className="flex items-center gap-1.5 text-white/65">
+                      <Check className={`w-3 h-3 shrink-0 ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`} />
+                      +{pkg.messages.toLocaleString('id-ID')} pesan
+                    </li>
+                    <li className="flex items-center gap-1.5 text-white/65">
+                      <Check className={`w-3 h-3 shrink-0 ${pkg.popular ? 'text-violet-400' : 'text-white/30'}`} />
+                      +{(pkg.ttsChars / 1000).toFixed(0)}K karakter TTS
+                    </li>
+                    <li className="flex items-center gap-1.5 text-white/35">
+                      <Check className="w-3 h-3 shrink-0 text-white/20" />
+                      Tidak hangus
+                    </li>
+                  </ul>
+
+                  <Button
+                    onClick={() => handleTopUp(pkg.id, pkg.messages)}
+                    disabled={isDisabled}
+                    className={`w-full h-9 text-xs rounded-xl font-semibold transition-all ${
+                      pkg.popular && !isDisabled
+                        ? 'bg-violet-600 hover:bg-violet-500 text-white border-0 shadow-md shadow-violet-500/25'
+                        : 'bg-white/[0.06] hover:bg-white/10 text-white/70 border border-white/10'
+                    } disabled:opacity-35 disabled:cursor-not-allowed`}
+                  >
+                    {!isPro ? 'Perlu Pro' : isTopUpCapReached ? 'Batas Tercapai' : 'Beli Sekarang'}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
 
           {!isPro && (

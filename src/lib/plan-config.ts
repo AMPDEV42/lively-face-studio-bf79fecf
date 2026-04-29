@@ -2,9 +2,23 @@
  * SaaS Plan Configuration
  * Voxie menggunakan model 2-tier sederhana: Starter (gratis) + Pro (berbayar).
  * User Pro yang kehabisan kuota bisa top-up paket pesan tambahan.
+ *
+ * KEBIJAKAN TOP-UP:
+ * - Top-up hanya bisa dibeli saat Pro aktif
+ * - Sisa top-up DIBEKUKAN (tidak bisa dipakai) saat non-Pro
+ * - Sisa top-up AKTIF KEMBALI saat Pro aktif lagi (tidak hangus)
+ * - Maksimum top-up tersimpan: MAX_TOPUP_MESSAGES (3.000 pesan)
+ * - Ini mencegah akumulasi tak terbatas & menjaga margin tetap positif
  */
 
 export type PlanId = 'free' | 'pro';
+
+/**
+ * Maksimum kuota top-up yang bisa dimiliki sekaligus (tidak termasuk kuota langganan).
+ * Worst case biaya: (1.500 + 3.000) × Rp 25 = Rp 112.500 < Rp 150.000 revenue → margin positif.
+ */
+export const MAX_TOPUP_MESSAGES = 3_000;
+export const MAX_TOPUP_TTS_CHARS = 100_000; // proporsional dengan MAX_TOPUP_MESSAGES
 
 export interface PlanLimits {
   /** Max messages per month dari langganan (null = unlimited) */
