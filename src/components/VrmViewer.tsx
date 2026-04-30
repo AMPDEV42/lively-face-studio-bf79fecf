@@ -40,6 +40,7 @@ import {
 import { useVrmaAnimations } from '@/hooks/useVrmaAnimations';
 import { playHeadpatSfx, playShoulderTapSfx, preloadHeadpatSfx, preloadTapSfx, getHeadpatPool, getTapPool } from '@/lib/interaction-sfx';
 import { HolographicHud } from './HolographicHud';
+import { PerformanceOverlay } from './PerformanceOverlay';
 import { toast } from 'sonner';
 
 export type { CameraPreset };
@@ -97,6 +98,20 @@ export function computeSpringSkipFrequency(cameraDistance: number, isMobile: boo
   if (cameraDistance > 4) return 4;
   if (isMobile) return 2;
   return 1;
+}
+
+/**
+ * Determines whether a raycasting operation should be throttled based on elapsed time.
+ * Throttles to maximum 30 raycasts per second (33.33ms interval).
+ * 
+ * @param lastRaycastTime - Timestamp of last raycast (performance.now())
+ * @param currentTime - Current timestamp (performance.now())
+ * @returns true if raycast should be skipped (throttled), false if allowed
+ */
+export function shouldThrottleRaycast(lastRaycastTime: number, currentTime: number): boolean {
+  const RAYCAST_INTERVAL = 1000 / 30; // 33.33ms — max 30 raycasts/sec
+  const elapsed = currentTime - lastRaycastTime;
+  return elapsed < RAYCAST_INTERVAL;
 }
 
 // ── Three.js resource disposal helpers ───────────────────────────────────────
@@ -216,6 +231,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [webglContextLost, setWebglContextLost] = useState(false);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
   const [prevBgImageUrl, setPrevBgImageUrl] = useState<string | null>(null);
   const isFadingOutRef = useRef(false); // Track if we're fading out idle expression
@@ -225,6 +241,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const lightingManagerRef = useRef<LightingManager | null>(null);
   // Cached rim intensity - reads localStorage once on mount, updated when lighting changes
   const rimIntensityRef = useRef(parseFloat(localStorage.getItem('vrm.rimLightIntensity') || '0.3'));
+
+  // ── Performance monitoring refs (Req 30.1, 30.2) ─────────────────────────
+  // Frame rate logging every 10 seconds
+  const fpsFrameCountRef = useRef(0);
+  const fpsWindowStartRef = useRef(performance.now());
+  // Memory logging every 30 seconds
+  const memLastLogTimeRef = useRef(performance.now());
 
   isSpeakingRef.current = isSpeaking || isInteractionSpeaking; // Include interaction speaking
 
@@ -715,6 +738,30 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         console.warn(`[RenderLoop] Frame budget exceeded: ${frameTime.toFixed(1)}ms (budget: ${budget}ms)`);
       }
     }
+
+    // ── Performance monitoring (Req 30.1, 30.2) ──────────────────────────────
+    const perfNow = performance.now();
+
+    // Frame rate logging every 10 seconds (Req 30.1)
+    fpsFrameCountRef.current++;
+    if (perfNow - fpsWindowStartRef.current >= 10_000) {
+      const elapsed10s = perfNow - fpsWindowStartRef.current;
+      const avgFps = Math.round((fpsFrameCountRef.current * 1000) / elapsed10s);
+      console.info(`[Perf] FPS avg (10s): ${avgFps}`);
+      fpsFrameCountRef.current = 0;
+      fpsWindowStartRef.current = perfNow;
+    }
+
+    // Memory usage logging every 30 seconds (Req 30.2)
+    if (perfNow - memLastLogTimeRef.current >= 30_000) {
+      const mem = (performance as any).memory;
+      if (mem) {
+        const usedMB = Math.round(mem.usedJSHeapSize / 1024 / 1024);
+        const totalMB = Math.round(mem.totalJSHeapSize / 1024 / 1024);
+        console.info(`[Perf] Memory: ${usedMB} MB used / ${totalMB} MB total`);
+      }
+      memLastLogTimeRef.current = perfNow;
+    }
   }, []);
 
   // ── Three.js setup & VRM load ─────────────────────────────────────────────
@@ -836,6 +883,53 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     renderer.domElement.style.cursor = 'inherit'; // Ensure it inherits from container
     rendererRef.current = renderer;
 
+    // ── WebGL context loss recovery (Req 29.1, 29.2, 29.3, 29.4) ─────────────
+    const handleContextLost = (e: Event) => {
+      e.preventDefault(); // Required to allow context restoration
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+      setWebglContextLost(true);
+    };
+
+    const handleContextRestored = () => {
+      setWebglContextLost(false);
+      // Resume render loop
+      clockRef.current = new THREE.Clock();
+      clockRef.current.start();
+      lastFrameTimeRef.current = performance.now();
+      rafRef.current = requestAnimationFrame(animate);
+      // Trigger VRM reload by re-loading the current model URL
+      // Application state (chat history, settings) lives in Index.tsx parent — naturally preserved (Req 29.5)
+      if (modelUrl && vrmRef.current === null) {
+        // Model was cleared on context loss; reload by re-triggering the effect
+        // The effect re-runs when modelUrl changes, but since it hasn't changed we
+        // manually reload the VRM here
+        const loader = new GLTFLoader();
+        loader.register((parser) => new VRMLoaderPlugin(parser));
+        setLoading(true);
+        loader.load(
+          modelUrl,
+          (gltf) => {
+            const vrm = gltf.userData.vrm as VRM;
+            if (!vrm) { setLoading(false); return; }
+            try { VRMUtils.rotateVRM0(vrm); } catch (_) { /* VRM1 */ }
+            vrmSceneHiddenRef.current = vrm.scene;
+            vrmRef.current = vrm;
+            mixerRef.current = createMixer(vrm);
+            initSpringBones(vrm);
+            initIdleExpression();
+            mixerUpdateCountRef.current = 0;
+            setLoading(false);
+          },
+          undefined,
+          () => { setLoading(false); },
+        );
+      }
+    };
+
+    renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
+    renderer.domElement.addEventListener('webglcontextrestored', handleContextRestored);
+
     // OrbitControls (disabled by default)
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0.95, 0);
@@ -889,6 +983,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
             hitboxMesh.position.set(bone === 'leftUpperArm' ? 0.08 : -0.08, 0, 0);
             hitboxMesh.renderOrder = 999;
             boneNode.add(hitboxMesh);
+          }
+        });
+
+        // Cache hitbox meshes for raycasting — avoids scene traversal on every pointer move
+        // Populated once after VRM load; cleared on cleanup/model change
+        hitboxMeshesRef.current = [];
+        vrm.scene.traverse((child) => {
+          if (
+            child instanceof THREE.Mesh &&
+            (child.name === 'headpat_hitbox' || child.name.startsWith('shouldertap_hitbox'))
+          ) {
+            hitboxMeshesRef.current.push(child);
           }
         });
 
@@ -991,14 +1097,18 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     return () => {
       window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', onVisibility);
+      renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', handleContextRestored);
       cleanupLookAt();
       cancelAnimationFrame(rafRef.current);
       if (cameraAnimationRef.current) cancelAnimationFrame(cameraAnimationRef.current);
 
+      // Clear hitbox mesh cache (Req 26.2)
+      hitboxMeshesRef.current = [];
+
       // Dispose VRM model — geometry, materials, textures (Req 2.2, 2.3, 13.1)
       const vrm = vrmRef.current;
-      if (vrm) {
-        try { disposeVrmResources(vrm); } catch (_) { /* ok */ }
+      if (vrm) {        try { disposeVrmResources(vrm); } catch (_) { /* ok */ }
         vrmRef.current = null;
       }
 
@@ -1058,8 +1168,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
   const lastShoulderTapTime = useRef(0); // Track last shoulder tap trigger
   const hasPlayedSoundThisSession = useRef(false); // Track if sound already played in current patting session
   const [isShaking, setIsShaking] = useState(false);
-  const [isHoveringHitbox, setIsHoveringHitbox] = useState(false);
+  const isHoveringHitboxRef = useRef(false); // Ref for hitbox hover state (no React re-render)
   const [isPatting, setIsPatting] = useState(false);
+  
+  // Raycasting throttle and cache
+  const lastRaycastTimeRef = useRef(0); // Timestamp of last raycast for throttle
+  const hitboxMeshesRef = useRef<THREE.Mesh[]>([]); // Cached hitbox meshes (populated after VRM load)
   
   // HUD & Mood state
   const [currentMoodName, setCurrentMoodName] = useState('neutral');
@@ -1131,6 +1245,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     const container = containerRef.current;
     if (!container) return;
 
+    // Throttle raycasting to max 30x/sec using timestamp comparison (Req 26.4)
+    const now = performance.now();
+    if (shouldThrottleRaycast(lastRaycastTimeRef.current, now)) return;
+    lastRaycastTimeRef.current = now;
+
     const rect = container.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1138,21 +1257,15 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
     const rc = new THREE.Raycaster();
     rc.setFromCamera({ x, y }, cameraRef.current);
 
-    const allHitMeshes: THREE.Mesh[] = [];
-    sceneRef.current.traverse(child => {
-      if (child.name === 'headpat_hitbox' || child.name.startsWith('shouldertap_hitbox')) {
-        allHitMeshes.push(child as THREE.Mesh);
-      }
-    });
+    // Use cached hitbox meshes — avoids scene traversal on every pointer move (Req 26.2)
+    const allHitMeshes = hitboxMeshesRef.current;
 
     const intersects = rc.intersectObjects(allHitMeshes);
     const isHit = intersects.length > 0;
-    setIsHoveringHitbox(isHit);
+    isHoveringHitboxRef.current = isHit;
 
-    // Direct DOM update for high performance/no lag
-    if (containerRef.current) {
-      containerRef.current.style.cursor = isHit ? (isPattingRef.current ? 'grabbing' : 'pointer') : 'default';
-    }
+    // Direct DOM update for cursor — avoids React re-render (Req 26.3)
+    container.style.cursor = isHit ? (isPattingRef.current ? 'grabbing' : 'pointer') : 'default';
 
     if (e.buttons !== 1) {
       // If not dragging, but we WERE patting (unlikely but safe), clean up
@@ -1160,9 +1273,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         isPattingRef.current = false;
         setIsPatting(false);
         setLookAtEnabled(true);
-        if (containerRef.current) {
-          containerRef.current.style.cursor = isHit ? 'pointer' : 'default';
-        }
+        container.style.cursor = isHit ? 'pointer' : 'default';
       }
       return; 
     }
@@ -1246,7 +1357,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
         // --- Shoulder Tap Reaction (on move - subtle) ---
       }
     } else {
-      setIsHoveringHitbox(false);
+      isHoveringHitboxRef.current = false;
       if (isPattingRef.current) {
         isPattingRef.current = false;
         setIsPatting(false);
@@ -1295,7 +1406,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
          onPointerMove={handlePointerMoveHitbox}
          onPointerUp={() => {
            if (containerRef.current) {
-             containerRef.current.style.cursor = isHoveringHitbox ? 'pointer' : 'default';
+             containerRef.current.style.cursor = isHoveringHitboxRef.current ? 'pointer' : 'default';
            }
            if (isPattingRef.current) {
              isPattingRef.current = false;
@@ -1307,7 +1418,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
          onPointerDown={(e) => { 
             lastPointerY.current = e.clientY; 
             // Update cursor immediately on click
-            if (isHoveringHitbox && containerRef.current) {
+            if (isHoveringHitboxRef.current && containerRef.current) {
               containerRef.current.style.cursor = 'grabbing';
             }
             pointerSpeedY.current = 0; 
@@ -1542,6 +1653,30 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(function VrmViewer
           </div>
         </div>
       )}
+
+      {/* WebGL context loss recovery overlay (Req 29.2) */}
+      {webglContextLost && (
+        <div className="absolute inset-0 flex items-center justify-center z-50"
+          style={{ background: 'rgba(6,4,14,0.92)', backdropFilter: 'blur(8px)' }}>
+          <div className="flex flex-col items-center gap-5 text-center px-6 max-w-xs">
+            <div className="relative w-20 h-20">
+              <div className="absolute inset-0 rounded-full border-2 border-yellow-500/30 animate-ping" style={{ animationDuration: '2s' }} />
+              <div className="absolute inset-3 rounded-full flex items-center justify-center"
+                style={{ background: 'radial-gradient(circle, rgba(234,179,8,0.2) 0%, rgba(120,90,0,0.1) 100%)', boxShadow: '0 0 20px rgba(234,179,8,0.3)' }}>
+                <span className="text-2xl">⚡</span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-semibold text-white/90 tracking-wide">Memulihkan WebGL…</p>
+              <p className="text-xs text-white/50">Konteks grafis hilang. Sedang memulihkan otomatis…</p>
+              <p className="text-xs text-white/30 mt-2">Jika tidak pulih, coba muat ulang halaman.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Performance debug overlay — only visible when ?debug=true (Req 30.5) */}
+      <PerformanceOverlay rendererRef={rendererRef} />
 
       {/* Companion HUD Overlay (Lovometer & Cinematic Subtitles) */}
       <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between overflow-hidden">

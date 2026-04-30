@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import ChatPanel from '@/components/ChatPanel';
 import UserMenu from '@/components/UserMenu';
@@ -26,6 +26,7 @@ import { parseAnimTag, isWebSpeechUrl, getWebSpeechText } from '@/lib/chat-api';
 import { speakWithWebSpeech, stopWebSpeech, preloadVoices } from '@/lib/web-speech-tts';
 import { useTTSProvider } from '@/hooks/useTTSProvider';
 import type { VrmViewerHandle, CameraPreset } from '@/components/VrmViewer';
+import type { LightingConfig } from '@/lib/vrm-lighting';
 import type { LangCode } from '@/lib/lang-detect';
 
 const VrmViewer = lazy(() => import('@/components/VrmViewer'));
@@ -70,10 +71,16 @@ export default function Index() {
 
   const { connectAudioElement, getAudioLevel, getFrequencyData } = useAudioAnalyser();
   const { clips, findMatch, findClipByName } = useVrmaTriggers();
-  const userLangPref =
-    (typeof window !== 'undefined'
-      ? (localStorage.getItem('vrm.lang') as LangCode | null)
-      : null) || null;
+  const userLangPref = useMemo(
+    () =>
+      (typeof window !== 'undefined'
+        ? (localStorage.getItem('vrm.lang') as LangCode | null)
+        : null) || null,
+    [],
+  );
+
+  // Memoize the animation names array to avoid creating a new array on every render
+  const availableAnimations = useMemo(() => clips.map(c => c.name), [clips]);
 
   if (audioRef.current === null && typeof window !== 'undefined') {
     audioRef.current = new Audio();
@@ -323,6 +330,39 @@ export default function Index() {
     setTimeout(() => viewerRef.current?.clearBlendshape(), 4000);
   }, []);
 
+  const handleCloseExpressionPanel = useCallback(() => {
+    setShowExpressionPanel(false);
+  }, []);
+
+  const handleToggleExpressionPanel = useCallback(() => {
+    setShowExpressionPanel(s => !s);
+  }, []);
+
+  const handleExpressionApply = useCallback((weights: Record<string, number>) => {
+    viewerRef.current?.applyBlendshape(weights);
+  }, []);
+
+  const handleExpressionClear = useCallback(() => {
+    viewerRef.current?.clearBlendshape();
+  }, []);
+
+  const handleBackgroundChange = useCallback((imageUrl: string) => {
+    viewerRef.current?.setImageBackground(imageUrl);
+  }, []);
+
+  const handleLightingChange = useCallback((config: LightingConfig) => {
+    viewerRef.current?.setLighting(config);
+  }, []);
+
+  const handleExposureChange = useCallback((val: number) => {
+    viewerRef.current?.setExposure(val);
+  }, []);
+
+  const handleEscape = useCallback(() => {
+    if (showExpressionPanel) { setShowExpressionPanel(false); return; }
+    if (chatOpen) setChatOpen(false);
+  }, [showExpressionPanel, chatOpen]);
+
   const handleLevelUp = useCallback((level: number) => {
     // Cari animasi kategori 'reaction' atau 'emote' yang bahagia
     const reactionClips = clips.filter(c => c.category === 'reaction' || c.category === 'emote');
@@ -363,14 +403,11 @@ export default function Index() {
   // Global keyboard shortcuts
   useKeyboardShortcuts({
     onToggleChat: handleToggleChat,
-    onEscape: () => {
-      if (showExpressionPanel) { setShowExpressionPanel(false); return; }
-      if (chatOpen) setChatOpen(false);
-    },
+    onEscape: handleEscape,
     onCameraPreset: (preset) => handleCameraPresetChange(preset as CameraPreset),
     onToggleParticles: handleToggleParticles,
     onToggleMute: handleToggleMute,
-    onToggleExpressionPanel: () => setShowExpressionPanel(s => !s),
+    onToggleExpressionPanel: handleToggleExpressionPanel,
   });
 
   return (
@@ -415,9 +452,9 @@ export default function Index() {
           <div className="pointer-events-auto">
             <ExpressionPanel
               isOpen={showExpressionPanel}
-              onClose={() => setShowExpressionPanel(false)}
-              onExpression={(weights) => viewerRef.current?.applyBlendshape(weights)}
-              onClear={() => viewerRef.current?.clearBlendshape()}
+              onClose={handleCloseExpressionPanel}
+              onExpression={handleExpressionApply}
+              onClear={handleExpressionClear}
             />
           </div>
         </div>
@@ -476,9 +513,7 @@ export default function Index() {
                 <TooltipTrigger asChild>
                   <div>
                     <BackgroundSelector
-                      onBackgroundChange={(imageUrl) => {
-                        viewerRef.current?.setImageBackground(imageUrl);
-                      }}
+                      onBackgroundChange={handleBackgroundChange}
                       onEnvironmentChange={handleEnvironmentChange}
                       currentEnvironment={viewerRef.current?.getCurrentEnvironment() ?? 'cyberpunk-void'}
                       ambientEffect={ambientEffect}
@@ -491,8 +526,8 @@ export default function Index() {
                 </TooltipContent>
               </Tooltip>
               <LightingControls
-                onLightingChange={(config) => viewerRef.current?.setLighting(config)}
-                onExposureChange={(val) => viewerRef.current?.setExposure(val)}
+                onLightingChange={handleLightingChange}
+                onExposureChange={handleExposureChange}
                 initialConfig={viewerRef.current?.getCurrentLighting() || undefined}
               />
             </>
@@ -534,7 +569,7 @@ export default function Index() {
         isSpeaking={isSpeaking}
         showSubtitles={showSubtitles}
         onToggleSubtitles={handleToggleSubtitles}
-        availableAnimations={clips.map(c => c.name)}
+        availableAnimations={availableAnimations}
         onMoodChange={handleMoodChange}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}

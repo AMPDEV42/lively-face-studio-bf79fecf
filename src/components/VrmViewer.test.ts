@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import { computeTargetInterval, computeSpringSkipFrequency } from './VrmViewer';
+import { computeTargetInterval, computeSpringSkipFrequency, shouldThrottleRaycast } from './VrmViewer';
 
 // Feature: performance-optimization, Property 1: Frame throttle respects target interval
 // Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5
@@ -263,6 +263,158 @@ describe('computeSpringSkipFrequency', () => {
           const desktopFreq = computeSpringSkipFrequency(distance, false);
           // Mobile should skip at least as often as desktop
           expect(mobileFreq).toBeGreaterThanOrEqual(desktopFreq);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
+
+// Feature: performance-optimization, Property 11: Raycasting Throttle
+// Validates: Requirements 26.4
+
+describe('shouldThrottleRaycast', () => {
+  const RAYCAST_INTERVAL = 1000 / 30; // 33.33ms
+
+  // ── Unit tests — specific examples ──────────────────────────────────────
+
+  it('allows raycast when no previous raycast (lastTime = 0)', () => {
+    expect(shouldThrottleRaycast(0, 100)).toBe(false);
+  });
+
+  it('throttles when elapsed < 33.33ms', () => {
+    const last = 1000;
+    expect(shouldThrottleRaycast(last, last + 10)).toBe(true);
+    expect(shouldThrottleRaycast(last, last + 33)).toBe(true);
+  });
+
+  it('allows raycast when elapsed >= 33.33ms', () => {
+    const last = 1000;
+    expect(shouldThrottleRaycast(last, last + RAYCAST_INTERVAL + 0.001)).toBe(false);
+    expect(shouldThrottleRaycast(last, last + 50)).toBe(false);
+    expect(shouldThrottleRaycast(last, last + 100)).toBe(false);
+  });
+
+  it('boundary: elapsed exactly at interval is allowed (not throttled)', () => {
+    const last = 500;
+    const current = last + RAYCAST_INTERVAL;
+    expect(shouldThrottleRaycast(last, current)).toBe(false);
+  });
+
+  it('boundary: elapsed just below interval is throttled', () => {
+    const last = 500;
+    const current = last + RAYCAST_INTERVAL - 0.001;
+    expect(shouldThrottleRaycast(last, current)).toBe(true);
+  });
+
+  // ── Property-based tests ─────────────────────────────────────────────────
+
+  /**
+   * Property 11: Raycasting Throttle
+   *
+   * For any sequence of N pointer move events arriving within a 1-second window,
+   * the number of raycasting operations performed SHALL be ≤ 30, regardless of N.
+   *
+   * Validates: Requirements 26.4
+   */
+  it('Property 11: N pointer events in 1 second produce ≤ 30 raycasting operations', () => {
+    fc.assert(
+      fc.property(
+        // N events: between 1 and 200 events in a 1-second window
+        fc.integer({ min: 1, max: 200 }),
+        (n) => {
+          // Simulate N pointer move events spread over 1000ms
+          const windowMs = 1000;
+          const eventInterval = windowMs / n;
+
+          let lastRaycastTime = 0;
+          let raycastCount = 0;
+
+          for (let i = 0; i < n; i++) {
+            const currentTime = i * eventInterval;
+            if (!shouldThrottleRaycast(lastRaycastTime, currentTime)) {
+              raycastCount++;
+              lastRaycastTime = currentTime;
+            }
+          }
+
+          // Must not exceed 30 raycasts per second
+          expect(raycastCount).toBeLessThanOrEqual(30);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property 11 (determinism): same inputs always produce same throttle decision', () => {
+    fc.assert(
+      fc.property(
+        fc.float({ min: 0, max: 10000, noNaN: true }),
+        fc.float({ min: 0, max: 10000, noNaN: true }),
+        (lastTime, currentTime) => {
+          const result1 = shouldThrottleRaycast(lastTime, currentTime);
+          const result2 = shouldThrottleRaycast(lastTime, currentTime);
+          expect(result1).toBe(result2);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property 11 (monotonicity): larger elapsed time never causes more throttling', () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          lastTime: fc.float({ min: 0, max: 5000, noNaN: true }),
+          elapsed1: fc.float({ min: 0, max: 200, noNaN: true }),
+          elapsed2: fc.float({ min: 0, max: 200, noNaN: true }),
+        }),
+        ({ lastTime, elapsed1, elapsed2 }) => {
+          // If elapsed1 <= elapsed2, then throttle(elapsed1) >= throttle(elapsed2)
+          // (more time passed = less likely to be throttled)
+          if (elapsed1 <= elapsed2) {
+            const throttled1 = shouldThrottleRaycast(lastTime, lastTime + elapsed1);
+            const throttled2 = shouldThrottleRaycast(lastTime, lastTime + elapsed2);
+            // If elapsed1 is throttled, elapsed2 might or might not be
+            // But if elapsed2 is throttled, elapsed1 must also be throttled
+            if (throttled2) {
+              expect(throttled1).toBe(true);
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property 11 (max rate): raycasts in any 1-second window never exceed 30', () => {
+    fc.assert(
+      fc.property(
+        // Random event timestamps within a 2-second window
+        fc.array(fc.float({ min: 0, max: 2000, noNaN: true }), { minLength: 1, maxLength: 300 }),
+        (rawTimestamps) => {
+          // Sort timestamps to simulate chronological events
+          const timestamps = [...rawTimestamps].sort((a, b) => a - b);
+
+          let lastRaycastTime = 0;
+          const raycastTimes: number[] = [];
+
+          for (const t of timestamps) {
+            if (!shouldThrottleRaycast(lastRaycastTime, t)) {
+              raycastTimes.push(t);
+              lastRaycastTime = t;
+            }
+          }
+
+          // Check every 1-second sliding window
+          for (let i = 0; i < raycastTimes.length; i++) {
+            const windowStart = raycastTimes[i];
+            const windowEnd = windowStart + 1000;
+            const countInWindow = raycastTimes.filter(
+              (t) => t >= windowStart && t < windowEnd,
+            ).length;
+            expect(countInWindow).toBeLessThanOrEqual(30);
+          }
         },
       ),
       { numRuns: 100 },
