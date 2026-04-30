@@ -31,8 +31,6 @@ export default defineConfig(({ mode }) => ({
           // Three.js + VRM (heaviest — isolated so it lazy-loads separately)
           "vendor-three": ["three"],
           "vendor-vrm": ["@pixiv/three-vrm", "@pixiv/three-vrm-animation"],
-          // Face API (large ML model)
-          "vendor-faceapi": ["@vladmandic/face-api"],
           // Supabase
           "vendor-supabase": ["@supabase/supabase-js"],
           // UI libs
