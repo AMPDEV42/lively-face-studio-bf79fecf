@@ -44,6 +44,45 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_log: {
+        Row: {
+          created_at: string
+          id: string
+          messages_count: number
+          period: string
+          tokens_count: number
+          topup_messages: number
+          topup_tts_chars: number
+          tts_chars_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          messages_count?: number
+          period: string
+          tokens_count?: number
+          topup_messages?: number
+          topup_tts_chars?: number
+          tts_chars_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          messages_count?: number
+          period?: string
+          tokens_count?: number
+          topup_messages?: number
+          topup_tts_chars?: number
+          tts_chars_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -178,6 +217,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_period: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
