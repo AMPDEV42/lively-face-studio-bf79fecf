@@ -84,7 +84,8 @@ export async function streamChat({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_KEY}`,
+      apikey: SUPABASE_KEY,
+      Authorization: await authHeader(),
     },
     body: JSON.stringify({ messages, systemPrompt: modifiedPrompt }),
     signal,
@@ -93,7 +94,18 @@ export async function streamChat({
   if (!resp.ok || !resp.body) {
     if (resp.status === 429) throw new Error("Rate limited. Coba lagi nanti.");
     if (resp.status === 402) throw new Error("Kredit habis. Tambahkan dana.");
-    if (resp.status === 401 || resp.status === 403) throw new Error("Sesi habis. Silakan login ulang.");
+    if (resp.status === 403) {
+      try {
+        const data = await resp.json();
+        if (data?.error === 'QUOTA_EXCEEDED' || data?.error === 'PRO_ONLY') {
+          throw new QuotaError(data.error, data.message ?? 'Kuota habis');
+        }
+      } catch (e) {
+        if (e instanceof QuotaError) throw e;
+      }
+      throw new Error("Akses ditolak.");
+    }
+    if (resp.status === 401) throw new Error("Sesi habis. Silakan login ulang.");
     if (resp.status >= 500) throw new Error("Server sedang bermasalah. Coba lagi.");
     throw new Error("Gagal memulai chat");
   }
