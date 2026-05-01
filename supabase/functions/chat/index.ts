@@ -104,52 +104,99 @@ async function buildAnimationCatalog(): Promise<{ text: string; cachedAt: number
 const CHAT_RATE_LIMIT = 20;       // requests per window
 const CHAT_RATE_WINDOW_MS = 60_000; // 1 minute
 
+// Plan limits (mirror src/lib/plan-config.ts)
+const FREE_MSG_PER_MONTH = 50;
+const PRO_MSG_PER_MONTH = 1_500;
+
+function currentPeriod(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     // ------------------------------------------------------------------
-    // Rate limiting — identify user via Supabase Auth JWT
+    // AUTH — required
     // ------------------------------------------------------------------
     const authHeader = req.headers.get("authorization") ?? "";
     const token = authHeader.replace(/^Bearer\s+/i, "");
 
-    let rateLimitUserId: string | null = null;
-    if (token) {
-      try {
-        const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-        const SUPABASE_KEY = Deno.env.get("SUPABASE_ANON_KEY") ??
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-        if (SUPABASE_URL && SUPABASE_KEY) {
-          const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_KEY);
-          const { data: { user } } = await supabaseAuth.auth.getUser(token);
-          rateLimitUserId = user?.id ?? null;
-        }
-      } catch (_authErr) {
-        // If auth lookup fails, fall through without rate limiting
-      }
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    if (rateLimitUserId) {
-      const { allowed, retryAfter } = await checkRateLimit(
-        rateLimitUserId,
-        CHAT_RATE_LIMIT,
-        CHAT_RATE_WINDOW_MS,
-      );
-      if (!allowed) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          {
-            status: 429,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              "Retry-After": String(retryAfter ?? 60),
-            },
-          },
-        );
-      }
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { user }, error: userErr } = await supabaseAuth.auth.getUser(token);
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    const userId = user.id;
+
+    // ------------------------------------------------------------------
+    // Per-instance rate limiting
+    // ------------------------------------------------------------------
+    const { allowed: rlAllowed, retryAfter } = await checkRateLimit(
+      userId, CHAT_RATE_LIMIT, CHAT_RATE_WINDOW_MS,
+    );
+    if (!rlAllowed) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfter ?? 60) } },
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // PLAN + QUOTA enforcement (server-side, source of truth)
+    // ------------------------------------------------------------------
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const { data: roles } = await supabaseAdmin
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roleSet = new Set((roles ?? []).map((r: { role: string }) => r.role));
+    const isAdmin = roleSet.has("admin");
+    const isPro = isAdmin || roleSet.has("pro");
+    const monthlyLimit = isAdmin ? null : (isPro ? PRO_MSG_PER_MONTH : FREE_MSG_PER_MONTH);
+
+    const period = currentPeriod();
+    // Upsert usage row
+    const { data: usageRow } = await supabaseAdmin
+      .from("usage_log")
+      .upsert({ user_id: userId, period }, { onConflict: "user_id,period" })
+      .select("messages_count, topup_messages")
+      .single();
+
+    const used = usageRow?.messages_count ?? 0;
+    const topUp = isPro ? (usageRow?.topup_messages ?? 0) : 0;
+    const effectiveLimit = monthlyLimit === null ? null : monthlyLimit + topUp;
+
+    if (effectiveLimit !== null && used >= effectiveLimit) {
+      return new Response(JSON.stringify({
+        error: "QUOTA_EXCEEDED",
+        message: isPro
+          ? "Kuota pesan bulanan Pro habis. Silakan top-up."
+          : "Kuota 50 pesan/bulan paket Free sudah habis. Upgrade ke Pro untuk lanjut.",
+        plan: isPro ? "pro" : "free",
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Increment counter atomically (best-effort; not critical if double-count)
+    await supabaseAdmin
+      .from("usage_log")
+      .update({ messages_count: used + 1 })
+      .eq("user_id", userId).eq("period", period);
 
     const { messages, systemPrompt } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
