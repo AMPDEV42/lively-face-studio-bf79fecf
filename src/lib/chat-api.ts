@@ -170,7 +170,8 @@ export async function generateTTS(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: SUPABASE_KEY,
+          Authorization: await authHeader(),
         },
         body: JSON.stringify({ text, voiceId }),
       });
