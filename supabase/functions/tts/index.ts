@@ -351,6 +351,12 @@ serve(async (req) => {
     const audioBuffer = await response.arrayBuffer();
     const base64Audio = base64Encode(audioBuffer);
 
+    // Increment usage counter (only on actual generation, not cache hit)
+    supabaseAdmin.from("usage_log")
+      .update({ tts_chars_count: usedChars + charCount })
+      .eq("user_id", userId).eq("period", period)
+      .then(() => {}, (err: unknown) => console.error("[TTS] usage update failed:", err));
+
     // ------------------------------------------------------------------
     // Save to cache after successful generation (fire-and-forget)
     // ------------------------------------------------------------------
