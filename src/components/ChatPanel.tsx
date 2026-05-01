@@ -649,6 +649,17 @@ export default function ChatPanel({
       });
     } catch (e) {
       if ((e as Error).name === 'AbortError') { setIsLoading(false); return; }
+      if (e instanceof QuotaError) {
+        setIsLoading(false);
+        setIsStreaming(false);
+        // Remove the optimistic user message since send failed server-side
+        setMessages((prev) => prev.filter((m) => m !== userMsg));
+        openUpgradeModal({
+          reason: e.code === 'PRO_ONLY' ? 'Fitur khusus Pro' : 'Kuota habis',
+          featureDescription: e.message,
+        });
+        return;
+      }
       toast.error(e instanceof Error ? e.message : 'Chat gagal');
       setIsLoading(false);
     }
