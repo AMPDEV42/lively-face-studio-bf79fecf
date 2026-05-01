@@ -1,5 +1,20 @@
+import { supabase } from "@/integrations/supabase/client";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+/** Custom error class for plan-quota failures (HTTP 403 from edge functions) */
+export class QuotaError extends Error {
+  constructor(public code: 'QUOTA_EXCEEDED' | 'PRO_ONLY', message: string) {
+    super(message);
+    this.name = 'QuotaError';
+  }
+}
+
+async function authHeader(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ? `Bearer ${session.access_token}` : `Bearer ${SUPABASE_KEY}`;
+}
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
