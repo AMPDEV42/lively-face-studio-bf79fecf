@@ -9,7 +9,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { streamChat, generateTTS, parseAnimTag, isOnline, stripForTTS, type ChatMessage } from '@/lib/chat-api';
+import { streamChat, generateTTS, parseAnimTag, isOnline, stripForTTS, QuotaError, type ChatMessage } from '@/lib/chat-api';
 import { generateVitsAudio, translateToJapanese, truncateForVits } from '@/lib/vits-tts';
 import { useConversations } from '@/hooks/useConversations';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
