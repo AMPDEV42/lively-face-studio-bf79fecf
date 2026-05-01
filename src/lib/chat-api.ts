@@ -1,5 +1,20 @@
+import { supabase } from "@/integrations/supabase/client";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+/** Custom error class for plan-quota failures (HTTP 403 from edge functions) */
+export class QuotaError extends Error {
+  constructor(public code: 'QUOTA_EXCEEDED' | 'PRO_ONLY', message: string) {
+    super(message);
+    this.name = 'QuotaError';
+  }
+}
+
+async function authHeader(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ? `Bearer ${session.access_token}` : `Bearer ${SUPABASE_KEY}`;
+}
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -69,7 +84,8 @@ export async function streamChat({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_KEY}`,
+      apikey: SUPABASE_KEY,
+      Authorization: await authHeader(),
     },
     body: JSON.stringify({ messages, systemPrompt: modifiedPrompt }),
     signal,
@@ -78,7 +94,18 @@ export async function streamChat({
   if (!resp.ok || !resp.body) {
     if (resp.status === 429) throw new Error("Rate limited. Coba lagi nanti.");
     if (resp.status === 402) throw new Error("Kredit habis. Tambahkan dana.");
-    if (resp.status === 401 || resp.status === 403) throw new Error("Sesi habis. Silakan login ulang.");
+    if (resp.status === 403) {
+      try {
+        const data = await resp.json();
+        if (data?.error === 'QUOTA_EXCEEDED' || data?.error === 'PRO_ONLY') {
+          throw new QuotaError(data.error, data.message ?? 'Kuota habis');
+        }
+      } catch (e) {
+        if (e instanceof QuotaError) throw e;
+      }
+      throw new Error("Akses ditolak.");
+    }
+    if (resp.status === 401) throw new Error("Sesi habis. Silakan login ulang.");
     if (resp.status >= 500) throw new Error("Server sedang bermasalah. Coba lagi.");
     throw new Error("Gagal memulai chat");
   }
@@ -143,7 +170,8 @@ export async function generateTTS(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: SUPABASE_KEY,
+          Authorization: await authHeader(),
         },
         body: JSON.stringify({ text, voiceId }),
       });

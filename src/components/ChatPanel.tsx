@@ -9,7 +9,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { streamChat, generateTTS, parseAnimTag, isOnline, stripForTTS, type ChatMessage } from '@/lib/chat-api';
+import { streamChat, generateTTS, parseAnimTag, isOnline, stripForTTS, QuotaError, type ChatMessage } from '@/lib/chat-api';
 import { generateVitsAudio, translateToJapanese, truncateForVits } from '@/lib/vits-tts';
 import { useConversations } from '@/hooks/useConversations';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
@@ -649,6 +649,17 @@ export default function ChatPanel({
       });
     } catch (e) {
       if ((e as Error).name === 'AbortError') { setIsLoading(false); return; }
+      if (e instanceof QuotaError) {
+        setIsLoading(false);
+        setIsStreaming(false);
+        // Remove the optimistic user message since send failed server-side
+        setMessages((prev) => prev.filter((m) => m !== userMsg));
+        openUpgradeModal({
+          reason: e.code === 'PRO_ONLY' ? 'Fitur khusus Pro' : 'Kuota habis',
+          featureDescription: e.message,
+        });
+        return;
+      }
       toast.error(e instanceof Error ? e.message : 'Chat gagal');
       setIsLoading(false);
     }

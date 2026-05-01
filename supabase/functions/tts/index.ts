@@ -185,13 +185,18 @@ async function saveCachedAudio(
 // Main handler
 // ---------------------------------------------------------------------------
 
+// Plan limits
+const PRO_TTS_CHARS_PER_MONTH = 50_000;
+
+function currentPeriod(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // ------------------------------------------------------------------
-    // Rate limiting — identify user via Supabase Auth JWT
-    // ------------------------------------------------------------------
     const authHeader = req.headers.get("authorization") ?? "";
     const token = authHeader.replace(/^Bearer\s+/i, "");
 
@@ -199,46 +204,78 @@ serve(async (req) => {
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    let rateLimitUserId: string | null = null;
-    if (token && SUPABASE_URL && SUPABASE_ANON_KEY) {
-      try {
-        const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const { data: { user } } = await supabaseAuth.auth.getUser(token);
-        rateLimitUserId = user?.id ?? null;
-      } catch (_authErr) {
-        // If auth lookup fails, fall through without rate limiting
-      }
+    if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    if (rateLimitUserId) {
-      const { allowed, retryAfter } = await checkRateLimit(
-        rateLimitUserId,
-        TTS_RATE_LIMIT,
-        TTS_RATE_WINDOW_MS,
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { user }, error: userErr } = await supabaseAuth.auth.getUser(token);
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userId = user.id;
+
+    // Per-instance rate limit
+    const { allowed, retryAfter } = await checkRateLimit(userId, TTS_RATE_LIMIT, TTS_RATE_WINDOW_MS);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfter ?? 60) } },
       );
-      if (!allowed) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          {
-            status: 429,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              "Retry-After": String(retryAfter ?? 60),
-            },
-          },
-        );
-      }
     }
 
     const { text, voiceId } = await req.json();
-
     if (!text || typeof text !== "string") {
       return new Response(JSON.stringify({ error: "text is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // ------------------------------------------------------------------
+    // PLAN GATE — ElevenLabs (premium TTS) is Pro-only
+    // ------------------------------------------------------------------
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: roles } = await supabaseAdmin
+      .from("user_roles").select("role").eq("user_id", userId);
+    const roleSet = new Set((roles ?? []).map((r: { role: string }) => r.role));
+    const isAdmin = roleSet.has("admin");
+    const isPro = isAdmin || roleSet.has("pro");
+
+    if (!isPro) {
+      return new Response(JSON.stringify({
+        error: "PRO_ONLY",
+        message: "Premium TTS hanya tersedia untuk pengguna Pro. Silakan upgrade.",
+      }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Quota: chars per month (admin = unlimited)
+    const period = currentPeriod();
+    const charCount = text.length;
+
+    const { data: usageRow } = await supabaseAdmin
+      .from("usage_log")
+      .upsert({ user_id: userId, period }, { onConflict: "user_id,period" })
+      .select("tts_chars_count, topup_tts_chars")
+      .single();
+
+    const usedChars = usageRow?.tts_chars_count ?? 0;
+    const topUp = usageRow?.topup_tts_chars ?? 0;
+
+    if (!isAdmin && usedChars + charCount > PRO_TTS_CHARS_PER_MONTH + topUp) {
+      return new Response(JSON.stringify({
+        error: "QUOTA_EXCEEDED",
+        message: "Kuota karakter TTS bulanan habis. Silakan top-up.",
+      }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
 
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
     if (!ELEVENLABS_API_KEY) {
@@ -252,13 +289,8 @@ serve(async (req) => {
 
     // ------------------------------------------------------------------
     // TTS Cache — check before calling ElevenLabs
-    // Use SERVICE_ROLE_KEY for storage write access
     // ------------------------------------------------------------------
-    let supabaseStorage: SupabaseClient | null = null;
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      supabaseStorage = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    }
-
+    const supabaseStorage: SupabaseClient = supabaseAdmin;
     const cacheKey = await getCacheKey(text, selectedVoice);
 
     if (supabaseStorage) {
@@ -313,6 +345,12 @@ serve(async (req) => {
 
     const audioBuffer = await response.arrayBuffer();
     const base64Audio = base64Encode(audioBuffer);
+
+    // Increment usage counter (only on actual generation, not cache hit)
+    supabaseAdmin.from("usage_log")
+      .update({ tts_chars_count: usedChars + charCount })
+      .eq("user_id", userId).eq("period", period)
+      .then(() => {}, (err: unknown) => console.error("[TTS] usage update failed:", err));
 
     // ------------------------------------------------------------------
     // Save to cache after successful generation (fire-and-forget)

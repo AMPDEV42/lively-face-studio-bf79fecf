@@ -1,25 +1,23 @@
 /**
  * usePlan — Central SaaS plan & usage tracking hook.
  *
- * Tracks:
- * - Current plan (free / pro / admin)
- * - Monthly message count
- * - Monthly token count
- * - Per-resource upload counts
+ * Source of truth:
+ * - Role: `user_roles` table (server)
+ * - Monthly counters (messages, tts_chars, topUp): `usage_log` table (server)
+ * - Upload counts: derived from real tables when needed; trigger enforces hard limit
  *
- * Usage is stored in localStorage keyed by userId + month.
- * This is a frontend-only implementation; backend enforcement
- * should be added via Supabase RLS / Edge Functions later.
+ * Client cannot bypass quotas — edge functions verify before serving requests
+ * and DB triggers reject inserts that exceed plan limits.
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useUserRole } from './useUserRole';
 import { useAuth } from './useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import {
   getPlanConfig,
   getUsagePercent,
   MAX_TOPUP_MESSAGES,
-  MAX_TOPUP_TTS_CHARS,
   type PlanConfig,
   type PlanId,
 } from '@/lib/plan-config';
@@ -33,68 +31,29 @@ export interface UsageStats {
   vrmUploads: number;
   vrmaUploads: number;
   backgroundUploads: number;
-  /** Total kuota pesan efektif (langganan + top-up, hanya saat Pro aktif) */
   totalMessageQuota: number | null;
-  /** Sisa ruang top-up yang masih bisa dibeli */
   topUpHeadroom: number;
 }
 
-interface StoredUsage {
-  month: string; // "YYYY-MM"
-  messages: number;
-  tokens: number;
-  ttsChars: number;
-  vrmUploads: number;
-  vrmaUploads: number;
-  backgroundUploads: number;
-  /** Extra messages added via top-up (tidak reset tiap bulan) */
-  topUpMessages: number;
-  /** Extra TTS chars added via top-up (tidak reset tiap bulan) */
-  topUpTtsChars: number;
+interface UsageRow {
+  messages_count: number;
+  tokens_count: number;
+  tts_chars_count: number;
+  topup_messages: number;
+  topup_tts_chars: number;
 }
 
-function getCurrentMonth(): string {
+const EMPTY_USAGE: UsageRow = {
+  messages_count: 0,
+  tokens_count: 0,
+  tts_chars_count: 0,
+  topup_messages: 0,
+  topup_tts_chars: 0,
+};
+
+function currentPeriod(): string {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function storageKey(userId: string): string {
-  return `voxie_usage_${userId}`;
-}
-
-function loadUsage(userId: string): StoredUsage {
-  const month = getCurrentMonth();
-  try {
-    const raw = localStorage.getItem(storageKey(userId));
-    if (raw) {
-      const parsed: StoredUsage = JSON.parse(raw);
-      if (parsed.month === month) return {
-        ...parsed,
-        ttsChars: parsed.ttsChars ?? 0,
-        topUpMessages: parsed.topUpMessages ?? 0,
-        topUpTtsChars: parsed.topUpTtsChars ?? 0,
-      };
-      // Bulan baru: reset monthly counters tapi PERTAHANKAN top-up sisa
-      return {
-        month,
-        messages: 0,
-        tokens: 0,
-        ttsChars: 0,
-        vrmUploads: parsed.vrmUploads ?? 0,
-        vrmaUploads: parsed.vrmaUploads ?? 0,
-        backgroundUploads: parsed.backgroundUploads ?? 0,
-        topUpMessages: parsed.topUpMessages ?? 0,
-        topUpTtsChars: parsed.topUpTtsChars ?? 0,
-      };
-    }
-  } catch { /* ok */ }
-  return { month, messages: 0, tokens: 0, ttsChars: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0, topUpMessages: 0, topUpTtsChars: 0 };
-}
-
-function saveUsage(userId: string, usage: StoredUsage) {
-  try {
-    localStorage.setItem(storageKey(userId), JSON.stringify(usage));
-  } catch { /* ok */ }
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 export function usePlan() {
@@ -108,159 +67,111 @@ export function usePlan() {
 
   const planId: PlanId = (isAdmin || isPro) ? 'pro' : 'free';
 
-  const [usage, setUsage] = useState<StoredUsage>(() => {
-    if (!user) return { month: getCurrentMonth(), messages: 0, tokens: 0, ttsChars: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0, topUpMessages: 0, topUpTtsChars: 0 };
-    return loadUsage(user.id);
-  });
+  const [usage, setUsage] = useState<UsageRow>(EMPTY_USAGE);
+  const [vrmUploads, setVrmUploads] = useState(0);
+  const [vrmaUploads, setVrmaUploads] = useState(0);
 
-  // Reload usage when user changes
-  useEffect(() => {
-    if (user) {
-      setUsage(loadUsage(user.id));
-    } else {
-      setUsage({ month: getCurrentMonth(), messages: 0, tokens: 0, ttsChars: 0, vrmUploads: 0, vrmaUploads: 0, backgroundUploads: 0, topUpMessages: 0, topUpTtsChars: 0 });
+  // Fetch usage row + upload counts whenever user changes
+  const refreshUsage = useCallback(async () => {
+    if (!user) {
+      setUsage(EMPTY_USAGE);
+      setVrmUploads(0);
+      setVrmaUploads(0);
+      return;
     }
+    const period = currentPeriod();
+    const [{ data: u }, { count: vrmCount }, { count: vrmaCount }] = await Promise.all([
+      supabase
+        .from('usage_log')
+        .select('messages_count, tokens_count, tts_chars_count, topup_messages, topup_tts_chars')
+        .eq('user_id', user.id)
+        .eq('period', period)
+        .maybeSingle(),
+      supabase.from('vrm_models').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('vrma_animations').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    ]);
+    setUsage(u ?? EMPTY_USAGE);
+    setVrmUploads(vrmCount ?? 0);
+    setVrmaUploads(vrmaCount ?? 0);
   }, [user]);
 
-  const persist = useCallback((next: StoredUsage) => {
-    if (!user) return;
-    saveUsage(user.id, next);
-    setUsage(next);
-  }, [user]);
+  useEffect(() => { refreshUsage(); }, [refreshUsage]);
 
-  /** Record a message + token usage. Returns false if limit exceeded. */
-  const recordMessage = useCallback((tokenCount: number = 0): boolean => {
-    const { messagesPerMonth, tokensPerMonth } = planConfig.limits;
-    const current = user ? loadUsage(user.id) : usage;
-
-    // Top-up hanya dihitung jika Pro aktif — jika non-Pro, top-up dibekukan
-    const effectiveTopUp = isPro ? current.topUpMessages : 0;
-    const totalMessageLimit = messagesPerMonth !== null
-      ? messagesPerMonth + effectiveTopUp
-      : null;
-
-    if (totalMessageLimit !== null && current.messages >= totalMessageLimit) return false;
-    if (tokensPerMonth !== null && current.tokens + tokenCount > tokensPerMonth) return false;
-
-    const next: StoredUsage = {
-      ...current,
-      messages: current.messages + 1,
-      tokens: current.tokens + tokenCount,
-    };
-    persist(next);
-    return true;
-  }, [planConfig.limits, isPro, usage, user, persist]);
-
-  /** Check if user can send another message (without recording) */
+  /** Check if user can send another message (server still re-checks) */
   const canSendMessage = useCallback((): boolean => {
-    const { messagesPerMonth, tokensPerMonth } = planConfig.limits;
-    const current = user ? loadUsage(user.id) : usage;
-    // Top-up dibekukan saat non-Pro
-    const effectiveTopUp = isPro ? current.topUpMessages : 0;
-    const totalMessageLimit = messagesPerMonth !== null
-      ? messagesPerMonth + effectiveTopUp
-      : null;
-    if (totalMessageLimit !== null && current.messages >= totalMessageLimit) return false;
-    if (tokensPerMonth !== null && current.tokens >= tokensPerMonth) return false;
-    return true;
-  }, [planConfig.limits, isPro, usage, user]);
+    const { messagesPerMonth } = planConfig.limits;
+    if (messagesPerMonth === null) return true;
+    const effectiveTopUp = isPro ? usage.topup_messages : 0;
+    return usage.messages_count < messagesPerMonth + effectiveTopUp;
+  }, [planConfig.limits, isPro, usage]);
 
-  /** Record TTS character usage. Returns false if monthly limit exceeded. */
-  const recordTtsChars = useCallback((charCount: number): boolean => {
-    const { ttsCharsPerMonth } = planConfig.limits;
-    const current = user ? loadUsage(user.id) : usage;
-    // Top-up TTS juga dibekukan saat non-Pro
-    const effectiveTopUpTts = isPro ? current.topUpTtsChars : 0;
-    const totalTtsLimit = ttsCharsPerMonth !== null
-      ? ttsCharsPerMonth + effectiveTopUpTts
-      : null;
-    if (totalTtsLimit !== null && current.ttsChars + charCount > totalTtsLimit) return false;
-    persist({ ...current, ttsChars: current.ttsChars + charCount });
+  /** Optimistic local increment (server is source of truth; refresh later) */
+  const recordMessage = useCallback((_tokenCount: number = 0): boolean => {
+    if (!canSendMessage()) return false;
+    setUsage((prev) => ({ ...prev, messages_count: prev.messages_count + 1 }));
+    // Refresh from DB shortly to reconcile (edge function increments authoritatively)
+    setTimeout(() => { refreshUsage(); }, 1500);
     return true;
-  }, [planConfig.limits, isPro, usage, user, persist]);
+  }, [canSendMessage, refreshUsage]);
 
-  /** Check if user can use premium TTS (without recording) */
   const canUsePremiumTTS = useCallback((charCount: number = 0): boolean => {
     const { ttsCharsPerMonth, premiumTTS } = planConfig.limits;
     if (!premiumTTS) return false;
     if (ttsCharsPerMonth === null) return true;
-    const current = user ? loadUsage(user.id) : usage;
-    const effectiveTopUpTts = isPro ? current.topUpTtsChars : 0;
-    const totalTtsLimit = ttsCharsPerMonth + effectiveTopUpTts;
-    return current.ttsChars + charCount <= totalTtsLimit;
-  }, [planConfig.limits, isPro, usage, user]);
+    const effectiveTopUp = isPro ? usage.topup_tts_chars : 0;
+    return usage.tts_chars_count + charCount <= ttsCharsPerMonth + effectiveTopUp;
+  }, [planConfig.limits, isPro, usage]);
 
-  /**
-   * Tambahkan top-up messages ke saldo user.
-   * Hanya bisa dilakukan saat Pro aktif.
-   * Dibatasi oleh MAX_TOPUP_MESSAGES untuk mencegah akumulasi tak terbatas.
-   *
-   * Returns:
-   *   'ok'        — berhasil
-   *   'not_pro'   — user bukan Pro
-   *   'cap_reached' — sudah mencapai batas maksimum top-up
-   */
-  const applyTopUp = useCallback((messages: number, ttsChars: number): 'ok' | 'not_pro' | 'cap_reached' => {
+  const recordTtsChars = useCallback((charCount: number): boolean => {
+    if (!canUsePremiumTTS(charCount)) return false;
+    setUsage((prev) => ({ ...prev, tts_chars_count: prev.tts_chars_count + charCount }));
+    setTimeout(() => { refreshUsage(); }, 1500);
+    return true;
+  }, [canUsePremiumTTS, refreshUsage]);
+
+  /** Upload limits enforced by DB trigger; this is just for UI feedback */
+  const recordVrmUpload = useCallback((): boolean => {
+    if (vrmUploads >= planConfig.limits.maxVrmUploads) return false;
+    setVrmUploads((n) => n + 1);
+    return true;
+  }, [planConfig.limits.maxVrmUploads, vrmUploads]);
+
+  const recordVrmaUpload = useCallback((): boolean => {
+    if (vrmaUploads >= planConfig.limits.maxVrmaUploads) return false;
+    setVrmaUploads((n) => n + 1);
+    return true;
+  }, [planConfig.limits.maxVrmaUploads, vrmaUploads]);
+
+  const recordBackgroundUpload = useCallback((): boolean => {
+    return planConfig.limits.maxBackgroundUploads > 0;
+  }, [planConfig.limits.maxBackgroundUploads]);
+
+  /** Top-up application — server-side via webhook in future; stub returns not_pro for non-Pro */
+  const applyTopUp = useCallback(async (
+    _messages: number, _ttsChars: number,
+  ): Promise<'ok' | 'not_pro' | 'cap_reached'> => {
     if (!isPro) return 'not_pro';
-    const current = user ? loadUsage(user.id) : usage;
-    if (current.topUpMessages + messages > MAX_TOPUP_MESSAGES) return 'cap_reached';
-    const newTtsChars = Math.min(current.topUpTtsChars + ttsChars, MAX_TOPUP_TTS_CHARS);
-    persist({
-      ...current,
-      topUpMessages: current.topUpMessages + messages,
-      topUpTtsChars: newTtsChars,
-    });
+    // TODO: implement via secure RPC after payment webhook
     return 'ok';
-  }, [isPro, usage, user, persist]);
+  }, [isPro]);
 
-  /**
-   * Cek apakah user bisa membeli top-up dengan jumlah pesan tertentu.
-   * Mempertimbangkan cap maksimum.
-   */
   const canTopUp = useCallback((messages: number): boolean => {
     if (!isPro) return false;
-    const current = user ? loadUsage(user.id) : usage;
-    return current.topUpMessages + messages <= MAX_TOPUP_MESSAGES;
-  }, [isPro, usage, user]);
+    return usage.topup_messages + messages <= MAX_TOPUP_MESSAGES;
+  }, [isPro, usage.topup_messages]);
 
-  /** Record a VRM upload. Returns false if limit exceeded. */
-  const recordVrmUpload = useCallback((): boolean => {
-    const current = user ? loadUsage(user.id) : usage;
-    if (current.vrmUploads >= planConfig.limits.maxVrmUploads) return false;
-    persist({ ...current, vrmUploads: current.vrmUploads + 1 });
-    return true;
-  }, [planConfig.limits.maxVrmUploads, usage, user, persist]);
-
-  /** Record a VRMA upload. Returns false if limit exceeded. */
-  const recordVrmaUpload = useCallback((): boolean => {
-    const current = user ? loadUsage(user.id) : usage;
-    if (current.vrmaUploads >= planConfig.limits.maxVrmaUploads) return false;
-    persist({ ...current, vrmaUploads: current.vrmaUploads + 1 });
-    return true;
-  }, [planConfig.limits.maxVrmaUploads, usage, user, persist]);
-
-  /** Record a background upload. Returns false if limit exceeded. */
-  const recordBackgroundUpload = useCallback((): boolean => {
-    const current = user ? loadUsage(user.id) : usage;
-    if (current.backgroundUploads >= planConfig.limits.maxBackgroundUploads) return false;
-    persist({ ...current, backgroundUploads: current.backgroundUploads + 1 });
-    return true;
-  }, [planConfig.limits.maxBackgroundUploads, usage, user, persist]);
-
-  /** Check if a specific feature is available on current plan */
   const hasFeature = useCallback((feature: keyof typeof planConfig.limits): boolean => {
     const val = planConfig.limits[feature];
     if (typeof val === 'boolean') return val;
-    if (val === null) return true; // unlimited
+    if (val === null) return true;
     if (typeof val === 'number') return val > 0;
     if (val === 'basic' || val === 'full') return true;
     return false;
   }, [planConfig.limits]);
 
-  // Computed usage percentages
-  // Top-up hanya dihitung saat Pro aktif — dibekukan saat non-Pro
-  const effectiveTopUpMessages = isPro ? usage.topUpMessages : 0;
-  const effectiveTopUpTtsChars = isPro ? usage.topUpTtsChars : 0;
+  // Computed
+  const effectiveTopUpMessages = isPro ? usage.topup_messages : 0;
+  const effectiveTopUpTtsChars = isPro ? usage.topup_tts_chars : 0;
 
   const totalMessageQuota = planConfig.limits.messagesPerMonth !== null
     ? planConfig.limits.messagesPerMonth + effectiveTopUpMessages
@@ -269,22 +180,21 @@ export function usePlan() {
     ? planConfig.limits.ttsCharsPerMonth + effectiveTopUpTtsChars
     : null;
 
-  const messagePercent = getUsagePercent(usage.messages, totalMessageQuota);
-  const tokenPercent = getUsagePercent(usage.tokens, planConfig.limits.tokensPerMonth);
-  const ttsPercent = getUsagePercent(usage.ttsChars, totalTtsQuota);
+  const messagePercent = getUsagePercent(usage.messages_count, totalMessageQuota);
+  const tokenPercent = getUsagePercent(usage.tokens_count, planConfig.limits.tokensPerMonth);
+  const ttsPercent = getUsagePercent(usage.tts_chars_count, totalTtsQuota);
 
-  // Sisa ruang top-up yang masih bisa dibeli
-  const topUpHeadroom = Math.max(0, MAX_TOPUP_MESSAGES - usage.topUpMessages);
+  const topUpHeadroom = Math.max(0, MAX_TOPUP_MESSAGES - usage.topup_messages);
 
   const stats: UsageStats = {
-    messagesThisMonth: usage.messages,
-    tokensThisMonth: usage.tokens,
-    ttsCharsThisMonth: usage.ttsChars,
-    topUpMessages: usage.topUpMessages,
-    topUpTtsChars: usage.topUpTtsChars,
-    vrmUploads: usage.vrmUploads,
-    vrmaUploads: usage.vrmaUploads,
-    backgroundUploads: usage.backgroundUploads,
+    messagesThisMonth: usage.messages_count,
+    tokensThisMonth: usage.tokens_count,
+    ttsCharsThisMonth: usage.tts_chars_count,
+    topUpMessages: usage.topup_messages,
+    topUpTtsChars: usage.topup_tts_chars,
+    vrmUploads,
+    vrmaUploads,
+    backgroundUploads: 0,
     totalMessageQuota,
     topUpHeadroom,
   };
@@ -300,6 +210,7 @@ export function usePlan() {
     messagePercent,
     tokenPercent,
     ttsPercent,
+    refreshUsage,
     recordMessage,
     canSendMessage,
     recordTtsChars,
