@@ -289,13 +289,8 @@ serve(async (req) => {
 
     // ------------------------------------------------------------------
     // TTS Cache — check before calling ElevenLabs
-    // Use SERVICE_ROLE_KEY for storage write access
     // ------------------------------------------------------------------
-    let supabaseStorage: SupabaseClient | null = null;
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      supabaseStorage = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    }
-
+    const supabaseStorage: SupabaseClient = supabaseAdmin;
     const cacheKey = await getCacheKey(text, selectedVoice);
 
     if (supabaseStorage) {
