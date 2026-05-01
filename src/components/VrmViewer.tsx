@@ -123,7 +123,7 @@ export function shouldThrottleRaycast(lastRaycastTime: number, currentTime: numb
 export function disposeMaterial(mat: THREE.Material): void {
   for (const key of Object.keys(mat)) {
     const val = (mat as unknown as Record<string, unknown>)[key];
-    if (val instanceof THREE.Texture) val.dispose();
+    if (val instanceof THREE.Texture) (val as THREE.Texture).dispose();
   }
   mat.dispose();
 }

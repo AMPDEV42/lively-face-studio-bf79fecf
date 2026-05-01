@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Square, Mic, MicOff, Radio, WifiOff } from 'lucide-react';
 import { SpeechModeButton } from '@/components/SpeechModeButton';
+import type { SpeechRecognitionStatus } from '@/hooks/useSpeechRecognition';
 
 interface ChatInputBarProps {
   input: string;
@@ -11,7 +12,7 @@ interface ChatInputBarProps {
   online: boolean;
   speechMode: boolean;
   stt: {
-    status: string;
+    status: SpeechRecognitionStatus;
     isReady: boolean;
     isSupported: boolean;
     transcript: string;

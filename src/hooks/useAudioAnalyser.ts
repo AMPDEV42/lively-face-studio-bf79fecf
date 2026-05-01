@@ -137,7 +137,7 @@ export function useAudioAnalyser(): AudioAnalyserControls {
 
   const getAudioLevel = useCallback((): number => {
     if (!analyserRef.current || !dataArrayRef.current) return 0;
-    analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+    analyserRef.current.getByteFrequencyData(dataArrayRef.current as Uint8Array<ArrayBuffer>);
     let sum = 0;
     for (let i = 0; i < dataArrayRef.current.length; i++) {
       sum += dataArrayRef.current[i];
@@ -148,7 +148,7 @@ export function useAudioAnalyser(): AudioAnalyserControls {
 
   const getFrequencyData = useCallback((): Uint8Array => {
     if (!analyserRef.current || !dataArrayRef.current) return new Uint8Array(0);
-    analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+    analyserRef.current.getByteFrequencyData(dataArrayRef.current as Uint8Array<ArrayBuffer>);
     return dataArrayRef.current;
   }, []);
 

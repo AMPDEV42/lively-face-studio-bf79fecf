@@ -336,7 +336,7 @@ const AFFECTION_TIERS = [
 ];
 
 function AffectionCard({ affection }: { affection: number }) {
-  const tier = AFFECTION_TIERS.findLast((t) => affection >= t.min) ?? AFFECTION_TIERS[0];
+  const tier = [...AFFECTION_TIERS].reverse().find((t) => affection >= t.min) ?? AFFECTION_TIERS[0];
   const nextTier = AFFECTION_TIERS[AFFECTION_TIERS.indexOf(tier) + 1];
   const progress = nextTier
     ? Math.min(((affection - tier.min) / (nextTier.min - tier.min)) * 100, 100)
