@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ChevronDown, X, Bot,
   Plus, History, Download, RefreshCw, MoreVertical, Upload, Trash2, Search, SearchX,
-  Bookmark, Volume2, VolumeX,
+  Bookmark, BookmarkCheck, Volume2, VolumeX,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,

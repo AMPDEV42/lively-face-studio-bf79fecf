@@ -85,13 +85,14 @@ export function useSpeechRecognition(
       }, 300); // 300ms delay to ensure mic is ready
     };
 
-    recognition.onaudiostart = () => {
+    // Non-standard events: not in lib.dom typings but supported by Chromium browsers
+    (recognition as unknown as { onaudiostart: () => void }).onaudiostart = () => {
       // Audio stream is now active and capturing
       setStatus('listening');
       setIsReady(true);
     };
 
-    recognition.onsoundstart = () => {
+    (recognition as unknown as { onsoundstart: () => void }).onsoundstart = () => {
       // Sound detected - mic is definitely working
       setIsReady(true);
     };
