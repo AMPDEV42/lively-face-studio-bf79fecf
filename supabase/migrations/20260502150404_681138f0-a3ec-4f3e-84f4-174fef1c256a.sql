@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.fulfill_order(TEXT) FROM PUBLIC, anon, authenticated;
