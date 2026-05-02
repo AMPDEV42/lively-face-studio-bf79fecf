@@ -26,6 +26,7 @@ export type Database = {
           payment_type: string | null
           product_type: string
           quantity: number
+          quantity_tts: number
           raw_notification: Json | null
           status: string
           transaction_id: string | null
@@ -43,6 +44,7 @@ export type Database = {
           payment_type?: string | null
           product_type: string
           quantity?: number
+          quantity_tts?: number
           raw_notification?: Json | null
           status?: string
           transaction_id?: string | null
@@ -60,6 +62,7 @@ export type Database = {
           payment_type?: string | null
           product_type?: string
           quantity?: number
+          quantity_tts?: number
           raw_notification?: Json | null
           status?: string
           transaction_id?: string | null
