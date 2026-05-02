@@ -97,9 +97,7 @@ export default function Pricing() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPro } = useUserRole();
-  const { stats, canTopUp } = usePlan();
-
-  const { refreshUsage } = usePlan();
+  const { stats, canTopUp, refreshUsage } = usePlan();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   const handleUpgrade = async () => {
