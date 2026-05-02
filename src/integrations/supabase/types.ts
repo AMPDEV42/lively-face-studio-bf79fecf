@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      orders: {
+        Row: {
+          amount_idr: number
+          created_at: string
+          expires_at: string | null
+          fraud_status: string | null
+          id: string
+          order_id: string
+          paid_at: string | null
+          payment_type: string | null
+          product_type: string
+          quantity: number
+          raw_notification: Json | null
+          status: string
+          transaction_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_idr: number
+          created_at?: string
+          expires_at?: string | null
+          fraud_status?: string | null
+          id?: string
+          order_id: string
+          paid_at?: string | null
+          payment_type?: string | null
+          product_type: string
+          quantity?: number
+          raw_notification?: Json | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_idr?: number
+          created_at?: string
+          expires_at?: string | null
+          fraud_status?: string | null
+          id?: string
+          order_id?: string
+          paid_at?: string | null
+          payment_type?: string | null
+          product_type?: string
+          quantity?: number
+          raw_notification?: Json | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           affection: number
@@ -21,6 +75,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          pro_until: string | null
           updated_at: string
           user_id: string
         }
@@ -30,6 +85,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          pro_until?: string | null
           updated_at?: string
           user_id: string
         }
@@ -39,6 +95,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          pro_until?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -218,6 +275,7 @@ export type Database = {
     }
     Functions: {
       current_period: { Args: never; Returns: string }
+      fulfill_order: { Args: { _order_id: string }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
