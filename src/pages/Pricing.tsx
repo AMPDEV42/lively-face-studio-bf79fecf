@@ -99,14 +99,45 @@ export default function Pricing() {
   const { isPro } = useUserRole();
   const { stats, canTopUp } = usePlan();
 
-  const handleUpgrade = () => {
-    window.location.href = 'mailto:sales@voxie.app?subject=Upgrade to Pro';
+  const { refreshUsage } = usePlan();
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  const handleUpgrade = async () => {
+    if (!user) { navigate('/auth?tab=signup'); return; }
+    setCheckoutLoading('pro');
+    try {
+      await startMidtransCheckout({ product: 'pro_monthly' }, {
+        onSuccess: () => { toast.success('Pembayaran berhasil! Pro aktif.'); refreshUsage(); },
+        onPending: () => toast.info('Pembayaran tertunda. Cek email/notifikasi.'),
+        onError: () => toast.error('Pembayaran gagal.'),
+        onClose: () => setCheckoutLoading(null),
+      });
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Gagal memulai checkout');
+    } finally {
+      setCheckoutLoading(null);
+    }
   };
 
-  const handleTopUp = (packageId: string, messages: number) => {
+  const handleTopUp = async (packageId: string, messages: number) => {
     if (!isPro) return;
     if (!canTopUp(messages)) return;
-    window.location.href = `mailto:sales@voxie.app?subject=Top-up ${packageId}`;
+    setCheckoutLoading(packageId);
+    try {
+      await startMidtransCheckout(
+        { product: 'topup', package_id: packageId as 'topup_100' | 'topup_300' | 'topup_700' | 'topup_1500' },
+        {
+          onSuccess: () => { toast.success('Top-up berhasil! Kuota ditambahkan.'); refreshUsage(); },
+          onPending: () => toast.info('Pembayaran tertunda.'),
+          onError: () => toast.error('Pembayaran gagal.'),
+          onClose: () => setCheckoutLoading(null),
+        },
+      );
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Gagal memulai checkout');
+    } finally {
+      setCheckoutLoading(null);
+    }
   };
 
   // Sisa ruang top-up yang bisa dibeli
