@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import ChatPanel from '@/components/ChatPanel';
 import UserMenu from '@/components/UserMenu';
@@ -40,6 +41,26 @@ export default function Index() {
 
   // Preload Web Speech voices on mount
   useEffect(() => { preloadVoices(); }, []);
+
+  // Handle post-payment redirect query params
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const upgraded = searchParams.get('upgraded');
+    const topup = searchParams.get('topup');
+    if (upgraded === 'pro') {
+      toast.success('🎉 Selamat! Langganan Pro kamu sudah aktif.', { duration: 5000 });
+      const next = new URLSearchParams(searchParams);
+      next.delete('upgraded');
+      setSearchParams(next, { replace: true });
+    } else if (topup === 'ok') {
+      toast.success('✨ Kuota top-up berhasil ditambahkan!', { duration: 5000 });
+      const next = new URLSearchParams(searchParams);
+      next.delete('topup');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isWebSpeechActive, setIsWebSpeechActive] = useState(false);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
