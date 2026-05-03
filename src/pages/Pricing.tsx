@@ -105,8 +105,25 @@ export default function Pricing() {
     setCheckoutLoading('pro');
     try {
       await startMidtransCheckout({ product: 'pro_monthly' }, {
-        onSuccess: () => { toast.success('Pembayaran berhasil! Pro aktif.'); refreshUsage(); },
-        onPending: () => toast.info('Pembayaran tertunda. Cek email/notifikasi.'),
+        onSuccess: () => {
+          toast.success('Pembayaran berhasil! Mengaktifkan Pro...');
+          // Poll for fulfillment, then redirect
+          let tries = 0;
+          const tick = async () => {
+            tries++;
+            await refreshUsage();
+            if (tries >= 4) {
+              navigate('/app?upgraded=pro');
+            } else {
+              setTimeout(tick, 1500);
+            }
+          };
+          setTimeout(tick, 1500);
+        },
+        onPending: () => {
+          toast.info('Pembayaran tertunda. Cek email/notifikasi.');
+          navigate('/profile?order=pending');
+        },
         onError: () => toast.error('Pembayaran gagal.'),
         onClose: () => setCheckoutLoading(null),
       });
@@ -125,8 +142,24 @@ export default function Pricing() {
       await startMidtransCheckout(
         { product: 'topup', package_id: packageId as 'topup_100' | 'topup_300' | 'topup_700' | 'topup_1500' },
         {
-          onSuccess: () => { toast.success('Top-up berhasil! Kuota ditambahkan.'); refreshUsage(); },
-          onPending: () => toast.info('Pembayaran tertunda.'),
+          onSuccess: () => {
+            toast.success('Top-up berhasil! Menambahkan kuota...');
+            let tries = 0;
+            const tick = async () => {
+              tries++;
+              await refreshUsage();
+              if (tries >= 3) {
+                navigate('/app?topup=ok');
+              } else {
+                setTimeout(tick, 1500);
+              }
+            };
+            setTimeout(tick, 1500);
+          },
+          onPending: () => {
+            toast.info('Pembayaran tertunda.');
+            navigate('/profile?order=pending');
+          },
           onError: () => toast.error('Pembayaran gagal.'),
           onClose: () => setCheckoutLoading(null),
         },
