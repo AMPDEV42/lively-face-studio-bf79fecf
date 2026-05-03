@@ -269,6 +269,7 @@ Tag [ANIM:...] akan dihapus dari teks yang diucapkan — selalu sisipkan di bari
         ...corsHeaders,
         "Content-Type": "text/event-stream",
         "X-Animation-Cache-Timestamp": String(catalog.cachedAt),
+        "X-AI-Provider": provider,
       },
     });
   } catch (e) {
