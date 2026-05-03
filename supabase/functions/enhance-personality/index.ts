@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { callAI } from "../_shared/ai-completion.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,8 +51,6 @@ serve(async (req) => {
     }
 
     const { name, gender, currentPersonality } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const safeName = (name && String(name).trim()) || "Karakter";
     const safeGender = gender === "male" ? "Male" : "Female";
@@ -81,19 +80,12 @@ Aturan:
       ? `Nama model: ${safeName}\nGender: ${safeGender}\n\nDraft kepribadian saat ini (perbaiki & strukturkan):\n${baseDraft}`
       : `Nama model: ${safeName}\nGender: ${safeGender}\n\nBuat persona baru yang menarik dan natural untuk karakter ini.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
+    const { response, provider } = await callAI({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
     });
 
     if (!response.ok) {
@@ -120,7 +112,7 @@ Aturan:
     const data = await response.json();
     const personality = data?.choices?.[0]?.message?.content?.trim() ?? "";
 
-    return new Response(JSON.stringify({ personality }), {
+    return new Response(JSON.stringify({ personality, provider }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
